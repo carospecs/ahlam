@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "CaroSpecs",
+    "slug": "carospecs",
+    "scheme": "carospecs",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0F172A",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.carospecs.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "CaroSpecs uses the camera to photograph auto parts for identification.",
+        "NSPhotoLibraryUsageDescription": "CaroSpecs lets you upload part photos from your library."
+      }
+    },
+    "android": {
+      "package": "com.carospecs.app",
+      "permissions": ["CAMERA"],
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "CaroSpecs uses the camera to photograph auto parts."
+        }
+      ],
+      "expo-image-picker"
+    ],
+    "extra": {
+      "router": { "origin": false }
+    }
+  }
+}
