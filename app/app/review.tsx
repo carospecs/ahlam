@@ -19,6 +19,8 @@ import {
 } from "@/lib/captureStore";
 import { identifyPart } from "@/lib/identify";
 import { enqueueCapture } from "@/lib/queue";
+import { useSession } from "@/lib/auth";
+import { saveListing, parseFitment } from "@/lib/listings";
 
 type State =
   | { phase: "loading" }
@@ -27,8 +29,10 @@ type State =
 
 export default function Review() {
   const router = useRouter();
+  const { session, shop } = useSession();
   const pending = getPendingCapture();
   const [state, setState] = useState<State>({ phase: "loading" });
+  const [saving, setSaving] = useState(false);
 
   async function run() {
     if (!pending) {
@@ -101,16 +105,40 @@ export default function Review() {
       {state.phase === "ready" && (
         <ReviewCard
           ai={state.ai}
-          onConfirm={(final) => {
-            // v1: produce a copy-paste-ready listing. (Wire to Supabase + the
-            // marketplace export flow next.)
-            clearPendingCapture();
-            Alert.alert(
-              "Listing ready",
-              `${final.partName} — $${final.priceUsd}\n\n` +
-                "Next: copy to Facebook / OfferUp / eBay, or save to your shop.",
-              [{ text: "Done", onPress: () => router.replace("/") }]
-            );
+          saving={saving}
+          onConfirm={async (final) => {
+            if (!session || !shop) {
+              Alert.alert("Not signed in", "Please sign in again.");
+              return;
+            }
+            const ai = state.ai;
+            setSaving(true);
+            try {
+              const saved = await saveListing({
+                shopId: shop.id,
+                userId: session.user.id,
+                imageBase64: pending.imageBase64,
+                aiOutput: ai,
+                corrected: {
+                  partName: final.partName,
+                  partCategory: final.partCategory,
+                  condition: final.condition,
+                  conditionNotes: final.conditionNotes,
+                  description: final.description,
+                  fitment: parseFitment(final.fitmentText),
+                  priceUsd: final.priceUsd,
+                },
+              });
+              clearPendingCapture();
+              router.replace(`/listing/${saved.id}`);
+            } catch (e) {
+              Alert.alert(
+                "Couldn't save",
+                e instanceof Error ? e.message : String(e)
+              );
+            } finally {
+              setSaving(false);
+            }
           }}
         />
       )}

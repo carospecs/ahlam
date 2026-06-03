@@ -25,8 +25,10 @@ import { Button } from "@/components/Button";
 export function ReviewCard({
   ai,
   onConfirm,
+  saving,
 }: {
   ai: AIPartOutput;
+  saving?: boolean;
   onConfirm: (final: {
     partName: string;
     partCategory: string;
@@ -148,6 +150,7 @@ export function ReviewCard({
       <View style={{ height: space.sm }} />
       <Button
         label="Looks right — make listing"
+        loading={saving}
         icon={<Check size={18} color={colors.white} />}
         onPress={() =>
           onConfirm({

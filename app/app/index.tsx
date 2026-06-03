@@ -1,15 +1,17 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Alert } from "react-native";
+import { View, Text, StyleSheet, Alert, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, ImageUp, Wrench } from "lucide-react-native";
+import { Camera, ImageUp, PackageOpen, LogOut } from "lucide-react-native";
 import { colors, space, font, radius } from "@/theme";
 import { Button } from "@/components/Button";
 import { setPendingCapture } from "@/lib/captureStore";
+import { useSession } from "@/lib/auth";
 
 export default function Home() {
   const router = useRouter();
+  const { shop, signOut } = useSession();
   const [busy, setBusy] = useState(false);
 
   async function capture(mode: "camera" | "library") {
@@ -52,11 +54,22 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["bottom"]}>
+      <View style={styles.topBar}>
+        <Text style={styles.shopName} numberOfLines={1}>
+          {shop?.name ?? "Your shop"}
+        </Text>
+        <Pressable
+          onPress={signOut}
+          hitSlop={12}
+          accessibilityLabel="Sign out"
+          accessibilityRole="button"
+        >
+          <LogOut size={20} color={colors.muted} />
+        </Pressable>
+      </View>
+
       <View style={styles.body}>
         <View style={styles.hero}>
-          <View style={styles.logo}>
-            <Wrench size={28} color={colors.white} />
-          </View>
           <Text style={styles.title}>Photograph a part</Text>
           <Text style={styles.subtitle}>
             Snap a photo and we&apos;ll identify it, grade its condition, and
@@ -78,6 +91,13 @@ export default function Home() {
             onPress={() => capture("library")}
             disabled={busy}
           />
+          <Button
+            label="My listings"
+            variant="secondary"
+            icon={<PackageOpen size={18} color={colors.foreground} />}
+            onPress={() => router.push("/listings")}
+            disabled={busy}
+          />
         </View>
 
         <Text style={styles.disclaimer}>
@@ -91,16 +111,16 @@ export default function Home() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  body: { flex: 1, padding: space.lg, justifyContent: "space-between" },
-  hero: { alignItems: "center", marginTop: space.xl * 2, gap: space.md },
-  logo: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.lg,
-    backgroundColor: colors.accent,
+  topBar: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
   },
+  shopName: { color: colors.foreground, fontSize: font.h3, fontWeight: "700", flex: 1 },
+  body: { flex: 1, padding: space.lg, justifyContent: "space-between" },
+  hero: { alignItems: "center", marginTop: space.xl, gap: space.md },
   title: { color: colors.foreground, fontSize: font.h1, fontWeight: "800" },
   subtitle: {
     color: colors.muted,

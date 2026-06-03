@@ -1,0 +1,160 @@
+import { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  Alert,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Wrench } from "lucide-react-native";
+import { colors, space, font, radius } from "@/theme";
+import { Button } from "@/components/Button";
+import { TextField } from "@/components/TextField";
+import {
+  signInWithEmail,
+  signUpWithEmail,
+  signInWithGoogle,
+} from "@/lib/auth";
+
+export default function SignIn() {
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    if (!email || !password) {
+      Alert.alert("Missing info", "Enter your email and password.");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (mode === "signup") {
+        await signUpWithEmail(email, password);
+        Alert.alert(
+          "Check your email",
+          "We sent a verification link. Confirm it, then sign in."
+        );
+        setMode("signin");
+      } else {
+        await signInWithEmail(email, password);
+      }
+    } catch (e) {
+      Alert.alert("Sign-in failed", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function google() {
+    setBusy(true);
+    try {
+      await signInWithGoogle();
+    } catch (e) {
+      Alert.alert("Google sign-in", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.flex}
+      >
+        <View style={styles.body}>
+          <View style={styles.brand}>
+            <View style={styles.logo}>
+              <Wrench size={26} color={colors.white} />
+            </View>
+            <Text style={styles.title}>CaroSpecs</Text>
+            <Text style={styles.subtitle}>
+              {mode === "signin"
+                ? "Sign in to your shop"
+                : "Create your shop account"}
+            </Text>
+          </View>
+
+          <View style={styles.form}>
+            <TextField
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="you@yourshop.com"
+              keyboardType="email-address"
+              autoComplete="email"
+            />
+            <TextField
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="••••••••"
+              secureTextEntry
+              autoComplete="password"
+            />
+            <Button
+              label={mode === "signin" ? "Sign in" : "Create account"}
+              onPress={submit}
+              loading={busy}
+            />
+
+            <View style={styles.divider}>
+              <View style={styles.line} />
+              <Text style={styles.or}>or</Text>
+              <View style={styles.line} />
+            </View>
+
+            <Button
+              label="Continue with Google"
+              variant="secondary"
+              onPress={google}
+              disabled={busy}
+            />
+          </View>
+
+          <Pressable
+            onPress={() => setMode(mode === "signin" ? "signup" : "signin")}
+            accessibilityRole="button"
+          >
+            <Text style={styles.switch}>
+              {mode === "signin"
+                ? "New here? Create an account"
+                : "Already have an account? Sign in"}
+            </Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
+  body: { flex: 1, padding: space.lg, justifyContent: "center", gap: space.xl },
+  brand: { alignItems: "center", gap: space.sm },
+  logo: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.lg,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: { color: colors.foreground, fontSize: font.h1, fontWeight: "800" },
+  subtitle: { color: colors.muted, fontSize: font.body },
+  form: { gap: space.md },
+  divider: { flexDirection: "row", alignItems: "center", gap: space.md },
+  line: { flex: 1, height: 1, backgroundColor: colors.line },
+  or: { color: colors.muted, fontSize: font.small },
+  switch: {
+    color: colors.accent,
+    textAlign: "center",
+    fontSize: font.small,
+    fontWeight: "600",
+  },
+});
