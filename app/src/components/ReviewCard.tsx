@@ -1,13 +1,12 @@
-import { useState } from "react";
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
   Pressable,
-  ScrollView,
+  Switch,
 } from "react-native";
-import { TriangleAlert, Check } from "lucide-react-native";
+import { TriangleAlert, Check, ArrowLeftRight } from "lucide-react-native";
 import {
   CONDITION_GRADES,
   CONDITION_RUBRIC,
@@ -15,156 +14,191 @@ import {
   type ConditionGrade,
 } from "@carospecs/shared";
 import { colors, space, radius, font, conditionColor } from "@/theme";
-import { Button } from "@/components/Button";
+
+/** Editable draft for one detected part. Parent owns the array of these. */
+export interface PartDraft {
+  included: boolean;
+  partName: string;
+  partCategory: string;
+  condition: ConditionGrade;
+  conditionNotes: string;
+  description: string;
+  fitmentText: string;
+  price: string;
+}
+
+/** Toggle the Left/Right side word in a part name (human override for the AI). */
+export function swapSide(name: string): string {
+  if (/\bleft\b/i.test(name)) {
+    return name.replace(/\bleft\b/i, (m) =>
+      m[0] === m[0].toUpperCase() ? "Right" : "right"
+    );
+  }
+  if (/\bright\b/i.test(name)) {
+    return name.replace(/\bright\b/i, (m) =>
+      m[0] === m[0].toUpperCase() ? "Left" : "left"
+    );
+  }
+  // No side yet — add "Left" after a leading Front/Rear, else prefix it.
+  const m = name.match(/^(Front|Rear)\b\s*(.*)$/i);
+  if (m) {
+    const rest = m[2].trim();
+    return `${m[1]} Left${rest ? ` ${rest}` : ""}`;
+  }
+  return `Left ${name}`;
+}
+
+/** Seed an editable draft from a raw AI part output. */
+export function draftFromAI(ai: AIPartOutput): PartDraft {
+  return {
+    included: true,
+    partName: ai.partName,
+    partCategory: ai.partCategory,
+    condition: ai.condition,
+    conditionNotes: ai.conditionNotes,
+    description: ai.description,
+    fitmentText: ai.fitment
+      .map((f) => `${f.yearStart}–${f.yearEnd} ${f.make} ${f.model}`.trim())
+      .join("\n"),
+    price: ai.suggestedPriceUsd != null ? String(ai.suggestedPriceUsd) : "",
+  };
+}
 
 /**
- * The review card — the critical-path UI. Shows AI-prefilled fields; every field
- * is tappable to edit. Low-confidence results turn the card amber with a banner.
- * Target: ~10s to confirm a correct output, ~30s to fix one.
+ * One part's review card. Controlled: it reads from `draft` and reports every
+ * edit via `onChange`. An "Include" switch toggles whether this part becomes a
+ * listing. Collapses to just the header when excluded.
  */
-export function ReviewCard({
+export function PartReviewCard({
   ai,
-  onConfirm,
-  saving,
+  draft,
+  onChange,
 }: {
   ai: AIPartOutput;
-  saving?: boolean;
-  onConfirm: (final: {
-    partName: string;
-    partCategory: string;
-    condition: ConditionGrade;
-    conditionNotes: string;
-    description: string;
-    fitmentText: string;
-    priceUsd: number;
-  }) => void;
+  draft: PartDraft;
+  onChange: (patch: Partial<PartDraft>) => void;
 }) {
   const lowConf = ai.confidence === "low";
   const lowFields = new Set(ai.lowConfidenceFields ?? []);
 
-  const [partName, setPartName] = useState(ai.partName);
-  const [partCategory, setPartCategory] = useState(ai.partCategory);
-  const [condition, setCondition] = useState<ConditionGrade>(ai.condition);
-  const [conditionNotes, setConditionNotes] = useState(ai.conditionNotes);
-  const [description, setDescription] = useState(ai.description);
-  const [fitmentText, setFitmentText] = useState(
-    ai.fitment
-      .map((f) => `${f.yearStart}–${f.yearEnd} ${f.make} ${f.model}`.trim())
-      .join("\n")
-  );
-  const [price, setPrice] = useState(
-    ai.suggestedPriceUsd != null ? String(ai.suggestedPriceUsd) : ""
-  );
-
   return (
-    <ScrollView
-      contentContainerStyle={styles.scroll}
-      keyboardShouldPersistTaps="handled"
-    >
-      {lowConf && (
-        <View style={styles.banner}>
-          <TriangleAlert size={18} color={colors.signal} />
-          <Text style={styles.bannerText}>Not sure — please review carefully</Text>
+    <View style={[styles.card, !draft.included && styles.cardOff]}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.cardTitle} numberOfLines={1}>
+          {draft.partName || "Unnamed part"}
+        </Text>
+        <View style={styles.includeWrap}>
+          <Text style={styles.includeLabel}>Include</Text>
+          <Switch
+            value={draft.included}
+            onValueChange={(v) => onChange({ included: v })}
+            trackColor={{ false: colors.surface2, true: colors.accent }}
+            thumbColor={colors.white}
+          />
+        </View>
+      </View>
+
+      {draft.included && (
+        <View style={styles.cardBody}>
+          {lowConf && (
+            <View style={styles.banner}>
+              <TriangleAlert size={16} color={colors.signal} />
+              <Text style={styles.bannerText}>
+                Not sure — please review carefully
+              </Text>
+            </View>
+          )}
+
+          <Field
+            label="Part name"
+            value={draft.partName}
+            onChange={(v) => onChange({ partName: v })}
+            warn={lowConf || lowFields.has("partName")}
+          />
+          <Pressable
+            onPress={() => onChange({ partName: swapSide(draft.partName) })}
+            accessibilityRole="button"
+            accessibilityLabel="Swap left or right side"
+            style={({ pressed }) => [styles.swapBtn, pressed && { opacity: 0.6 }]}
+          >
+            <ArrowLeftRight size={14} color={colors.muted} />
+            <Text style={styles.swapText}>Swap L/R side</Text>
+          </Pressable>
+          <Field
+            label="Category"
+            value={draft.partCategory}
+            onChange={(v) => onChange({ partCategory: v })}
+            warn={lowConf || lowFields.has("partCategory")}
+          />
+          <Field
+            label="Fits (one vehicle per line)"
+            value={draft.fitmentText}
+            onChange={(v) => onChange({ fitmentText: v })}
+            multiline
+            warn={lowConf || lowFields.has("fitment")}
+          />
+
+          <Text style={styles.fieldLabel}>Condition</Text>
+          <View style={styles.gradeRow}>
+            {CONDITION_GRADES.map((g) => {
+              const active = g === draft.condition;
+              return (
+                <Pressable
+                  key={g}
+                  onPress={() => onChange({ condition: g })}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  style={[
+                    styles.grade,
+                    {
+                      borderColor: active ? conditionColor[g] : colors.line,
+                      backgroundColor: active
+                        ? `${conditionColor[g]}22`
+                        : "transparent",
+                    },
+                  ]}
+                >
+                  {active && <Check size={14} color={conditionColor[g]} />}
+                  <Text
+                    style={[
+                      styles.gradeText,
+                      { color: active ? conditionColor[g] : colors.muted },
+                    ]}
+                  >
+                    {g}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={styles.rubric}>
+            {CONDITION_RUBRIC[draft.condition].summary}
+          </Text>
+
+          <Field
+            label="Condition notes"
+            value={draft.conditionNotes}
+            onChange={(v) => onChange({ conditionNotes: v })}
+            multiline
+            warn={lowFields.has("conditionNotes")}
+          />
+          <Field
+            label="Description"
+            value={draft.description}
+            onChange={(v) => onChange({ description: v })}
+            multiline
+            warn={lowFields.has("description")}
+          />
+          <Field
+            label="Your price (USD)"
+            value={draft.price}
+            onChange={(v) => onChange({ price: v })}
+            keyboardType="numeric"
+            warn={lowFields.has("suggestedPriceUsd")}
+          />
         </View>
       )}
-
-      <Field
-        label="Part name"
-        value={partName}
-        onChange={setPartName}
-        warn={lowConf || lowFields.has("partName")}
-      />
-      <Field
-        label="Category"
-        value={partCategory}
-        onChange={setPartCategory}
-        warn={lowConf || lowFields.has("partCategory")}
-      />
-      <Field
-        label="Fits (one vehicle per line)"
-        value={fitmentText}
-        onChange={setFitmentText}
-        multiline
-        warn={lowConf || lowFields.has("fitment")}
-      />
-
-      <Text style={styles.fieldLabel}>Condition</Text>
-      <View style={styles.gradeRow}>
-        {CONDITION_GRADES.map((g) => {
-          const active = g === condition;
-          return (
-            <Pressable
-              key={g}
-              onPress={() => setCondition(g)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              style={[
-                styles.grade,
-                {
-                  borderColor: active ? conditionColor[g] : colors.line,
-                  backgroundColor: active ? `${conditionColor[g]}22` : "transparent",
-                },
-              ]}
-            >
-              {active && <Check size={14} color={conditionColor[g]} />}
-              <Text
-                style={[
-                  styles.gradeText,
-                  { color: active ? conditionColor[g] : colors.muted },
-                ]}
-              >
-                {g}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <Text style={styles.rubric}>{CONDITION_RUBRIC[condition].summary}</Text>
-
-      <Field
-        label="Condition notes"
-        value={conditionNotes}
-        onChange={setConditionNotes}
-        multiline
-        warn={lowFields.has("conditionNotes")}
-      />
-      <Field
-        label="Description"
-        value={description}
-        onChange={setDescription}
-        multiline
-        warn={lowFields.has("description")}
-      />
-      <Field
-        label="Your price (USD)"
-        value={price}
-        onChange={setPrice}
-        keyboardType="numeric"
-        warn={lowFields.has("suggestedPriceUsd")}
-      />
-
-      <Text style={styles.disclaimer}>
-        AI can make mistakes. Double-check the details before you post.
-      </Text>
-
-      <View style={{ height: space.sm }} />
-      <Button
-        label="Looks right — make listing"
-        loading={saving}
-        icon={<Check size={18} color={colors.white} />}
-        onPress={() =>
-          onConfirm({
-            partName,
-            partCategory,
-            condition,
-            conditionNotes,
-            description,
-            fitmentText,
-            priceUsd: Number(price) || 0,
-          })
-        }
-      />
-    </ScrollView>
+    </View>
   );
 }
 
@@ -204,7 +238,41 @@ function Field({
 }
 
 const styles = StyleSheet.create({
-  scroll: { padding: space.md, paddingBottom: space.xl * 2, gap: space.sm },
+  card: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: space.md,
+  },
+  cardOff: { opacity: 0.6 },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.sm,
+  },
+  cardTitle: {
+    flex: 1,
+    color: colors.foreground,
+    fontSize: font.body,
+    fontWeight: "700",
+  },
+  includeWrap: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  includeLabel: { color: colors.muted, fontSize: font.small, fontWeight: "600" },
+  cardBody: { gap: space.xs, marginTop: space.sm },
+  swapBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.xs,
+    alignSelf: "flex-start",
+    paddingVertical: space.xs,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface2,
+    marginTop: space.xs,
+  },
+  swapText: { color: colors.muted, fontSize: font.small, fontWeight: "600" },
   banner: {
     flexDirection: "row",
     alignItems: "center",
@@ -213,8 +281,8 @@ const styles = StyleSheet.create({
     borderColor: colors.signal,
     borderWidth: 1,
     borderRadius: radius.md,
-    padding: space.md,
-    marginBottom: space.sm,
+    padding: space.sm,
+    marginBottom: space.xs,
   },
   bannerText: { color: colors.signal, fontWeight: "600", fontSize: font.small },
   fieldWrap: { gap: space.xs },
@@ -227,7 +295,7 @@ const styles = StyleSheet.create({
     marginTop: space.sm,
   },
   input: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surface2,
     borderWidth: 1,
     borderColor: colors.line,
     borderRadius: radius.md,
@@ -238,7 +306,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   inputWarn: { borderColor: colors.signal, backgroundColor: colors.signalBg },
-  gradeRow: { flexDirection: "row", gap: space.sm },
+  gradeRow: { flexDirection: "row", gap: space.sm, marginTop: space.xs },
   grade: {
     flex: 1,
     flexDirection: "row",
@@ -251,10 +319,4 @@ const styles = StyleSheet.create({
   },
   gradeText: { fontSize: font.body, fontWeight: "600" },
   rubric: { color: colors.muted, fontSize: font.small, marginTop: space.xs },
-  disclaimer: {
-    color: colors.muted,
-    fontSize: font.tiny,
-    textAlign: "center",
-    marginTop: space.md,
-  },
 });

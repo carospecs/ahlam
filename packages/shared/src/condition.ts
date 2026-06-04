@@ -9,23 +9,19 @@ export const CONDITION_RUBRIC: Record<
   { summary: string; detail: string }
 > = {
   Good: {
-    summary: "No visible damage. Can be sold as-is.",
+    summary: "No cracks or breaks. Intact and sellable as-is.",
     detail:
-      "No visible damage. Fully functional cosmetically and mechanically. " +
-      "Minor wear expected.",
-  },
-  Fair: {
-    summary: "Minor damage that doesn't affect function. Disclose to buyer.",
-    detail:
-      "Minor damage (small dents, scratches, surface rust) that does not affect " +
-      "function. Buyer should be informed.",
+      "Intact with no cracks, breaks, or missing pieces. Normal light wear " +
+      "(minor scratches, dirt, surface dust) is acceptable. Cosmetically and " +
+      "structurally sound.",
   },
   Poor: {
-    summary: "Visible damage. Functional status uncertain. Disclose clearly.",
+    summary: "Cracked, broken, or damaged. Disclose clearly.",
     detail:
-      "Visible structural damage, cracks, broken pieces, or missing components. " +
-      "Functional status uncertain. Requires clear disclosure.",
+      "Any crack, break, chip, shatter, deep gouge, broken mount/tab, fogging " +
+      "or moisture inside a lens, dent, bend, or missing component. If there is " +
+      "ANY visible damage, grade Poor — never Good.",
   },
 };
 
-export const CONDITION_GRADES: ConditionGrade[] = ["Good", "Fair", "Poor"];
+export const CONDITION_GRADES: ConditionGrade[] = ["Good", "Poor"];

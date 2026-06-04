@@ -6,7 +6,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Wrench } from "lucide-react-native";
@@ -24,37 +23,54 @@ export default function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  // Inline feedback — Alert.alert is a no-op on react-native-web, so failures
+  // would otherwise be silent in the browser.
+  const [notice, setNotice] = useState<{
+    type: "error" | "info";
+    text: string;
+  } | null>(null);
 
   async function submit() {
+    setNotice(null);
     if (!email || !password) {
-      Alert.alert("Missing info", "Enter your email and password.");
+      setNotice({ type: "error", text: "Enter your email and password." });
       return;
     }
     setBusy(true);
     try {
       if (mode === "signup") {
-        await signUpWithEmail(email, password);
-        Alert.alert(
-          "Check your email",
-          "We sent a verification link. Confirm it, then sign in."
-        );
-        setMode("signin");
+        const { needsConfirmation } = await signUpWithEmail(email, password);
+        if (needsConfirmation) {
+          setNotice({
+            type: "info",
+            text: "Check your email for a verification link, then sign in.",
+          });
+          setMode("signin");
+        }
+        // Otherwise a session was created — the auth listener redirects us in.
       } else {
         await signInWithEmail(email, password);
       }
     } catch (e) {
-      Alert.alert("Sign-in failed", e instanceof Error ? e.message : String(e));
+      setNotice({
+        type: "error",
+        text: e instanceof Error ? e.message : String(e),
+      });
     } finally {
       setBusy(false);
     }
   }
 
   async function google() {
+    setNotice(null);
     setBusy(true);
     try {
       await signInWithGoogle();
     } catch (e) {
-      Alert.alert("Google sign-in", e instanceof Error ? e.message : String(e));
+      setNotice({
+        type: "error",
+        text: e instanceof Error ? e.message : String(e),
+      });
     } finally {
       setBusy(false);
     }
@@ -80,6 +96,25 @@ export default function SignIn() {
           </View>
 
           <View style={styles.form}>
+            {notice && (
+              <View
+                style={[
+                  styles.notice,
+                  notice.type === "error" ? styles.noticeError : styles.noticeInfo,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.noticeText,
+                    notice.type === "error"
+                      ? styles.noticeTextError
+                      : styles.noticeTextInfo,
+                  ]}
+                >
+                  {notice.text}
+                </Text>
+              </View>
+            )}
             <TextField
               label="Email"
               value={email}
@@ -148,6 +183,20 @@ const styles = StyleSheet.create({
   title: { color: colors.foreground, fontSize: font.h1, fontWeight: "800" },
   subtitle: { color: colors.muted, fontSize: font.body },
   form: { gap: space.md },
+  notice: {
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+  },
+  noticeError: {
+    backgroundColor: "rgba(239, 68, 68, 0.12)",
+    borderColor: colors.danger,
+  },
+  noticeInfo: { backgroundColor: colors.signalBg, borderColor: colors.signal },
+  noticeText: { fontSize: font.small, lineHeight: 20 },
+  noticeTextError: { color: colors.danger },
+  noticeTextInfo: { color: colors.signal },
   divider: { flexDirection: "row", alignItems: "center", gap: space.md },
   line: { flex: 1, height: 1, backgroundColor: colors.line },
   or: { color: colors.muted, fontSize: font.small },

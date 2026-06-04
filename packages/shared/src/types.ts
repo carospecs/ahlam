@@ -1,7 +1,7 @@
 // Core data model shared across web + app + database.
 // Keep this in sync with supabase/migrations.
 
-export type ConditionGrade = "Good" | "Fair" | "Poor";
+export type ConditionGrade = "Good" | "Poor";
 
 /** AI confidence bucket. "low" triggers the yellow "review carefully" UI. */
 export type Confidence = "high" | "medium" | "low";
@@ -69,9 +69,12 @@ export interface Listing {
   updatedAt: string;
 }
 
-/** Result wrapper for an AI call so the UI can render error/low-confidence states. */
+/**
+ * Result wrapper for an AI call so the UI can render error/low-confidence states.
+ * `data` is an array: one entry per distinct sellable part detected in the photo.
+ */
 export type AIResult =
-  | { ok: true; data: AIPartOutput }
+  | { ok: true; data: AIPartOutput[] }
   | {
       ok: false;
       /** User-facing message. NEVER leak raw errors or "couldn't identify". */

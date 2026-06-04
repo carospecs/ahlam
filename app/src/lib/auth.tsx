@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import type { Session } from "@supabase/supabase-js";
@@ -92,10 +93,20 @@ export function useSession(): SessionState {
 
 // --- Auth actions -----------------------------------------------------------
 
-export async function signUpWithEmail(email: string, password: string) {
-  const { error } = await supabase.auth.signUp({ email, password });
+/**
+ * Returns { needsConfirmation } so the UI can react correctly:
+ * - If the project requires email confirmation, no session is returned and the
+ *   user must click the verification link first.
+ * - If auto-confirm is on, a session is returned immediately (the auth listener
+ *   then redirects), so we should NOT tell the user to check their email.
+ */
+export async function signUpWithEmail(
+  email: string,
+  password: string
+): Promise<{ needsConfirmation: boolean }> {
+  const { data, error } = await supabase.auth.signUp({ email, password });
   if (error) throw error;
-  // Supabase sends a verification email; the user confirms, then signs in.
+  return { needsConfirmation: !data.session };
 }
 
 export async function signInWithEmail(email: string, password: string) {
@@ -109,6 +120,20 @@ export async function signInWithEmail(email: string, password: string) {
  * provider URL, then exchange the returned ?code= for a session.
  */
 export async function signInWithGoogle() {
+  // Web: let Supabase do a normal full-page redirect; detectSessionInUrl (set
+  // in supabase.ts for web) completes the session on return. The native
+  // in-app-browser + manual code exchange does not apply in the browser.
+  if (Platform.OS === "web") {
+    const redirectTo =
+      typeof window !== "undefined" ? window.location.origin : undefined;
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo },
+    });
+    if (error) throw error;
+    return;
+  }
+
   const redirectTo = Linking.createURL("/");
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",

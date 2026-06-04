@@ -6,25 +6,27 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { TriangleAlert } from "lucide-react-native";
 import type { AIPartOutput } from "@carospecs/shared";
-import { colors, space, font, radius } from "@/theme";
+import { colors, space, font } from "@/theme";
 import { Button } from "@/components/Button";
-import { ReviewCard } from "@/components/ReviewCard";
 import {
-  getPendingCapture,
-  clearPendingCapture,
-} from "@/lib/captureStore";
+  PartReviewCard,
+  draftFromAI,
+  type PartDraft,
+} from "@/components/ReviewCard";
+import { getPendingCapture, clearPendingCapture } from "@/lib/captureStore";
 import { identifyPart } from "@/lib/identify";
 import { enqueueCapture } from "@/lib/queue";
 import { useSession } from "@/lib/auth";
-import { saveListing, parseFitment } from "@/lib/listings";
+import { saveListings, parseFitment } from "@/lib/listings";
 
 type State =
   | { phase: "loading" }
-  | { phase: "ready"; ai: AIPartOutput }
+  | { phase: "ready"; ais: AIPartOutput[] }
   | { phase: "error"; message: string; canRetry: boolean };
 
 export default function Review() {
@@ -32,6 +34,7 @@ export default function Review() {
   const { session, shop } = useSession();
   const pending = getPendingCapture();
   const [state, setState] = useState<State>({ phase: "loading" });
+  const [drafts, setDrafts] = useState<PartDraft[]>([]);
   const [saving, setSaving] = useState(false);
 
   async function run() {
@@ -41,17 +44,33 @@ export default function Review() {
     }
     setState({ phase: "loading" });
     const result = await identifyPart({ imageBase64: pending.imageBase64 });
-    if (result.ok) {
-      setState({ phase: "ready", ai: result.data });
-    } else {
+    if (!result.ok) {
       setState({ phase: "error", message: result.userMessage, canRetry: true });
+      return;
     }
+    if (result.data.length === 0) {
+      setState({
+        phase: "error",
+        message:
+          "We couldn't spot any sellable parts in this photo. Try a clearer shot or a different angle.",
+        canRetry: true,
+      });
+      return;
+    }
+    setDrafts(result.data.map(draftFromAI));
+    setState({ phase: "ready", ais: result.data });
   }
 
   useEffect(() => {
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function patchDraft(index: number, patch: Partial<PartDraft>) {
+    setDrafts((prev) =>
+      prev.map((d, i) => (i === index ? { ...d, ...patch } : d))
+    );
+  }
 
   async function queueForLater() {
     if (!pending) return;
@@ -64,6 +83,47 @@ export default function Review() {
     router.back();
   }
 
+  async function saveAll() {
+    if (!pending || state.phase !== "ready") return;
+    if (!session || !shop) {
+      Alert.alert("Not signed in", "Please sign in again.");
+      return;
+    }
+    const chosen = drafts
+      .map((d, i) => ({ d, ai: state.ais[i] }))
+      .filter(({ d }) => d.included);
+    if (chosen.length === 0) {
+      Alert.alert("Nothing selected", "Include at least one part to save.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveListings({
+        shopId: shop.id,
+        userId: session.user.id,
+        imageBase64: pending.imageBase64,
+        parts: chosen.map(({ d, ai }) => ({
+          aiOutput: ai,
+          corrected: {
+            partName: d.partName,
+            partCategory: d.partCategory,
+            condition: d.condition,
+            conditionNotes: d.conditionNotes,
+            description: d.description,
+            fitment: parseFitment(d.fitmentText),
+            priceUsd: Number(d.price) || 0,
+          },
+        })),
+      });
+      clearPendingCapture();
+      router.replace("/listings");
+    } catch (e) {
+      Alert.alert("Couldn't save", e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (!pending) {
     return (
       <Centered>
@@ -72,6 +132,8 @@ export default function Review() {
     );
   }
 
+  const includedCount = drafts.filter((d) => d.included).length;
+
   return (
     <View style={styles.container}>
       <Image source={{ uri: pending.imageUri }} style={styles.photo} />
@@ -79,7 +141,7 @@ export default function Review() {
       {state.phase === "loading" && (
         <Centered>
           <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={styles.loadingText}>Identifying the part…</Text>
+          <Text style={styles.loadingText}>Finding parts in your photo…</Text>
         </Centered>
       )}
 
@@ -89,9 +151,7 @@ export default function Review() {
             <TriangleAlert size={28} color={colors.signal} />
             <Text style={styles.errText}>{state.message}</Text>
             <View style={styles.errActions}>
-              {state.canRetry && (
-                <Button label="Try again" onPress={run} />
-              )}
+              {state.canRetry && <Button label="Try again" onPress={run} />}
               <Button
                 label="Save & finish later"
                 variant="secondary"
@@ -103,44 +163,43 @@ export default function Review() {
       )}
 
       {state.phase === "ready" && (
-        <ReviewCard
-          ai={state.ai}
-          saving={saving}
-          onConfirm={async (final) => {
-            if (!session || !shop) {
-              Alert.alert("Not signed in", "Please sign in again.");
-              return;
-            }
-            const ai = state.ai;
-            setSaving(true);
-            try {
-              const saved = await saveListing({
-                shopId: shop.id,
-                userId: session.user.id,
-                imageBase64: pending.imageBase64,
-                aiOutput: ai,
-                corrected: {
-                  partName: final.partName,
-                  partCategory: final.partCategory,
-                  condition: final.condition,
-                  conditionNotes: final.conditionNotes,
-                  description: final.description,
-                  fitment: parseFitment(final.fitmentText),
-                  priceUsd: final.priceUsd,
-                },
-              });
-              clearPendingCapture();
-              router.replace(`/listing/${saved.id}`);
-            } catch (e) {
-              Alert.alert(
-                "Couldn't save",
-                e instanceof Error ? e.message : String(e)
-              );
-            } finally {
-              setSaving(false);
-            }
-          }}
-        />
+        <>
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={styles.foundLabel}>
+              {state.ais.length} part{state.ais.length === 1 ? "" : "s"} found —
+              review, edit, and pick which to list.
+            </Text>
+            {drafts.map((d, i) => (
+              <PartReviewCard
+                key={i}
+                ai={state.ais[i]}
+                draft={d}
+                onChange={(patch) => patchDraft(i, patch)}
+              />
+            ))}
+            <Text style={styles.disclaimer}>
+              AI can make mistakes. Double-check each part before you post.
+            </Text>
+          </ScrollView>
+
+          <View style={styles.footer}>
+            <Button
+              label={
+                includedCount === 0
+                  ? "Select parts to save"
+                  : `Save ${includedCount} listing${
+                      includedCount === 1 ? "" : "s"
+                    }`
+              }
+              loading={saving}
+              disabled={includedCount === 0}
+              onPress={saveAll}
+            />
+          </View>
+        </>
       )}
     </View>
   );
@@ -152,10 +211,12 @@ function Centered({ children }: { children: React.ReactNode }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  photo: {
-    width: "100%",
-    height: 200,
-    backgroundColor: colors.surface,
+  photo: { width: "100%", height: 180, backgroundColor: colors.surface },
+  scroll: { padding: space.md, paddingBottom: space.xl, gap: space.md },
+  foundLabel: {
+    color: colors.muted,
+    fontSize: font.small,
+    lineHeight: 20,
   },
   centered: {
     flex: 1,
@@ -173,4 +234,16 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   errActions: { gap: space.sm, alignSelf: "stretch", marginTop: space.sm },
+  disclaimer: {
+    color: colors.muted,
+    fontSize: font.tiny,
+    textAlign: "center",
+    marginTop: space.sm,
+  },
+  footer: {
+    padding: space.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    backgroundColor: colors.background,
+  },
 });

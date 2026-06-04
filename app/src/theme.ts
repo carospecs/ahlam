@@ -45,6 +45,10 @@ export const font = {
 /** Semantic color per condition grade (always paired with the text label). */
 export const conditionColor: Record<ConditionGrade, string> = {
   Good: colors.success,
-  Fair: colors.caution,
   Poor: colors.danger,
 };
+
+/** Safe lookup that tolerates legacy data graded "Fair" before the two-grade switch. */
+export function conditionColorOf(grade: string): string {
+  return (conditionColor as Record<string, string>)[grade] ?? colors.muted;
+}

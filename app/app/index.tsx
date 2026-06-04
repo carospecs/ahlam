@@ -1,9 +1,24 @@
-import { useState } from "react";
-import { View, Text, StyleSheet, Alert, Pressable } from "react-native";
+import { useState, type ReactNode } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  Pressable,
+  ScrollView,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, ImageUp, PackageOpen, LogOut } from "lucide-react-native";
+import {
+  Camera,
+  ImageUp,
+  PackageOpen,
+  Megaphone,
+  MessageSquare,
+  LogOut,
+  ChevronRight,
+} from "lucide-react-native";
 import { colors, space, font, radius } from "@/theme";
 import { Button } from "@/components/Button";
 import { setPendingCapture } from "@/lib/captureStore";
@@ -55,9 +70,12 @@ export default function Home() {
   return (
     <SafeAreaView style={styles.safe} edges={["bottom"]}>
       <View style={styles.topBar}>
-        <Text style={styles.shopName} numberOfLines={1}>
-          {shop?.name ?? "Your shop"}
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.eyebrow}>Dashboard</Text>
+          <Text style={styles.shopName} numberOfLines={1}>
+            {shop?.name ?? "Your shop"}
+          </Text>
+        </View>
         <Pressable
           onPress={signOut}
           hitSlop={12}
@@ -68,12 +86,16 @@ export default function Home() {
         </Pressable>
       </View>
 
-      <View style={styles.body}>
+      <ScrollView
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Primary action: photograph a part */}
         <View style={styles.hero}>
-          <Text style={styles.title}>Photograph a part</Text>
+          <Text style={styles.title}>Photograph the vehicle</Text>
           <Text style={styles.subtitle}>
-            Snap a photo and we&apos;ll identify it, grade its condition, and
-            draft a listing. You review and post.
+            Snap one photo and we&apos;ll find every sellable part, grade each
+            one, and draft the listings. You review and post.
           </Text>
         </View>
 
@@ -91,12 +113,28 @@ export default function Home() {
             onPress={() => capture("library")}
             disabled={busy}
           />
-          <Button
-            label="My listings"
-            variant="secondary"
-            icon={<PackageOpen size={18} color={colors.foreground} />}
+        </View>
+
+        {/* Navigation hub */}
+        <Text style={styles.sectionLabel}>Manage</Text>
+        <View style={styles.tiles}>
+          <Tile
+            icon={<PackageOpen size={22} color={colors.foreground} />}
+            label="Inventory"
+            sub="Browse & search saved parts"
             onPress={() => router.push("/listings")}
-            disabled={busy}
+          />
+          <Tile
+            icon={<Megaphone size={22} color={colors.foreground} />}
+            label="Posts"
+            sub="Parts ready to post"
+            onPress={() => router.push("/posts")}
+          />
+          <Tile
+            icon={<MessageSquare size={22} color={colors.foreground} />}
+            label="Chat"
+            sub="Ask about a part or VIN"
+            onPress={() => router.push("/chat")}
           />
         </View>
 
@@ -104,8 +142,38 @@ export default function Home() {
           AI can make mistakes — always review before posting. Snap the VIN plate
           too and we&apos;ll keep the history on file.
         </Text>
-      </View>
+      </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function Tile({
+  icon,
+  label,
+  sub,
+  onPress,
+}: {
+  icon: ReactNode;
+  label: string;
+  sub: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.tile, pressed && { opacity: 0.7 }]}
+    >
+      <View style={styles.tileIcon}>{icon}</View>
+      <View style={styles.tileBody}>
+        <Text style={styles.tileLabel}>{label}</Text>
+        <Text style={styles.tileSub} numberOfLines={1}>
+          {sub}
+        </Text>
+      </View>
+      <ChevronRight size={20} color={colors.muted} />
+    </Pressable>
   );
 }
 
@@ -118,9 +186,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
   },
-  shopName: { color: colors.foreground, fontSize: font.h3, fontWeight: "700", flex: 1 },
-  body: { flex: 1, padding: space.lg, justifyContent: "space-between" },
-  hero: { alignItems: "center", marginTop: space.xl, gap: space.md },
+  eyebrow: {
+    color: colors.muted,
+    fontSize: font.tiny,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  shopName: { color: colors.foreground, fontSize: font.h3, fontWeight: "700" },
+  body: { padding: space.lg, gap: space.lg },
+  hero: { alignItems: "center", marginTop: space.sm, gap: space.sm },
   title: { color: colors.foreground, fontSize: font.h1, fontWeight: "800" },
   subtitle: {
     color: colors.muted,
@@ -130,10 +205,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
   },
   actions: { gap: space.md },
+  sectionLabel: {
+    color: colors.muted,
+    fontSize: font.tiny,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginTop: space.sm,
+  },
+  tiles: { gap: space.sm },
+  tile: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: space.md,
+  },
+  tileIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tileBody: { flex: 1, gap: 2 },
+  tileLabel: { color: colors.foreground, fontSize: font.body, fontWeight: "700" },
+  tileSub: { color: colors.muted, fontSize: font.small },
   disclaimer: {
     color: colors.muted,
     fontSize: font.small,
     textAlign: "center",
     lineHeight: 20,
+    marginTop: space.sm,
   },
 });

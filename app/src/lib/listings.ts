@@ -98,6 +98,49 @@ export async function saveListing(params: {
   return data as SavedListing;
 }
 
+/**
+ * Save multiple parts detected from a SINGLE photo. Uploads the image once and
+ * inserts one listings row per part (each row stores its own AI + corrected
+ * pair). Returns the inserted rows.
+ */
+export async function saveListings(params: {
+  shopId: string;
+  userId: string;
+  imageBase64: string;
+  parts: { aiOutput: AIPartOutput; corrected: CorrectedFields }[];
+  vin?: string | null;
+}): Promise<SavedListing[]> {
+  if (params.parts.length === 0) return [];
+
+  const path = `${params.shopId}/${Date.now()}.jpg`;
+  const { error: upErr } = await supabase.storage
+    .from("part-photos")
+    .upload(path, decode(params.imageBase64), {
+      contentType: "image/jpeg",
+      upsert: false,
+    });
+  if (upErr) throw upErr;
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("part-photos").getPublicUrl(path);
+
+  const rows = params.parts.map((p) => ({
+    shop_id: params.shopId,
+    created_by: params.userId,
+    photo_url: publicUrl,
+    ai_output: p.aiOutput,
+    corrected: p.corrected,
+    vin: params.vin ?? null,
+    price_usd: p.corrected.priceUsd || null,
+    status: "active" as const,
+  }));
+
+  const { data, error } = await supabase.from("listings").insert(rows).select();
+  if (error) throw error;
+  return (data ?? []) as SavedListing[];
+}
+
 export async function fetchListings(): Promise<SavedListing[]> {
   const { data, error } = await supabase
     .from("listings")

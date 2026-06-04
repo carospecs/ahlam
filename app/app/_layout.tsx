@@ -61,7 +61,9 @@ function RootNav() {
       <Stack.Screen name="onboarding" options={{ title: "Set up your shop" }} />
       <Stack.Screen name="index" options={{ title: "CaroSpecs" }} />
       <Stack.Screen name="review" options={{ title: "Review listing" }} />
-      <Stack.Screen name="listings" options={{ title: "My listings" }} />
+      <Stack.Screen name="listings" options={{ title: "Inventory" }} />
+      <Stack.Screen name="posts" options={{ title: "Posts" }} />
+      <Stack.Screen name="chat" options={{ title: "Chat" }} />
       <Stack.Screen name="listing/[id]" options={{ title: "Listing" }} />
     </Stack>
   );

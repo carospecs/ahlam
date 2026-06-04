@@ -19,7 +19,7 @@ import {
   TriangleAlert,
   Info,
 } from "lucide-react-native";
-import { colors, space, font, radius, conditionColor } from "@/theme";
+import { colors, space, font, radius, conditionColorOf } from "@/theme";
 import { Button } from "@/components/Button";
 import {
   fetchListing,
@@ -120,7 +120,7 @@ export default function ListingDetail() {
           {listing.status === "sold" && <Text style={styles.soldTag}>SOLD</Text>}
         </View>
         <View style={styles.metaRow}>
-          <Text style={[styles.badge, { color: conditionColor[grade] }]}>
+          <Text style={[styles.badge, { color: conditionColorOf(grade) }]}>
             {grade}
           </Text>
           {listing.price_usd != null && (
