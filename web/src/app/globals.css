@@ -4,11 +4,13 @@
 
 html {
   scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11", "ss01";
 }
 
 body {
   @apply bg-background text-foreground antialiased;
-  font-feature-settings: "cv11", "ss01";
 }
 
 /* tabular figures for prices / numbers */
@@ -16,19 +18,53 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* grain wash — landing + login panels */
 .grain {
-  background-image: radial-gradient(
-      circle at 18% 8%,
-      rgba(220, 38, 38, 0.13),
-      transparent 42%
-    ),
+  background-image:
+    radial-gradient(circle at 18% 8%, rgba(220, 38, 38, 0.13), transparent 42%),
     radial-gradient(circle at 92% 0%, rgba(39, 47, 66, 0.7), transparent 46%);
 }
 
+/* automotive photo placeholder */
+.photo-cell {
+  background:
+    radial-gradient(circle at 30% 25%, rgba(148,163,184,0.10), transparent 60%),
+    linear-gradient(135deg, #20283c 0%, #161d2e 100%);
+  color: #5b6680;
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.photo-cell::after {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.015) 0 2px, transparent 2px 9px);
+  pointer-events: none;
+}
+
+/* scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2c3650; border-radius: 8px; border: 2px solid #0f172a; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes fade-up {
+  0%   { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fade-up 0.45s ease-out both; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.pulse-dot { animation: pulse-dot 1.8s infinite; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.9s linear infinite; }
+
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;

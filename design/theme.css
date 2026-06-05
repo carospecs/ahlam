@@ -1,0 +1,95 @@
+/* CaroSpecs — design tokens lifted from carospecs/carospecs
+   docs/DESIGN_SYSTEM.md + web/tailwind.config.ts + app/src/theme.ts */
+:root {
+  --background: #0F172A;
+  --surface:    #1B2336;
+  --surface2:   #272F42;
+  --foreground: #F8FAFC;
+  --muted:      #94A3B8;
+  --line:       #334155;
+  --accent:     #DC2626;
+  --accenthover:#B91C1C;
+  --signal:     #F59E0B;
+  --signal-bg:  rgba(245, 158, 11, 0.12);
+  --success:    #22C55E;
+  --caution:    #F59E0B;
+  --danger:     #EF4444;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+button { font-family: inherit; cursor: pointer; }
+input, textarea, select { font-family: inherit; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* grain wash used on the landing + login */
+.grain {
+  background-image:
+    radial-gradient(circle at 18% 8%, rgba(220, 38, 38, 0.13), transparent 42%),
+    radial-gradient(circle at 92% 0%, rgba(39, 47, 66, 0.7), transparent 46%);
+}
+
+/* login responsive */
+[data-mobile-brand] { display: none; }
+@media (max-width: 720px) {
+  .login-card { grid-template-columns: 1fr !important; }
+  .login-panel { display: none !important; }
+  [data-mobile-brand] { display: flex !important; margin-bottom: 8px; }
+}
+
+/* automotive photo placeholder cell */
+.photo-cell {
+  background:
+    radial-gradient(circle at 30% 25%, rgba(148,163,184,0.10), transparent 60%),
+    linear-gradient(135deg, #20283c 0%, #161d2e 100%);
+  color: #5b6680;
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.photo-cell::after {
+  content: "";
+  position: absolute; inset: 0;
+  background-image:
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.015) 0 2px, transparent 2px 9px);
+  pointer-events: none;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2c3650; border-radius: 8px; border: 2px solid var(--background); }
+::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes fade-up {
+  0%   { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fade-up 0.45s ease-out both; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -58,12 +58,12 @@ function Hero() {
   return (
     <section className="grain">
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 lg:grid-cols-2 lg:py-28">
-        <div className="animate-fade-up">
+        <div className="fade-up">
           <span className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-medium text-red-300">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-            Now onboarding pilot shops
+            <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-accent" />
+            Pilot shops · early access
           </span>
-          <h1 className="mt-5 text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">
+          <h1 className="mt-5 text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl">
             Photograph a part.
             <br />
             <span className="text-accent">List it in seconds.</span>
@@ -77,7 +77,7 @@ function Hero() {
             <WaitlistForm />
           </div>
         </div>
-        <div className="animate-fade-up [animation-delay:120ms]">
+        <div className="fade-up [animation-delay:120ms]">
           <PhoneMock />
         </div>
       </div>

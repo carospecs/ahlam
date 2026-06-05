@@ -15,6 +15,8 @@ export default {
         accent: "#DC2626",
         accenthover: "#B91C1C",
         signal: "#F59E0B",
+        "signal-bg": "rgba(245, 158, 11, 0.12)",
+        caution: "#F59E0B",
         success: "#22C55E",
         danger: "#EF4444",
       },
