@@ -128,7 +128,7 @@ function ExportModal() {
           <button style={mx.closeBtn} onClick={close}><I name="X" size={18} color="var(--muted)" /></button>
         </div>
 
-        <div style={mx.modalBody}>
+        <div style={mx.modalBody} className="cs-modal-body">
           {/* left — photos + facts */}
           <div style={mx.leftCol}>
             <window.UI.PhotoCell icon="Wrench" style={{ aspectRatio: "4/3", borderRadius: "var(--radius-md)" }} iconSize={40} label="Primary photo" />

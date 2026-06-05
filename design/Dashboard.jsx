@@ -108,13 +108,14 @@ function Card({ children, style = {}, pad = 18 }) {
 window.UI = { ConditionBadge, SellModeBadge, StatusBadge, PhotoCell, MarketChip, Card };
 
 // ---- shell ----------------------------------------------------------------
-function Sidebar({ active, onNav, onSignOut }) {
+function Sidebar({ active, onNav, onSignOut, open, onClose }) {
   const I = window.Icon;
   return (
-    <aside style={sx.sidebar}>
+    <aside style={sx.sidebar} className={"cs-sidebar" + (open ? " open" : "")}>
       <div style={sx.brand}>
         <span style={sx.logo}><I name="Wrench" size={18} strokeWidth={2.25} color="#fff" /></span>
         <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>CaroSpecs</span>
+        <button className="cs-navclose" onClick={onClose} style={sx.navClose}><I name="X" size={18} color="var(--muted)" /></button>
       </div>
 
       <nav style={{ display: "grid", gap: 3, marginTop: 4, overflowY: "auto" }}>
@@ -152,22 +153,25 @@ function Sidebar({ active, onNav, onSignOut }) {
   );
 }
 
-function Topbar({ meta, onAdd, onSignOut }) {
+function Topbar({ meta, onAdd, onSignOut, onMenu }) {
   const I = window.Icon;
   return (
-    <header style={sx.topbar}>
-      <div>
-        <h1 style={{ margin: 0, fontSize: 21, fontWeight: 700, letterSpacing: "-0.01em" }}>{meta.title}</h1>
-        <p style={{ margin: "3px 0 0", fontSize: 13, color: "var(--muted)" }}>{meta.sub}</p>
+    <header style={sx.topbar} className="cs-topbar">
+      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+        <button className="cs-hamburger" onClick={onMenu} style={sx.hamburger}><I name="Menu" size={20} color="var(--foreground)" /></button>
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 700, letterSpacing: "-0.01em" }}>{meta.title}</h1>
+          <p style={{ margin: "3px 0 0", fontSize: 13, color: "var(--muted)" }} className="cs-sub">{meta.sub}</p>
+        </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={sx.search}>
+        <div style={sx.search} className="cs-search">
           <I name="Search" size={16} color="var(--muted)" />
           <input placeholder="Search parts, vehicles, VIN…" style={sx.searchInput} />
         </div>
-        <button style={sx.iconBtn}><I name="Bell" size={18} color="var(--muted)" /><span style={sx.notifDot} /></button>
-        <button style={sx.addBtn} onClick={onAdd}>
-          <I name="Plus" size={17} /> Add vehicle
+        <button style={sx.iconBtn} className="cs-bell"><I name="Bell" size={18} color="var(--muted)" /><span style={sx.notifDot} /></button>
+        <button style={sx.addBtn} className="cs-addbtn" onClick={onAdd}>
+          <I name="Plus" size={17} /> <span className="cs-addbtn-label">Add vehicle</span>
         </button>
         <window.ProfileMenu onSignOut={onSignOut} />
       </div>
@@ -178,6 +182,7 @@ function Topbar({ meta, onAdd, onSignOut }) {
 function Dashboard({ onSignOut }) {
   const [active, setActive] = useStateD("overview");
   const [vehicle, setVehicle] = useStateD(null);
+  const [navOpen, setNavOpen] = useStateD(false);
   const meta = PAGE_META[active];
   const views = window.VIEWS || {};
   const View = views[active] || (() => null);
@@ -186,7 +191,7 @@ function Dashboard({ onSignOut }) {
     window.csOpenVehicle = (v) => setVehicle(v);
   }, []);
 
-  function nav(id) { setVehicle(null); setActive(id); }
+  function nav(id) { setVehicle(null); setActive(id); setNavOpen(false); }
 
   const VehicleProfile = (window.VIEWS && window.VIEWS.vehicleProfile);
   const showProfile = vehicle && VehicleProfile;
@@ -195,11 +200,12 @@ function Dashboard({ onSignOut }) {
     : meta;
 
   return (
-    <div style={sx.layout}>
-      <Sidebar active={showProfile ? "vehicles" : active} onNav={nav} onSignOut={onSignOut} />
-      <main style={sx.main}>
-        <Topbar meta={headMeta} onAdd={() => nav("add")} onSignOut={onSignOut} />
-        <div style={sx.content} key={showProfile ? "vp" + vehicle.id : active}>
+    <div style={sx.layout} className="cs-layout">
+      {navOpen && <div className="cs-backdrop" onClick={() => setNavOpen(false)} style={sx.backdrop} />}
+      <Sidebar active={showProfile ? "vehicles" : active} onNav={nav} onSignOut={onSignOut} open={navOpen} onClose={() => setNavOpen(false)} />
+      <main style={sx.main} className="cs-main">
+        <Topbar meta={headMeta} onAdd={() => nav("add")} onSignOut={onSignOut} onMenu={() => setNavOpen(true)} />
+        <div style={sx.content} className="cs-content" key={showProfile ? "vp" + vehicle.id : active}>
           {showProfile
             ? <VehicleProfile v={vehicle} go={nav} onBack={() => setVehicle(null)} />
             : <View go={nav} />}
@@ -218,6 +224,9 @@ const sx = {
     padding: 18, display: "flex", flexDirection: "column", gap: 6,
   },
   brand: { display: "flex", alignItems: "center", gap: 10, padding: "6px 8px 14px" },
+  navClose: { display: "none", marginLeft: "auto", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: "transparent", placeItems: "center" },
+  hamburger: { display: "none", width: 40, height: 40, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", placeItems: "center", flexShrink: 0 },
+  backdrop: { position: "fixed", inset: 0, zIndex: 90, background: "rgba(7,11,22,0.6)", backdropFilter: "blur(2px)" },
   logo: { width: 34, height: 34, borderRadius: 10, background: "var(--accent)", display: "grid", placeItems: "center" },
   navItem: {
     display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 10,

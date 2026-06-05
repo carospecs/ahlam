@@ -100,7 +100,7 @@ function VehicleProfile({ v, onBack }) {
 
       {/* hero */}
       <window.UI.Card pad={0} style={{ overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "320px 1fr" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "320px 1fr" }} className="cs-veh-hero">
           <window.UI.PhotoCell icon="Car" style={{ height: "100%", minHeight: 220, borderRadius: 0 }} iconSize={56} />
           <div style={{ padding: 22 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

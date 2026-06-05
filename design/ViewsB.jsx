@@ -79,10 +79,12 @@ function Listings() {
       </div>
 
       {group === "part" && (
+        <div className="cs-parts-card">
         <window.UI.Card pad={0}>
           {head}
           {rows.map((l, i) => <PartRowB key={l.id} l={l} last={i === rows.length - 1} />)}
         </window.UI.Card>
+        </div>
       )}
 
       {group === "car" && (
@@ -147,7 +149,7 @@ function Messages() {
   const t = window.THREADS.find((x) => x.id === activeId);
 
   return (
-    <div style={bx.chatWrap}>
+    <div style={bx.chatWrap} className="cs-chat">
       {/* thread list */}
       <div style={bx.threadList}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 9 }}>

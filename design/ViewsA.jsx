@@ -24,14 +24,14 @@ function Overview({ go }) {
   const I = window.Icon;
   return (
     <div style={{ display: "grid", gap: 20, maxWidth: 1180 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }} className="cs-grid4">
         <StatCard icon="Car" label="Vehicles in inventory" value="5" delta="+2 wk" tone="accent" />
         <StatCard icon="Wrench" label="Parts identified" value="42" delta="+9 wk" tone="muted" />
         <StatCard icon="Tag" label="Active listings" value="18" tone="success" />
         <StatCard icon="DollarSign" label="Sold this month" value="$1,840" delta="15 parts" tone="signal" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 20 }} className="cs-grid-2">
         <window.UI.Card pad={0}>
           <div style={ax.cardHead}>
             <span style={ax.cardTitle}>Recent vehicles</span>
@@ -220,7 +220,7 @@ function AddVehicle({ go }) {
               <div style={{ fontSize: 14, fontWeight: 700 }}>How do you want to sell this?</div>
               <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>You can change this anytime.</div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }} className="cs-sellmode">
               {["parts", "whole", "both"].map((mode) => {
                 const m = window.SELL_MODE[mode];
                 const on = sellMode === mode;
