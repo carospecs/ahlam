@@ -44,7 +44,8 @@ export async function GET() {
         added: timeAgo(v.created_at), photos: v.photos || 0,
         parts: 0, value: 0, listed: 0, sold: 0,
         sellMode: v.sell_mode || "parts", askingPrice: v.asking_price, mileage: v.mileage || "",
-        description: v.description || "",
+        description: v.description || "", title: v.title || "", status: statusLabel(v.status),
+        stock_number: v.stock_number || "",
       }));
 
       listings = (listRes.data || []).map((l: any) => {

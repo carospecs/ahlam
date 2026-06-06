@@ -127,9 +127,12 @@ export async function PATCH(req: Request) {
       if (!enumStatus) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
       update.status = enumStatus;
     }
-    if (typeof body.description === "string") {
-      // Merge into the corrected JSON so we don't clobber other reviewed fields.
-      const corrected = { ...(row.corrected || row.ai_output || {}), description: body.description };
+    // Editable part title (name) + description merge into the corrected JSON so
+    // we don't clobber other reviewed fields.
+    if (typeof body.description === "string" || typeof body.partName === "string") {
+      const corrected = { ...(row.corrected || row.ai_output || {}) };
+      if (typeof body.description === "string") corrected.description = body.description;
+      if (typeof body.partName === "string" && body.partName.trim()) corrected.partName = body.partName.trim();
       update.corrected = corrected;
     }
     if (Object.keys(update).length === 0) return NextResponse.json({ ok: true });
@@ -170,17 +173,25 @@ export async function PATCH(req: Request) {
     vehUpdate.status = enumStatus;
   }
 
-  if (typeof body.description === "string") {
-    vehUpdate.description = body.description;
+  if (typeof body.description === "string") vehUpdate.description = body.description;
+  if (typeof body.title === "string") vehUpdate.title = body.title.trim() || null;
+  if (typeof body.mileage === "string") vehUpdate.mileage = body.mileage.trim() || null;
+  if (body.askingPrice !== undefined) {
+    const n = body.askingPrice === "" || body.askingPrice == null ? null : Number(body.askingPrice);
+    vehUpdate.asking_price = Number.isFinite(n as number) ? n : null;
   }
 
   if (Object.keys(vehUpdate).length === 0) return NextResponse.json({ ok: true });
 
-  const { error } = await db
-    .from("vehicles")
-    .update(vehUpdate)
-    .eq("id", vehicleId)
-    .eq("shop_id", shopId);
+  let { error } = await db.from("vehicles").update(vehUpdate).eq("id", vehicleId).eq("shop_id", shopId);
+  // The `title` column may not exist yet (migration 0015). Retry without it.
+  if (error && "title" in vehUpdate && /title/i.test(error.message)) {
+    const { title, ...rest } = vehUpdate;
+    if (Object.keys(rest).length) {
+      ({ error } = await db.from("vehicles").update(rest).eq("id", vehicleId).eq("shop_id", shopId));
+    } else error = null as any;
+    if (!error) return NextResponse.json({ ok: true, titleSkipped: true });
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
