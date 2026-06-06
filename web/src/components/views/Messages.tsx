@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Inbox, ExternalLink, Paperclip, Send, X, Gauge, Search, CircleDot, Handshake, Ban } from "lucide-react";
+import { Inbox, ExternalLink, Paperclip, Send, X, Gauge, Search, CircleDot, Handshake, Ban, Check, LoaderCircle } from "lucide-react";
 
 // Conversation lifecycle: open = still chatting, dealt = a deal was made,
 // closed = ended with no deal.
@@ -36,32 +36,39 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
   const [sending, setSending] = React.useState(false);
   const [statusFilter, setStatusFilter] = React.useState<"all" | ConvStatus>("all");
   const [localStatus, setLocalStatus] = React.useState<Record<string, ConvStatus>>({});
+  // The status the user has *picked* for the open conversation but not saved yet.
+  const [pendingStatus, setPendingStatus] = React.useState<ConvStatus | null>(null);
+  const [savingStatus, setSavingStatus] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
   const statusOf = (th: any): ConvStatus => localStatus[th.id] ?? (th.status as ConvStatus) ?? "open";
 
-  async function setStatus(conversationId: string, status: ConvStatus) {
+  async function saveStatus(conversationId: string, status: ConvStatus) {
     const prev = localStatus[conversationId];
+    setSavingStatus(true);
     setLocalStatus((s) => ({ ...s, [conversationId]: status }));   // optimistic
     try {
       const r = await fetch("/api/messages", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversationId, status }) });
       if (!r.ok) {
         const d = await r.json().catch(() => ({}));
         setLocalStatus((s) => ({ ...s, [conversationId]: prev ?? "open" }));   // revert
-        csToast(d.needsMigration ? "Apply migration 0014 to save conversation status" : "Couldn't update status");
+        csToast(d.needsMigration ? "Apply migration 0014 to save conversation status" : "Couldn't save status");
         return;
       }
-      csToast(`Marked ${STATUS_META[status].label.toLowerCase()}`);
+      setPendingStatus(null);
+      csToast(`Saved — marked ${STATUS_META[status].label.toLowerCase()}`);
       reloadData();
     } catch {
       setLocalStatus((s) => ({ ...s, [conversationId]: prev ?? "open" }));
-      csToast("Couldn't update status");
+      csToast("Couldn't save status");
+    } finally {
+      setSavingStatus(false);
     }
   }
 
   React.useEffect(() => { if (!activeId && threads.length) setActiveId(threads[0].id); }, [threads, activeId]);
-  // Reset the composer when switching conversations.
-  React.useEffect(() => { setDraft(""); setAttachments([]); }, [activeId]);
+  // Reset the composer + any unsaved status pick when switching conversations.
+  React.useEffect(() => { setDraft(""); setAttachments([]); setPendingStatus(null); }, [activeId]);
 
   // Near-real-time: refresh inbox while this view is open (no WebSocket infra yet).
   React.useEffect(() => {
@@ -194,17 +201,32 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
               <MarketChip name={t.market} /> {t.part}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 4, padding: 3, borderRadius: 10, background: "var(--surface2)", border: "1px solid var(--line)", flexShrink: 0 }} className="cs-hide-mobile">
-            {(["open", "dealt", "closed"] as const).map((s) => {
-              const on = statusOf(t) === s; const M = STATUS_META[s];
-              return (
-                <button key={s} onClick={() => setStatus(t.id, s)} title={`Mark ${M.label}`}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 8, border: "none", background: on ? "var(--surface)" : "transparent", color: on ? M.color : "var(--muted)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", boxShadow: on ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }}>
-                  <M.Icon size={14} /> {M.label}
-                </button>
-              );
-            })}
-          </div>
+          {(() => {
+            const saved = statusOf(t);
+            const selected = pendingStatus ?? saved;
+            const dirty = pendingStatus !== null && pendingStatus !== saved;
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }} className="cs-hide-mobile">
+                <div style={{ display: "flex", gap: 4, padding: 3, borderRadius: 10, background: "var(--surface2)", border: "1px solid var(--line)" }}>
+                  {(["open", "dealt", "closed"] as const).map((s) => {
+                    const on = selected === s; const M = STATUS_META[s];
+                    return (
+                      <button key={s} onClick={() => setPendingStatus(s)} title={`Mark ${M.label}`}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 8, border: "none", background: on ? "var(--surface)" : "transparent", color: on ? M.color : "var(--muted)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", boxShadow: on ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }}>
+                        <M.Icon size={14} /> {M.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {dirty && (
+                  <button onClick={() => saveStatus(t.id, pendingStatus!)} disabled={savingStatus}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: savingStatus ? 0.6 : 1 }}>
+                    {savingStatus ? <LoaderCircle size={13} className="spin" /> : <Check size={14} />} Save changes
+                  </button>
+                )}
+              </div>
+            );
+          })()}
           <button style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", flexShrink: 0 }}><ExternalLink size={16} color="var(--muted)" /></button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 12, background: "var(--background)" }}>
