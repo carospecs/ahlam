@@ -20,9 +20,15 @@ export default function Home() {
     }
 
     const sb = supabaseBrowser();
-    sb.auth.getSession().then(({ data: { session } }) => {
-      setAuthed(!!session);
-    });
+    sb.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        setAuthed(!!session);
+      })
+      .catch(() => {
+        // Never leave the user stuck on "Loading…": fail open to the landing page.
+        setAuthed(false);
+      });
 
     const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
       setAuthed(!!session);
