@@ -71,28 +71,31 @@ export async function POST(req: Request) {
   const heroUrl = photoUrls[heroIndex] || photoUrls.find(Boolean) || null;
 
   // 1. Vehicle — active so whole/both variants surface in the market.
-  const { data: veh, error: vErr } = await db
-    .from("vehicles")
-    .insert({
-      shop_id: shopId,
-      created_by: user.id,
-      year: String(vehicle.year || ""),
-      make: vehicle.make || "Unknown",
-      model: vehicle.model || "",
-      trim: vehicle.trim || null,
-      body: vehicle.body || null,
-      color: vehicle.color || null,
-      vin: vehicle.vin || null,
-      stock_number: stockNumber,
-      mileage: mileage,                // private — never exposed in the public feed
-      asking_price: carPrice,
-      sell_mode: sellMode,
-      photos: vehicle.photos || 0,
-      photo_url: heroUrl,
-      status,
-    })
-    .select()
-    .single();
+  const vehRow: Record<string, any> = {
+    shop_id: shopId,
+    created_by: user.id,
+    year: String(vehicle.year || ""),
+    make: vehicle.make || "Unknown",
+    model: vehicle.model || "",
+    trim: vehicle.trim || null,
+    body: vehicle.body || null,
+    color: vehicle.color || null,
+    vin: vehicle.vin || null,
+    stock_number: stockNumber,
+    mileage: mileage,                // private — never exposed in the public feed
+    asking_price: carPrice,
+    sell_mode: sellMode,
+    photos: vehicle.photos || 0,
+    photo_url: heroUrl,
+    status,
+  };
+  let { data: veh, error: vErr } = await db.from("vehicles").insert(vehRow).select().single();
+  // Graceful when migration 0017 (vehicles.photo_url) isn't applied yet: retry
+  // without it so posting still works (the part photos still persist).
+  if (vErr && /photo_url/.test(vErr.message || "")) {
+    delete vehRow.photo_url;
+    ({ data: veh, error: vErr } = await db.from("vehicles").insert(vehRow).select().single());
+  }
   if (vErr || !veh) return NextResponse.json({ error: vErr?.message || "Could not save vehicle" }, { status: 500 });
 
   // 2. Part listings — skipped when selling the whole car only.
