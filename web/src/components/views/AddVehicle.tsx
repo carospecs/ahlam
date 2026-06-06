@@ -6,6 +6,7 @@ import { Card, PhotoCell, ConditionBadge } from "../UI";
 import { SELL_MODE } from "../data";
 import { csToast } from "../Dashboard";
 import { looksLikeImage, normalizeImageFile, fileToJpegDataUrl } from "@/lib/image";
+import { ManualListing } from "./ManualListing";
 
 interface UploadedPhoto { url: string; name: string; file: File }
 
@@ -89,6 +90,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const [saving, setSaving] = React.useState(false);
   const [mainPhoto, setMainPhoto] = React.useState<string | null>(null);
   const [sellMode, setSellMode] = React.useState("parts");
+  const [mode, setMode] = React.useState<null | "ai" | "manualCar" | "manualPart">(null);
   const [provider] = React.useState<string>("gemini");
   const [photos, setPhotos] = React.useState<UploadedPhoto[]>([]);
   const [dragging, setDragging] = React.useState(false);
@@ -291,8 +293,13 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const showCar = sellMode === "whole" || sellMode === "both";
   const carPriceNum = Number(carPrice) || 0;
 
+  if (mode === "manualCar") return <ManualListing kind="car" onBack={() => setMode(null)} go={go} />;
+  if (mode === "manualPart") return <ManualListing kind="part" onBack={() => setMode(null)} go={go} />;
+  if (!mode) return <ModePicker onPick={setMode} />;
+
   return (
     <div style={{ maxWidth: 880, margin: "0 auto", display: "grid", gap: 20 }}>
+      <button onClick={() => setMode(null)} style={{ ...navBtn, justifySelf: "start" }}><ArrowLeft size={15} /> Back to options</button>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <Step n={1} label="Photos" on={phase === "upload"} done={phase !== "upload"} />
         <span style={{ flex: 1, height: 2, background: "var(--line)", borderRadius: 2, maxWidth: 80 }} />
@@ -684,6 +691,32 @@ function Step({ n, label, on, done }: { n: number; label: string; on: boolean; d
         {done ? <Check size={14} color="#fff" /> : n}
       </div>
       <span style={{ fontSize: 13.5, fontWeight: 600, color: on ? "var(--foreground)" : "var(--muted)" }}>{label}</span>
+    </div>
+  );
+}
+
+// Entry choice: AI scan vs. manual car vs. manual part.
+function ModePicker({ onPick }: { onPick: (m: "ai" | "manualCar" | "manualPart") => void }) {
+  const tiles = [
+    { id: "ai", icon: Sparkles, title: "Scan with AI", desc: "Upload photos — AI finds the car, every part, condition, and prices.", fast: true },
+    { id: "manualCar", icon: Car, title: "List a car manually", desc: "Type it in yourself. Photos optional. AI can help write & price." },
+    { id: "manualPart", icon: Wrench, title: "List a part manually", desc: "Post a single part (e.g. an engine). Photos optional." },
+  ] as const;
+  return (
+    <div style={{ maxWidth: 880, margin: "0 auto", display: "grid", gap: 16 }}>
+      <div>
+        <div style={{ fontSize: 16, fontWeight: 700 }}>How do you want to add this?</div>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 3 }}>Let AI do it from photos, or enter a car or part yourself.</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+        {tiles.map((t) => (
+          <button key={t.id} onClick={() => onPick(t.id)} className="cs-hover-card" style={{ textAlign: "left", cursor: "pointer", border: `1px solid ${t.fast ? "var(--accent)" : "var(--line)"}`, borderRadius: "var(--radius-md)", background: "var(--surface)", padding: 18, display: "grid", gap: 10 }}>
+            <span style={{ width: 46, height: 46, borderRadius: 12, background: "var(--accent-tint)", display: "grid", placeItems: "center" }}><t.icon size={22} color="var(--accent)" /></span>
+            <div style={{ fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>{t.title}{t.fast && <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", background: "var(--accent-tint)", borderRadius: 6, padding: "2px 7px" }}>FASTEST</span>}</div>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 }}>{t.desc}</div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

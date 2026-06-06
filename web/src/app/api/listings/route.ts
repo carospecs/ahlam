@@ -87,13 +87,20 @@ export async function POST(req: Request) {
     sell_mode: sellMode,
     photos: vehicle.photos || 0,
     photo_url: heroUrl,
+    title: typeof vehicle.title === "string" && vehicle.title.trim() ? vehicle.title.trim() : null,
+    description: typeof vehicle.description === "string" && vehicle.description.trim() ? vehicle.description : null,
     status,
   };
   let { data: veh, error: vErr } = await db.from("vehicles").insert(vehRow).select().single();
-  // Graceful when migration 0017 (vehicles.photo_url) isn't applied yet: retry
-  // without it so posting still works (the part photos still persist).
-  if (vErr && /photo_url/.test(vErr.message || "")) {
-    delete vehRow.photo_url;
+  // Graceful when an optional column's migration isn't applied yet (photo_url 0017,
+  // title 0015, description 0018): drop the offending column(s) and retry so the
+  // post still succeeds.
+  for (let attempt = 0; vErr && attempt < 3; attempt++) {
+    let dropped = false;
+    for (const col of ["photo_url", "title", "description"]) {
+      if (col in vehRow && new RegExp(col, "i").test(vErr.message || "")) { delete (vehRow as any)[col]; dropped = true; }
+    }
+    if (!dropped) break;
     ({ data: veh, error: vErr } = await db.from("vehicles").insert(vehRow).select().single());
   }
   if (vErr || !veh) return NextResponse.json({ error: vErr?.message || "Could not save vehicle" }, { status: 500 });
