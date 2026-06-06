@@ -23,7 +23,7 @@ export async function GET() {
   if (!shopId) return NextResponse.json({ members: [], invites: [], role: null });
 
   const [{ data: members }, { data: invites }] = await Promise.all([
-    db.from("shop_members").select("id, role, user_id, created_at, profiles!inner(display_name, avatar_url)").eq("shop_id", shopId),
+    db.from("shop_members").select("id, role, user_id, created_at, profiles(display_name, avatar_url)").eq("shop_id", shopId),
     db.from("shop_invites").select("*").eq("shop_id", shopId).eq("status", "pending").order("created_at", { ascending: false }),
   ]);
 

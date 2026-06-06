@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export async function POST(req: Request) {
@@ -12,6 +13,16 @@ export async function POST(req: Request) {
   const email = String(body.email ?? "").trim().toLowerCase();
   if (!email) {
     return NextResponse.json({ error: "Email required" }, { status: 400 });
+  }
+
+  // Require authentication — only the user themselves can confirm their email.
+  const supabase = await supabaseServer();
+  const { data: { user: authUser }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !authUser) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (authUser.email?.toLowerCase() !== email) {
+    return NextResponse.json({ error: "You can only confirm your own email" }, { status: 403 });
   }
 
   const admin = supabaseAdmin();

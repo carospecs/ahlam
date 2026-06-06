@@ -22,63 +22,53 @@ export async function GET() {
   const { data: shops } = await db.from("shops").select("*");
   const shopMap = new Map((shops || []).map((s: any) => [s.id, s]));
 
-  // Active part listings from other shops.
-  const { data: listingRows } = await db
-    .from("listings")
-    .select("*")
-    .eq("status", "active")
-    .order("created_at", { ascending: false });
+  // Active part listings from other shops (filtered in SQL).
+  let listQuery = db.from("listings").select("*").eq("status", "active");
+  if (ownShopId) listQuery = listQuery.neq("shop_id", ownShopId);
+  const { data: listingRows } = await listQuery.order("created_at", { ascending: false });
 
-  const parts = (listingRows || [])
-    .filter((l: any) => l.shop_id !== ownShopId)
-    .map((l: any) => {
-      const c = l.corrected || l.ai_output || {};
-      const shop = shopMap.get(l.shop_id);
-      return {
-        id: l.id,
-        part: c.partName || c.part_name || "Used Part",
-        grade: c.condition || "Good",
-        price: l.price_usd ?? c.priceUsd ?? c.suggestedPriceUsd ?? c.suggested_price ?? 0,
-        fitment: formatFit(c.fitment),
-        category: c.partCategory || c.part_category || "",
-        photoUrl: l.photo_url || null,
-        views: l.views || 0,
-        sellerId: l.seller_id || l.created_by,
-        shopId: l.shop_id,
-        shopName: shop?.name || "Independent seller",
-        location: shop?.location || "",
-        note: c.conditionNotes || c.condition_notes || "",
-        desc: c.description || "",
-        confidence: c.confidence || "high",
-        markets: l.marketplace_url ? ["Marketplace"] : [],
-      };
-    });
+  const parts = (listingRows || []).map((l: any) => {
+    const c = l.corrected || l.ai_output || {};
+    const shop = shopMap.get(l.shop_id);
+    return {
+      id: l.id,
+      part: c.partName || c.part_name || "Used Part",
+      grade: c.condition || "Good",
+      price: l.price_usd ?? c.priceUsd ?? c.suggestedPriceUsd ?? c.suggested_price ?? 0,
+      fitment: formatFit(c.fitment),
+      category: c.partCategory || c.part_category || "",
+      photoUrl: l.photo_url || null,
+      views: l.views || 0,
+      sellerId: l.seller_id || l.created_by,
+      shopId: l.shop_id,
+      shopName: shop?.name || "Independent seller",
+      location: shop?.location || "",
+      note: c.conditionNotes || c.condition_notes || "",
+      desc: c.description || "",
+      confidence: c.confidence || "high",
+      markets: l.marketplace_url ? ["Marketplace"] : [],
+    };
+  });
 
-  // Whole-car vehicles from other shops.
-  const { data: vehicleRows } = await db
-    .from("vehicles")
-    .select("*")
-    .in("sell_mode", ["whole", "both"])
-    .order("created_at", { ascending: false });
+  // Whole-car vehicles from other shops (filtered in SQL).
+  let vehQuery = db.from("vehicles").select("*").in("sell_mode", ["whole", "both"]).eq("status", "active");
+  if (ownShopId) vehQuery = vehQuery.neq("shop_id", ownShopId);
+  const { data: vehicleRows } = await vehQuery.order("created_at", { ascending: false });
 
-  const vehicles = (vehicleRows || [])
-    .filter((v: any) => v.shop_id !== ownShopId && v.status === "active")
-    .map((v: any) => {
-      const shop = shopMap.get(v.shop_id);
-      return {
-        id: v.id,
-        year: v.year, make: v.make, model: v.model, trim: v.trim || "",
-        body: v.body || "", color: v.color || "",
-        // mileage intentionally omitted — kept private, shared only via chat.
-        sellMode: v.sell_mode || "whole",
-        askingPrice: v.asking_price,
-        views: v.views || 0,
-        // vin intentionally omitted — never exposed to buyers.
-        shopId: v.shop_id,
-        shopName: shop?.name || "Independent seller",
-        location: shop?.location || "",
-      };
-    });
+  const vehicles = (vehicleRows || []).map((v: any) => {
+    const shop = shopMap.get(v.shop_id);
+    return {
+      id: v.id,
+      year: v.year, make: v.make, model: v.model, trim: v.trim || "",
+      body: v.body || "", color: v.color || "",
+      sellMode: v.sell_mode || "whole",
+      askingPrice: v.asking_price,
+      views: v.views || 0,
+      shopId: v.shop_id,
+      shopName: shop?.name || "Independent seller",
+      location: shop?.location || "",
+    };
+  });
 
   // Demo fallback so the marketplace is never empty for a brand-new shop.
   const usedDemo = parts.length === 0 && vehicles.length === 0;

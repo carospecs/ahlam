@@ -24,7 +24,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
 
   const mode = SELL_MODE[sellMode];
   const showCar = sellMode === "whole" || sellMode === "both";
-  const showParts = sellMode === "parts" || sellMode === "both";
+  const showParts = true; // always allow editing parts regardless of sell mode
   const priceOf = (p: any) => (prices[p.id] != null ? prices[p.id] : p.price);
   const partsValue = parts.reduce((s: number, p: any) => s + priceOf(p), 0);
   const selectedCount = parts.filter((p: any) => selected.has(p.id)).length;
@@ -41,6 +41,31 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
       if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't update"); }
       else { setSellMode(pendingMode); csToast(`Now selling as ${SELL_MODE[pendingMode].label}`); (window as any).csReloadData?.(); }
     } catch { csToast("Couldn't update — check your connection"); setPendingMode(prev); }
+    setSavingMode(false);
+  }
+
+  // Post the whole vehicle to the marketplace.
+  async function postVehicle() {
+    if (savingMode) return;
+    setSavingMode(true);
+    try {
+      const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vehicleId: v.id, status: "active" }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't post"); }
+      else { csToast("Posted this vehicle to the marketplace"); (window as any).csReloadData?.(); }
+    } catch { csToast("Couldn't post — check your connection"); }
+    setSavingMode(false);
+  }
+
+  // Post selected parts to the marketplace.
+  async function postSelected() {
+    if (savingMode || !selectedCount) return;
+    setSavingMode(true);
+    const ids = parts.filter((p: any) => selected.has(p.id)).map((p: any) => p.id);
+    try {
+      const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingIds: ids, status: "active" }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't post"); }
+      else { csToast(`Posted ${ids.length} selected part${ids.length === 1 ? "" : "s"}`); (window as any).csReloadData?.(); }
+    } catch { csToast("Couldn't post — check your connection"); }
     setSavingMode(false);
   }
 
@@ -74,7 +99,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
       {/* Header row: back link on the left, Post car on the top-right corner. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <button onClick={onBack} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "var(--muted)", fontSize: 13.5, fontWeight: 600, padding: 0, width: "fit-content" }}><ChevronLeft size={16} /> Back to shop vehicles</button>
-        <button style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 600 }} onClick={() => csToast("Posted this vehicle to the marketplace")}><Send size={15} /> Post car</button>
+        <button style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 600 }} onClick={postVehicle}><Send size={15} /> Post car</button>
       </div>
 
       <Card pad={0} style={{ overflow: "hidden" }}>
@@ -148,7 +173,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
         <Card pad={0}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 18px", borderBottom: "1px solid var(--line)" }}>
             <span style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Wrench size={16} color="var(--accent)" /> Parts from this car <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {parts.length}</span></span>
-            <button style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, opacity: selectedCount ? 1 : 0.6 }} disabled={!selectedCount} onClick={() => csToast(`Drafted listings for ${selectedCount} selected part${selectedCount === 1 ? "" : "s"}`)}><Sparkles size={14} /> Post {selectedCount} selected</button>
+            <button style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, opacity: selectedCount ? 1 : 0.6 }} disabled={!selectedCount || savingMode} onClick={postSelected}><Sparkles size={14} /> Post {selectedCount} selected</button>
           </div>
           {parts.map((l: any, i: number) => {
             const on = selected.has(l.id);

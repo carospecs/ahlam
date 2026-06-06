@@ -22,18 +22,18 @@
   --radius-xl: 22px;
 }
 
-/* ---- Cream light mode ---------------------------------------------------- */
-/* Main color: #D0B98B (cream). Secondary: #0D1C30 (deep navy) used for text,
-   borders, and surfaces. The red accent stays the brand constant. Toggle by
-   setting data-theme="light" on <html>. */
+/* ---- Light mode (brand palette) ------------------------------------------ */
+/* Core: Midnight #0F172A, Ink #0d1c30, Sand #D0B98B, Paper #F4EFE4,
+   warm gray #E7E1D4, Redline #DC2626. Toggle by setting data-theme="light"
+   on <html>. */
 :root[data-theme="light"] {
-  --background: #E4D5B5;          /* cream paper — the page behind cards */
-  --foreground: #15253B;          /* deep navy text */
-  --surface: #F6EEDB;             /* light warm card — lifts off the paper */
-  --surface2: #E7D6B2;            /* deeper cream — clearly visible hover/fill */
-  --muted: #897E60;               /* lighter warm muted — reads as secondary */
-  --line: #C2A971;                /* defined cream border */
-  --accent: #DC2626;
+  --background: #E7E1D4;          /* warm gray backdrop */
+  --foreground: #0d1c30;          /* Ink — body text, wordmark */
+  --surface: #F4EFE4;             /* Paper — card backs, panels */
+  --surface2: #D0B98B;            /* Sand — hover/fill, card fronts */
+  --muted: #8B7D62;               /* muted ink for secondary text */
+  --line: #C5B48C;                /* light warm border */
+  --accent: #DC2626;              /* Redline — constant brand accent */
   --accent-hover: #B91C1C;
   --signal: #B45309;
   --signal-bg: rgba(180, 83, 9, 0.14);

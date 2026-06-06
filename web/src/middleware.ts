@@ -6,11 +6,19 @@ const allowedOrigins = [
   "http://localhost:3001",
   "http://localhost:8081",
   "http://localhost:8082",
+  // Expo / React Native dev — no port
+  "exp://192.168.0.0",
+  "exp://10.0.0.0",
+  "exp://172.16.0.0",
+  "http://192.168.0.0",
+  "http://10.0.0.0",
+  "http://172.16.0.0",
 ];
 
 function corsMiddleware(req: NextRequest, res: NextResponse) {
   const origin = req.headers.get("origin") ?? "";
-  const cors = allowedOrigins.includes(origin) || origin.endsWith(".ahlam.io");
+  const dynamicOk = /^https?:\/\/192\.168\./.test(origin) || /^https?:\/\/10\./.test(origin) || /^https?:\/\/172\.(1[6-9]|2\d|3[01])\./.test(origin) || /^exp:\/\/192\.168\./.test(origin) || /^exp:\/\/10\./.test(origin) || /^exp:\/\/172\.(1[6-9]|2\d|3[01])\./.test(origin);
+  const cors = allowedOrigins.includes(origin) || origin.endsWith(".ahlam.io") || dynamicOk;
   if (cors) {
     res.headers.set("Access-Control-Allow-Origin", origin);
     res.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -24,7 +32,8 @@ export async function middleware(req: NextRequest) {
 
   // CORS preflight
   const origin = req.headers.get("origin") ?? "";
-  const corsOk = allowedOrigins.includes(origin) || origin.endsWith(".ahlam.io");
+  const dynamicOk = /^https?:\/\/192\.168\./.test(origin) || /^https?:\/\/10\./.test(origin) || /^https?:\/\/172\.(1[6-9]|2\d|3[01])\./.test(origin) || /^exp:\/\/192\.168\./.test(origin) || /^exp:\/\/10\./.test(origin) || /^exp:\/\/172\.(1[6-9]|2\d|3[01])\./.test(origin);
+  const corsOk = allowedOrigins.includes(origin) || origin.endsWith(".ahlam.io") || dynamicOk;
   if (req.method === "OPTIONS" && corsOk) {
     const preflight = new Response(null, { status: 204 });
     preflight.headers.set("Access-Control-Allow-Origin", origin);

@@ -34,7 +34,7 @@ export async function GET() {
       db.from("listings").select("*").eq("shop_id", shopId).order("created_at", { ascending: false }),
       db.from("conversations").select("*, messages(*)").eq("shop_id", shopId).order("created_at", { ascending: false }),
       db.from("activity_log").select("*").eq("shop_id", shopId).order("created_at", { ascending: false }),
-      db.from("shop_members").select("*, profiles!inner(display_name, avatar_url)").eq("shop_id", shopId),
+      db.from("shop_members").select("*, profiles(display_name, avatar_url)").eq("shop_id", shopId),
     ]);
 
     if (!shopRes.error) {
@@ -87,11 +87,14 @@ export async function GET() {
       myRole = members.find((m: any) => m.userId === user.id)?.role || "owner";
 
       const s = shopRes.data;
+      const trialEnd = s.trial_ends_at ? new Date(s.trial_ends_at) : null;
+      const trialLeft = trialEnd ? Math.max(0, Math.ceil((trialEnd.getTime() - Date.now()) / 86400000)) : 0;
+      const planName = s.plan || "Pro";
       shop = {
         id: s.id, name: s.name, location: s.location || "",
         phone: s.business_phone || "", email: s.email || "", website: s.website || "",
         description: s.description || "", hours: s.hours || "", logoUrl: s.logo_url || null,
-        coverUrl: s.cover_url || null, members, plan: "Pro", trialDaysLeft: 18,
+        coverUrl: s.cover_url || null, members, plan: planName, trialDaysLeft: trialLeft,
       };
     }
   }

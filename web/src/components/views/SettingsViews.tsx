@@ -453,7 +453,7 @@ function parseHours(value: string): HoursRow[] | null {
 }
 
 function HoursEditor({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
-  const parsedOnce = React.useMemo(() => parseHours(value), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const parsedOnce = React.useMemo(() => parseHours(value), [value]);
   const legacy = !parsedOnce && value ? value : "";
   const [rows, setRows] = React.useState<HoursRow[]>(parsedOnce || DEFAULT_ROWS.map((r) => ({ ...r })));
 

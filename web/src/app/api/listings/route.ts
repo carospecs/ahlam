@@ -75,9 +75,11 @@ export async function POST(req: Request) {
 // Map a UI status label back to the listing_status enum.
 const STATUS_TO_ENUM: Record<string, string> = { Posted: "active", Draft: "draft", Sold: "sold" };
 
-// PATCH handles two shapes, scoped to the seller's own shop:
-//   { vehicleId, sellMode }                          → flip a vehicle parts/whole/both
+// PATCH handles three shapes, scoped to the seller's own shop:
 //   { listingId, priceUsd?, status?, description? }  → edit one part listing
+//   { vehicleId, sellMode }                           → flip a vehicle parts/whole/both
+//   { vehicleId, status }                             → post/unpost a vehicle as a whole car
+//   { listingIds, status }                            → bulk-update listing statuses
 export async function PATCH(req: Request) {
   const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
@@ -115,15 +117,42 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // ── Flip a vehicle's sell mode ─────────────────────────────────────────────
-  const { vehicleId, sellMode } = body;
-  if (!vehicleId || !["parts", "whole", "both"].includes(sellMode)) {
-    return NextResponse.json({ error: "vehicleId and a valid sellMode are required" }, { status: 400 });
+  // ── Bulk-update listing statuses ───────────────────────────────────────────
+  if (body.listingIds && typeof body.status === "string") {
+    const enumStatus = STATUS_TO_ENUM[body.status] || (["draft", "active", "sold", "removed"].includes(body.status) ? body.status : null);
+    if (!enumStatus) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    const ids: string[] = Array.isArray(body.listingIds) ? body.listingIds : [];
+    if (!ids.length) return NextResponse.json({ error: "No listing IDs provided" }, { status: 400 });
+
+    const { error } = await db.from("listings").update({ status: enumStatus }).in("id", ids).eq("shop_id", shopId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, updated: ids.length });
   }
+
+  // ── Vehicle-level update (sell mode OR status) ─────────────────────────────
+  const { vehicleId } = body;
+  if (!vehicleId) return NextResponse.json({ error: "vehicleId is required" }, { status: 400 });
+
+  const vehUpdate: Record<string, any> = {};
+
+  if (body.sellMode) {
+    if (!["parts", "whole", "both"].includes(body.sellMode)) {
+      return NextResponse.json({ error: "Invalid sellMode" }, { status: 400 });
+    }
+    vehUpdate.sell_mode = body.sellMode;
+  }
+
+  if (body.status) {
+    const enumStatus = ["draft", "active", "sold"].includes(body.status) ? body.status : null;
+    if (!enumStatus) return NextResponse.json({ error: "Valid vehicle status required (draft/active/sold)" }, { status: 400 });
+    vehUpdate.status = enumStatus;
+  }
+
+  if (Object.keys(vehUpdate).length === 0) return NextResponse.json({ ok: true });
 
   const { error } = await db
     .from("vehicles")
-    .update({ sell_mode: sellMode })
+    .update(vehUpdate)
     .eq("id", vehicleId)
     .eq("shop_id", shopId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

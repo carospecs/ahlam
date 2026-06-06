@@ -1,6 +1,6 @@
 "use client";
 
-import { Car, Wrench, ScanLine } from "lucide-react";
+import { Car, Wrench } from "lucide-react";
 import { PhotoCell } from "../UI";
 import { useData } from "../Dashboard";
 

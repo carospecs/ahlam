@@ -96,8 +96,12 @@ export function AIChat(_: { go: (id: string) => void; onVehicle?: (v: any) => vo
   function deleteChat(id: string) {
     setStore((s) => {
       const chats = s.chats.filter((c) => c.id !== id);
-      const activeId = s.activeId === id ? (chats[0]?.id ?? null) : s.activeId;
-      return chats.length ? { ...s, chats, activeId } : { ...s, chats: [newChat()], activeId: null };
+      if (chats.length) {
+        const activeId = s.activeId === id ? chats[0].id : s.activeId;
+        return { ...s, chats, activeId };
+      }
+      const c = newChat();
+      return { ...s, chats: [c], activeId: c.id };
     });
   }
   function deleteProject(id: string) {

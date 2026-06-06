@@ -167,6 +167,13 @@ async function callGemini(key: string, base64: string, mime: string, userText: s
 }
 
 export async function POST(req: Request): Promise<NextResponse<AIResult>> {
+  // Require authentication to prevent anonymous credit-burning.
+  const supabase = await (await import("@/lib/supabase-server")).supabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, userMessage: "Sign in required", internalError: "no auth" }, { status: 401 });
+  }
+
   let body: { imageBase64?: string; imageUrl?: string; provider?: string; photoContext?: string; vin?: { make?: string; model?: string; year?: number } };
   try {
     body = await req.json();
