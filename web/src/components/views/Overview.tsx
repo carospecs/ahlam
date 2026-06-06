@@ -17,10 +17,10 @@ export function Overview({ go }: { go: (id: string) => void; onVehicle?: (v: any
   const firstName = (user?.displayName || "").split(" ")[0];
 
   const stats = [
-    { icon: Car, label: "Vehicles in inventory", value: String(vehicles.length), delta: vehicles.length > 0 ? null : null, tone: "var(--accent)" },
-    { icon: Wrench, label: "Parts identified", value: String(partsIdentified), delta: partsIdentified > 0 ? "+ parts" : null, tone: "var(--muted)" },
-    { icon: Tag, label: "Active listings", value: String(activeListings), tone: "var(--success)" },
-    { icon: DollarSign, label: "Sold this month", value: soldTotal > 0 ? `$${soldTotal.toLocaleString()}` : "$0", delta: soldCount > 0 ? `${soldCount} parts` : null, tone: "var(--signal)" },
+    { icon: Car, label: "Vehicles in inventory", value: String(vehicles.length), delta: vehicles.length > 0 ? null : null, tone: "var(--accent)", nav: "vehicles" },
+    { icon: Wrench, label: "Parts identified", value: String(partsIdentified), delta: partsIdentified > 0 ? "+ parts" : null, tone: "var(--muted)", nav: "parts" },
+    { icon: Tag, label: "Active listings", value: String(activeListings), tone: "var(--success)", nav: "parts" },
+    { icon: DollarSign, label: "Sold this month", value: soldTotal > 0 ? `$${soldTotal.toLocaleString()}` : "$0", delta: soldCount > 0 ? `${soldCount} parts` : null, tone: "var(--signal)", nav: "analytics" },
   ];
 
   return (
@@ -29,18 +29,22 @@ export function Overview({ go }: { go: (id: string) => void; onVehicle?: (v: any
         {stats.map((s) => {
           const IconComp = s.icon;
           return (
-            <Card key={s.label} pad={18} style={{ display: "grid", gap: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in srgb, ${s.tone} 15%, transparent)`, display: "grid", placeItems: "center" }}>
-                  <IconComp size={19} color={s.tone} />
+            <button key={s.label} onClick={() => go(s.nav)} className="cs-card-btn" style={{ all: "unset", cursor: "pointer", display: "block" }} title={`Go to ${s.label}`}>
+              <Card pad={18} style={{ display: "grid", gap: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in srgb, ${s.tone} 15%, transparent)`, display: "grid", placeItems: "center" }}>
+                    <IconComp size={19} color={s.tone} />
+                  </div>
+                  {s.delta
+                    ? <span style={{ fontSize: 12, fontWeight: 600, color: "var(--success)", display: "inline-flex", alignItems: "center", gap: 3 }}><TrendingUp size={13} /> {s.delta}</span>
+                    : <ArrowRight size={15} color="var(--muted)" />}
                 </div>
-                {s.delta && <span style={{ fontSize: 12, fontWeight: 600, color: "var(--success)", display: "inline-flex", alignItems: "center", gap: 3 }}><TrendingUp size={13} /> {s.delta}</span>}
-              </div>
-              <div>
-                <div className="tnum" style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em" }}>{s.value}</div>
-                <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{s.label}</div>
-              </div>
-            </Card>
+                <div>
+                  <div className="tnum" style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em" }}>{s.value}</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{s.label}</div>
+                </div>
+              </Card>
+            </button>
           );
         })}
       </div>
