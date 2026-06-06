@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { normalizeGrade } from "@/lib/grade";
 
 const R = 3959; // Earth radius in miles
 
@@ -67,7 +68,7 @@ export async function GET(req: Request) {
     return {
       id: l.id,
       part: c.partName || c.part_name || "Used Part",
-      grade: ["A","B","C","D","F"].includes(c.condition) ? c.condition : "C",
+      grade: normalizeGrade(c.condition),
       price: l.price_usd ?? c.priceUsd ?? c.suggestedPriceUsd ?? c.suggested_price ?? 0,
       fitment: formatFit(c.fitment),
       category: c.partCategory || c.part_category || "",

@@ -243,7 +243,7 @@ export function Browse() {
             <>
               <Select label="Category" value={partCat} onChange={setPartCat} options={partCats} />
               <span style={{ fontSize: 12, color: "var(--muted)" }}>Grade:</span>
-              {["A","B","C","D","F"].map((g) => {
+              {["Good","Poor"].map((g) => {
                 const on = selectedConditions.has(g);
                 const color = conditionColorOf(g);
                 return (
@@ -295,7 +295,7 @@ export function Browse() {
                       <Store size={13} /> <ShopLink id={l.shopId} name={l.shopName} />
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                      <MapPin size={13} /> ZIP {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views} views
+                      <MapPin size={13} /> {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views} views
                     </div>
                     <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}` }); }}>
                       <MessageSquare size={14} /> Message seller
@@ -323,7 +323,7 @@ export function Browse() {
                     <Store size={13} /> <ShopLink id={l.shopId} name={l.shopName} />
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                    <MapPin size={13} /> ZIP {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views} views
+                    <MapPin size={13} /> {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views} views
                   </div>
                   <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}` }); }}>
                     <MessageSquare size={14} /> Message seller
@@ -354,7 +354,7 @@ export function Browse() {
                     <span>{v.mileage}</span><span>·</span><span>{v.body}</span><span>·</span><span>{v.color}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                    <Store size={13} /> <ShopLink id={v.shopId} name={v.shopName} /> · <MapPin size={12} /> ZIP {v.location || "—"}{v.distance != null ? ` · ${v.distance} mi` : ""}{v.driveTime != null ? ` · ~${v.driveTime} min` : ""} · <Eye size={12} /> {v.views} views
+                    <Store size={13} /> <ShopLink id={v.shopId} name={v.shopName} /> · <MapPin size={12} /> {v.location || "—"}{v.distance != null ? ` · ${v.distance} mi` : ""}{v.driveTime != null ? ` · ~${v.driveTime} min` : ""} · <Eye size={12} /> {v.views} views
                   </div>
                   <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ shopId: v.shopId, subject: `${v.year} ${v.make} ${v.model}`, title: `${v.year} ${v.make} ${v.model} · ${v.shopName}` }); }}>
                     <MessageSquare size={14} /> Message seller
@@ -424,7 +424,7 @@ function PartDetailModal({ part, onClose, onContact }: { part: MktPart; onClose:
         )}
         <div style={{ height: 1, background: "var(--line)" }} />
         <MetaRow icon={<Store size={14} />}><ShopLink id={part.shopId} name={part.shopName} /></MetaRow>
-        <MetaRow icon={<MapPin size={14} />}>ZIP {part.location || "—"}{part.distance != null ? ` · ${part.distance} mi · ~${part.driveTime} min drive` : ""}</MetaRow>
+        <MetaRow icon={<MapPin size={14} />}>{part.location || "—"}{part.distance != null ? ` · ${part.distance} mi · ~${part.driveTime} min drive` : ""}</MetaRow>
         <MetaRow icon={<Eye size={14} />}>{part.views} {part.views === 1 ? "person has" : "people have"} viewed this</MetaRow>
         <button style={primaryBtn} onClick={onContact}><MessageSquare size={15} /> Message seller</button>
       </div>
@@ -450,7 +450,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onContact }: { vehicle: MktVe
         </p>
         <div style={{ height: 1, background: "var(--line)" }} />
         <MetaRow icon={<Store size={14} />}><ShopLink id={v.shopId} name={v.shopName} /></MetaRow>
-        <MetaRow icon={<MapPin size={14} />}>ZIP {v.location || "—"}{v.distance != null ? ` · ${v.distance} mi · ~${v.driveTime} min drive` : ""}</MetaRow>
+        <MetaRow icon={<MapPin size={14} />}>{v.location || "—"}{v.distance != null ? ` · ${v.distance} mi · ~${v.driveTime} min drive` : ""}</MetaRow>
         <MetaRow icon={<Eye size={14} />}>{v.views} {v.views === 1 ? "person has" : "people have"} viewed this</MetaRow>
         <button style={primaryBtn} onClick={onContact}><MessageSquare size={15} /> Message seller</button>
       </div>

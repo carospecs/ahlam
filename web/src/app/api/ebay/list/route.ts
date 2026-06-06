@@ -6,7 +6,9 @@ import { ebayConfigured, getConnection, publishListing } from "@/lib/ebay";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+// Two-bucket grade → eBay condition. Legacy A–F still map via the extra keys.
 const CONDITION: Record<string, string> = {
+  Good: "USED_GOOD", Poor: "USED_ACCEPTABLE",
   A: "USED_EXCELLENT", B: "USED_VERY_GOOD", C: "USED_GOOD",
   D: "USED_ACCEPTABLE", F: "FOR_PARTS_OR_NOT_WORKING",
 };

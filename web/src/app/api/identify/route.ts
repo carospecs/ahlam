@@ -6,7 +6,7 @@ export const maxDuration = 60;
 
 // --- Inlined from @ahlam/shared (monorepo dep that Vercel can't resolve) ---
 
-export type ConditionGrade = "A" | "B" | "C" | "D" | "F";
+export type ConditionGrade = "Good" | "Poor";
 export type Confidence = "high" | "medium" | "low";
 
 export interface VehicleFit {
@@ -52,11 +52,8 @@ export type AIResult =
   | { ok: false; userMessage: string; internalError: string };
 
 const CONDITION_RUBRIC: Record<string, { detail: string }> = {
-  A: { detail: "Like New — no visible wear, no damage, fully functional. Original finish intact. Surface is clean with no scratches, scuffs, or blemishes." },
-  B: { detail: "Good — minor scuffs or light scratches that do not affect function. All tabs and mounts intact. Surface rust only, no cracks/breaks/dents/bends. The part works as intended." },
-  C: { detail: "Fair — visible wear, scratches, scuffs, or minor dents. Functions but shows age. May have surface corrosion, light pitting, or faded finish." },
-  D: { detail: "Poor — heavy wear, cracks, dents, or damage. Functions but needs repair. Broken mounting tabs, worn bushings, heavy corrosion, tears, or leaks." },
-  F: { detail: "Core/Scrap — broken, non-functional, or severely damaged. Only good as core/rebuild/project. Shattered glass/lenses, heavy dents, non-functional mechanicals." },
+  Good: { detail: "The part is usable and sellable as-is. It may have normal wear, minor scuffs, light scratches, dirt, or surface rust, but it is structurally sound — no cracks, breaks, bends, or missing/broken mounting tabs — and works as intended. A buyer can install it without repair." },
+  Poor: { detail: "The part is damaged or compromised. Cracks, breaks, deep gouges, dents, bends, heavy corrosion, broken/missing mounting tabs, tears, leaks, shattered glass/lenses, or non-functional. It needs repair or only sells as a core/project piece." },
 };
 
 const VISION_SYSTEM_PROMPT = `You are an expert automotive salvage parts identifier. You look at a photo taken at a salvage yard — often a whole vehicle or a large section of one — and you catalog EVERY distinct sellable part you can see.
@@ -82,7 +79,7 @@ You MUST return ONLY a JSON object, no prose, with this shape:
       "fitment": [
         { "make": string, "model": string, "yearStart": number, "yearEnd": number, "notes": string }
       ],
-      "condition": "A" | "B" | "C" | "D" | "F",
+      "condition": "Good" | "Poor",
       "conditionNotes": string,
       "description": string,
       "suggestedPriceUsd": number | null,
@@ -115,27 +112,29 @@ VEHICLE ESTIMATE ("vehicle"):
 PRICING GUIDANCE (applies to both "suggestedWholeCarPriceUsd" and each part's "suggestedPriceUsd"):
 - Price like a real seller checking the market: base your number on what comparable items ACTUALLY sell for on Facebook Marketplace, Craigslist, OfferUp, eBay (sold listings), and Google Shopping for the same make/model/year and condition.
 - For the whole car: think used-car comps for that year/make/model/mileage and trim, adjusted down for salvage/parts-car condition.
-- For each part: think used-OEM-part comps for that specific fitment and grade — an A/B grade part sells well below new/aftermarket; a D/F grade part sells as a core/repairable at a steep discount.
+- For each part: think used-OEM-part comps for that specific fitment and grade — a "Good" part sells well below new/aftermarket; a "Poor" part sells as a core/repairable at a steep discount.
 - Use realistic round numbers a buyer would expect, not list/retail price. If you have no basis for a price, use null rather than guessing.
 
-VEHICLE SIDE:
+LEFT / RIGHT SIDES — READ CAREFULLY (this is where mistakes happen):
 1. "vehicleFront" — where is the FRONT of the car relative to the photo?
    - "toward-camera", "away-from-camera", "points-left", "points-right", or "unknown"
-2. "imageSide" (per part) — purely WHERE the part appears in the photo frame from your point of view.
-- Put NO "left"/"right"/"driver"/"passenger" word in "partName".
+2. "imageSide" (per part) — purely WHERE the part appears in the photo frame from your point of view: "left", "right", or "center".
+3. Put NO "left"/"right"/"driver"/"passenger" word in "partName" — the system adds the correct side itself from "imageSide". "front"/"rear" ARE allowed in the name (e.g. "Front Bumper Cover").
+4. CENTER PARTS HAVE NO LEFT/RIGHT. These parts exist as a single centered unit and MUST use "imageSide": "center" — never left/right: Hood, Grille, Front Bumper Cover, Rear Bumper Cover, Roof Panel, Windshield, Back Glass, Trunk Lid, Tailgate, Liftgate, Radiator, Engine, Transmission, Dashboard, Center Console, Instrument Cluster, Steering Wheel, Battery, exhaust/muffler. A "Right Grille" or "Left Bumper Cover" is WRONG.
+5. SIDE PARTS that genuinely come in a left and a right: Fender, Door, Quarter Panel, Side Mirror, Headlight Assembly, Tail Light Assembly, Fog Light, door Windows, Front Seat, wheels. Only these may carry a side.
+6. NEVER CONTRADICT YOURSELF: the side you report MUST match what you wrote in "description" and "conditionNotes". If your description mentions damage near the left headlight, the part is on the LEFT — do not report it as right. If you are not sure which side, set "imageSide": "center" and lower "confidence" rather than guessing.
 
-CONDITION RUBRIC (grade each part A–F based solely on visible condition):
-- A (Like New): ${CONDITION_RUBRIC.A.detail}
-- B (Good): ${CONDITION_RUBRIC.B.detail}
-- C (Fair): ${CONDITION_RUBRIC.C.detail}
-- D (Poor): ${CONDITION_RUBRIC.D.detail}
-- F (Core/Scrap): ${CONDITION_RUBRIC.F.detail}
+CONDITION RUBRIC (grade each part as exactly "Good" or "Poor", based solely on visible condition — there are only these two grades):
+- Good: ${CONDITION_RUBRIC.Good.detail}
+- Poor: ${CONDITION_RUBRIC.Poor.detail}
+When uncertain between the two, look at whether a buyer could install it as-is (Good) or would need to repair it (Poor).
 
 CRITICAL RULES:
-1. NEVER invent precise fitment you cannot support.
-2. Grade condition based ONLY on what is visible.
-3. If not highly confident, set "confidence" to "low".
-4. Return ONLY the JSON object.`;
+1. NEVER invent precise fitment, sides, VIN, mileage, or details you cannot actually see. Omit or use null/"center" instead of guessing.
+2. Grade condition based ONLY on what is visible, and only as "Good" or "Poor".
+3. Your "description" must describe ONLY what you can actually observe in this photo — no fabricated features, no contradictions with the part name.
+4. If not highly confident, set "confidence" to "low".
+5. Return ONLY the JSON object.`;
 
 const VISION_USER_INSTRUCTION =
   'Catalog every distinct sellable auto part visible in this photo. Inspect each part closely for cracks, breaks, and damage. Report "vehicleFront" and each part\'s "imageSide" as literal observations. Return the JSON { "vehicleFront": ..., "parts": [...] }.';
@@ -251,19 +250,22 @@ export async function POST(req: Request): Promise<NextResponse<AIResult>> {
     const rawParts: RawPart[] = Array.isArray(parsed.parts) ? parsed.parts : parsed.partName ? [parsed] : [];
 
     const data: AIPartOutput[] = rawParts.map((p) => {
-      const baseName = (p.partName ?? "Unknown part").trim();
-      const side = lateralSide(vehicleFront, p.imageSide);
+      // Center parts (hood, grille, bumper cover…) have no left/right — strip any
+      // side word the model added and never apply one. Side parts keep theirs.
+      const center = isCenterPart(p.partName ?? "");
+      const baseName = stripSide((p.partName ?? "Unknown part").trim());
+      const side = center ? null : lateralSide(vehicleFront, p.imageSide);
       const partName = applySide(baseName, side);
 
       const lowFields = new Set<keyof AIPartOutput>(p.lowConfidenceFields ?? []);
-      const sideUnknown = !side && isLateralPart(baseName) && vehicleFront === "unknown";
+      const sideUnknown = !center && !side && isLateralPart(baseName) && vehicleFront === "unknown";
       if (sideUnknown) lowFields.add("partName");
 
       return {
         partName,
         partCategory: p.partCategory ?? "Uncategorized",
         fitment: Array.isArray(p.fitment) ? p.fitment : [],
-        condition: ["A","B","C","D","F"].includes(p.condition ?? "") ? (p.condition as ConditionGrade) : "C",
+        condition: ["Good","Poor"].includes(p.condition ?? "") ? (p.condition as ConditionGrade) : "Good",
         conditionNotes: p.conditionNotes ?? "",
         description: p.description ?? "",
         suggestedPriceUsd: typeof p.suggestedPriceUsd === "number" ? p.suggestedPriceUsd : null,
@@ -332,6 +334,21 @@ function lateralSide(front: VehicleFront, imageSide?: ImageSide): "Left" | "Righ
 const LATERAL_PART = /\b(door|mirror|fender|quarter|headlight|head light|tail ?light|fog|window|rocker|wheel|rim|tire|tyre)\b/i;
 function isLateralPart(name: string): boolean {
   return LATERAL_PART.test(name);
+}
+
+// Single, centered parts that physically have no left/right variant.
+const CENTER_PART = /\b(hood|bonnet|grille|grill|bumper|roof|windshield|windscreen|back ?glass|rear ?glass|trunk ?lid|tailgate|liftgate|deck ?lid|radiator|engine|transmission|gearbox|torque converter|driveshaft|drive shaft|dash(board)?|center console|instrument cluster|steering wheel|battery|exhaust|muffler|catalytic|converter|firewall|cowl|headliner|fuel tank|gas tank)\b/i;
+function isCenterPart(name: string): boolean {
+  return CENTER_PART.test(name) && !LATERAL_PART.test(name);
+}
+
+// Remove a stray left/right/driver/passenger word the model put in a part name.
+function stripSide(name: string): string {
+  return name
+    .replace(/\b(driver'?s?|passenger'?s?)([ -]side)?\b/gi, "")
+    .replace(/\b(left|right|lh|rh)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function applySide(name: string, side: "Left" | "Right" | null): string {

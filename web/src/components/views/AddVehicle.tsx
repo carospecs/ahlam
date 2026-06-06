@@ -371,8 +371,8 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             <ScanLine size={26} color={chosen.tone} style={{ position: "absolute", inset: 0, margin: "auto" }} />
           </div>
           <div>
-            <div style={{ fontSize: 17, fontWeight: 700 }}>Analyzing with {chosen.name}…</div>
-            <div style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 420, marginTop: 6, lineHeight: 1.5 }}>Reading your {photoCount} photo{photoCount === 1 ? "" : "s"}, identifying the vehicle, and grading every part the model can see.</div>
+            <div style={{ fontSize: 17, fontWeight: 700 }}>Scanning your car…</div>
+            <div style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 420, marginTop: 6, lineHeight: 1.5 }}>Reading your photos to identify the vehicle and every sellable part — including the VIN or stock number if they show in a picture.</div>
           </div>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: "var(--signal)", background: "var(--signal-bg)", border: "1px solid color-mix(in srgb, var(--signal) 35%, transparent)", borderRadius: 999, padding: "7px 14px" }}>
             <Info size={14} /> This might take up to 30 seconds — hang tight.

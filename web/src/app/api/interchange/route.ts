@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase-server";
+import { normalizeGrade } from "@/lib/grade";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -52,7 +53,7 @@ async function findMarketMatches(part: string, vehicles: { make: string; model: 
     out.push({
       id: l.id, part: pName,
       price: l.price_usd ?? c.suggestedPriceUsd ?? c.priceUsd ?? 0,
-      grade: ["A", "B", "C", "D", "F"].includes(c.condition) ? c.condition : "C",
+      grade: normalizeGrade(c.condition),
       fit, shopId: l.shop_id, shopName: shopName.get(l.shop_id) || "Independent seller",
       link: `/shop/${l.shop_id}`,
     });

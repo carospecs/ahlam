@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { normalizeGrade } from "@/lib/grade";
 
 export async function GET() {
   const supabase = await supabaseServer();
@@ -53,7 +54,7 @@ export async function GET() {
         return {
           id: l.id, part: c.partName || c.part_name || "Unknown Part",
           vehicleId: l.vehicle_id, listingType: l.listing_type || "part",
-          grade: c.condition || "Good", price: l.price_usd ?? c.priceUsd ?? c.suggestedPriceUsd ?? c.suggested_price ?? 0,
+          grade: normalizeGrade(c.condition), price: l.price_usd ?? c.priceUsd ?? c.suggestedPriceUsd ?? c.suggested_price ?? 0,
           status: statusLabel(l.status), markets: l.marketplace_url ? [marketName(l.marketplace_url)] : [],
           views: l.views || 0, photos: 0, fitment: formatFit(c.fitment),
           category: c.partCategory || c.part_category || "", confidence: c.confidence || "high",
