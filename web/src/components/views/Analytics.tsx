@@ -12,6 +12,8 @@ export function Analytics({ go }: { go: (id: string) => void; onVehicle?: (v: an
   const sold = listings.filter((l: any) => l.status === "Sold");
   const revenue = sold.reduce((s: number, l: any) => s + (l.price || 0), 0);
   const inquiries = threads.length;
+  const conversionRate = totalViews > 0 ? ((inquiries / totalViews) * 100).toFixed(1) : "0";
+  const revenueEstimate = posted.reduce((s: number, l: any) => s + (l.price || 0), 0);
 
   // Conversion funnel — derived entirely from real listing state.
   const funnel = [
@@ -38,6 +40,8 @@ export function Analytics({ go }: { go: (id: string) => void; onVehicle?: (v: an
     { icon: MessageSquare, label: "Buyer inquiries", value: String(inquiries), tone: "var(--signal)" },
     { icon: Tag, label: "Active listings", value: String(posted.length), tone: "var(--success)" },
     { icon: DollarSign, label: "Revenue (sold)", value: `$${revenue.toLocaleString()}`, tone: "var(--success)" },
+    { icon: TrendingUp, label: "Conversion rate", value: `${conversionRate}%`, tone: "var(--signal)" },
+    { icon: DollarSign, label: "Revenue estimate", value: `$${revenueEstimate.toLocaleString()}`, tone: "var(--accent)" },
   ];
 
   if (listings.length === 0) {
@@ -54,7 +58,7 @@ export function Analytics({ go }: { go: (id: string) => void; onVehicle?: (v: an
 
   return (
     <div style={{ display: "grid", gap: 20, maxWidth: 1180 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }} className="cs-grid4">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 16 }}>
         {stats.map((s) => (
           <Card key={s.label} pad={18} style={{ display: "grid", gap: 14 }}>
             <div style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in srgb, ${s.tone} 15%, transparent)`, display: "grid", placeItems: "center" }}><s.icon size={19} color={s.tone} /></div>

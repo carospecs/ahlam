@@ -2,6 +2,26 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+export async function GET(req: Request) {
+  const supabase = await supabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const db = supabaseAdmin();
+  const { data: profile } = await db.from("profiles").select("shop_id").eq("id", user.id).single();
+  const shopId = profile?.shop_id;
+  if (!shopId) return NextResponse.json({ ok: true, listings: [] });
+
+  const { data: listings, error } = await db
+    .from("listings")
+    .select("*")
+    .eq("shop_id", shopId)
+    .order("created_at", { ascending: false });
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, listings });
+}
+
 // Save a reviewed vehicle + its parts. Creates an active vehicle row and active
 // part listings so they show up in the seller's own "Vehicles/Parts posted" and,
 // for whole/both + active parts, in the public Browse market for OTHER clients.

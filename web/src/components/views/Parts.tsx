@@ -18,8 +18,7 @@ export function Parts({ go }: { go: (id: string) => void; onVehicle?: (v: any) =
   const vMap = new Map<string, any>(vehicles.map((v: any) => [v.id, v]));
   const carTitle = (l: any) => {
     const v = vMap.get(l.vehicleId);
-    if (v) return `${v.year} ${v.make} ${v.model}${v.trim ? ` ${v.trim}` : ""}`;
-    return l.vehicle || "Unassigned parts";
+    return v ? `${v.year} ${v.make} ${v.model}${v.trim ? ` ${v.trim}` : ""}` : (l.vehicle || "Unassigned parts");
   };
 
   // Group rows by their source car for the "By car" folder view.

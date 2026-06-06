@@ -1,11 +1,16 @@
 "use client";
 
+import { CONDITION_GRADE_MAP } from "@ahlam/shared";
 import {
   Wrench, WrenchIcon, Car, Check, CircleCheck, Send, PencilLine,
 } from "lucide-react";
 
+export function conditionColorOf(grade: string): string {
+  return CONDITION_GRADE_MAP[grade]?.color || "var(--muted)";
+}
+
 export function ConditionBadge({ grade, size = "md" }: { grade: string; size?: "sm" | "md" }) {
-  const c = grade === "Good" ? "var(--success)" : "var(--danger)";
+  const c = CONDITION_GRADE_MAP[grade]?.color || "var(--muted)";
   const pad = size === "sm" ? "2px 8px" : "3px 10px";
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 7, padding: pad, fontSize: size === "sm" ? 11.5 : 12.5, fontWeight: 700, color: c, background: `color-mix(in srgb, ${c} 16%, transparent)` }}>
@@ -70,8 +75,8 @@ export function Card({ children, style = {}, pad = 18 }: { children: React.React
   );
 }
 
-export function Skeleton({ w = "100%", h = 14, r = 8, style = {} }: { w?: number | string; h?: number | string; r?: number; style?: React.CSSProperties }) {
-  return <div className="cs-skel" style={{ width: w, height: h, borderRadius: r, ...style }} />;
+export function Skeleton({ width = "100%", height = 14, borderRadius = 8 }: { width?: number | string; height?: number | string; borderRadius?: number }) {
+  return <div className="cs-skel" style={{ width, height, borderRadius }} />;
 }
 
 // Mirrors the Overview layout so the loading state doesn't "jump" into content.
@@ -79,12 +84,12 @@ export function DashboardSkeleton() {
   return (
     <div style={{ display: "grid", gap: 20, maxWidth: 1180 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }} className="cs-grid4">
-        {[0, 1, 2, 3].map((i) => (
+          {[0, 1, 2, 3].map((i) => (
           <Card key={i} pad={18} style={{ display: "grid", gap: 14 }}>
-            <Skeleton w={38} h={38} r={10} />
+            <Skeleton width={38} height={38} borderRadius={10} />
             <div style={{ display: "grid", gap: 8 }}>
-              <Skeleton w={64} h={28} />
-              <Skeleton w="80%" h={12} />
+              <Skeleton width={64} height={28} />
+              <Skeleton width="80%" height={12} />
             </div>
           </Card>
         ))}
@@ -92,14 +97,14 @@ export function DashboardSkeleton() {
       <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 20 }} className="cs-grid-2">
         {[0, 1].map((col) => (
           <Card key={col} pad={0}>
-            <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--line)" }}><Skeleton w={140} h={14} /></div>
+            <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--line)" }}><Skeleton width={140} height={14} /></div>
             <div style={{ padding: "6px 18px 14px" }}>
               {[0, 1, 2, 3].map((i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 13, padding: "11px 0" }}>
-                  <Skeleton w={col === 0 ? 52 : 30} h={col === 0 ? 40 : 30} r={col === 0 ? 8 : 999} />
+                  <Skeleton width={col === 0 ? 52 : 30} height={col === 0 ? 40 : 30} borderRadius={col === 0 ? 8 : 999} />
                   <div style={{ flex: 1, display: "grid", gap: 7 }}>
-                    <Skeleton w="60%" h={13} />
-                    <Skeleton w="40%" h={11} />
+                    <Skeleton width="60%" height={13} />
+                    <Skeleton width="40%" height={11} />
                   </div>
                 </div>
               ))}

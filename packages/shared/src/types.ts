@@ -1,7 +1,7 @@
 // Core data model shared across web + app + database.
 // Keep this in sync with supabase/migrations.
 
-export type ConditionGrade = "Good" | "Poor";
+export type ConditionGrade = "A" | "B" | "C" | "D" | "F";
 
 /** AI confidence bucket. "low" triggers the yellow "review carefully" UI. */
 export type Confidence = "high" | "medium" | "low";
@@ -39,6 +39,11 @@ export interface AIPartOutput {
   confidence: Confidence;
   /** Optional: fields the model was unsure about, for targeted highlighting. */
   lowConfidenceFields?: (keyof AIPartOutput)[];
+  pricingInsight?: {
+    suggestedPrice: number
+    priceRange: { min: number; max: number }
+    similarCount: number
+  }
 }
 
 /** What the employee actually saved after reviewing/correcting the AI output. */

@@ -66,6 +66,7 @@ html {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   font-feature-settings: "cv11", "ss01";
+  transition: background-color 0.3s, color 0.3s;
 }
 
 body {
@@ -233,4 +234,31 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ---- Responsive: tablet ---- */
+@media (max-width: 768px) {
+  .cs-grid4 { grid-template-columns: 1fr 1fr !important; }
+  .cs-content { padding: 16px !important; }
+  .cs-hide-tablet { display: none !important; }
+}
+
+/* ---- Responsive: phone ---- */
+@media (max-width: 480px) {
+  .cs-grid4 { grid-template-columns: 1fr !important; }
+  .cs-topbar { padding: 10px 12px !important; }
+  .cs-content { padding: 12px !important; }
+  .cs-hide-mobile { display: none !important; }
+  .cs-addbtn-label { display: none; }
+}
+
+/* ---- Print: listing cards ---- */
+@media print {
+  .cs-sidebar, .cs-topbar, .cs-hamburger, .cs-navclose, .cs-backdrop, button {
+    display: none !important;
+  }
+  .cs-layout { display: block !important; }
+  .cs-content { padding: 0 !important; }
+  body { background: white !important; color: black !important; }
+  .cs-content > * { animation: none !important; }
 }

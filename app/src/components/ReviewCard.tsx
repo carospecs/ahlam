@@ -189,6 +189,29 @@ export function PartReviewCard({
             multiline
             warn={lowFields.has("description")}
           />
+          {ai.pricingInsight && (
+            <View style={styles.pricingInsight}>
+              <Text style={styles.insightText}>
+                Market avg: ${ai.pricingInsight.suggestedPrice} | Similar:{" "}
+                {ai.pricingInsight.similarCount} listed
+              </Text>
+            </View>
+          )}
+          {(() => {
+            const entered = Number(draft.price);
+            const suggested = ai.suggestedPriceUsd;
+            const pct =
+              entered && suggested
+                ? Math.abs(entered - suggested) / suggested
+                : 0;
+            return pct > 0.2 ? (
+              <View style={styles.priceWarn}>
+                <Text style={styles.priceWarnText}>
+                  Price is {Math.round(pct * 100)}% above market — double-check
+                </Text>
+              </View>
+            ) : null;
+          })()}
           <Field
             label="Your price (USD)"
             value={draft.price}
@@ -306,6 +329,22 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   inputWarn: { borderColor: colors.signal, backgroundColor: colors.signalBg },
+  pricingInsight: {
+    backgroundColor: colors.surface2,
+    padding: space.sm,
+    borderRadius: radius.sm,
+    marginTop: space.sm,
+  },
+  insightText: { color: colors.muted, fontSize: font.small, fontWeight: "600" },
+  priceWarn: {
+    backgroundColor: colors.signalBg,
+    borderWidth: 1,
+    borderColor: colors.signal,
+    borderRadius: radius.sm,
+    padding: space.sm,
+    marginTop: space.sm,
+  },
+  priceWarnText: { color: colors.signal, fontSize: font.small, fontWeight: "600" },
   gradeRow: { flexDirection: "row", gap: space.sm, marginTop: space.xs },
   grade: {
     flex: 1,

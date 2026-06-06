@@ -23,10 +23,12 @@ import {
   Eye,
   MapPin,
   PackageOpen,
+  Camera,
 } from "lucide-react-native";
 import { colors, space, font, radius, conditionColorOf } from "@/theme";
 import { Button } from "@/components/Button";
 import { useSession } from "@/lib/auth";
+import * as ImagePicker from "expo-image-picker";
 import {
   fetchMarketplace,
   contactSeller,
@@ -55,6 +57,37 @@ export default function Market() {
   const [q, setQ] = useState("");
   const [target, setTarget] = useState<Target | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [photoSearching, setPhotoSearching] = useState(false);
+
+  async function searchByPhoto() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Photo library access is required.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      quality: 0.6,
+      base64: true,
+      allowsEditing: false,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    });
+    if (result.canceled || !result.assets?.[0]?.base64) return;
+    setPhotoSearching(true);
+    try {
+      const res = await fetch("/api/search-by-photo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: result.assets[0].base64 }),
+      });
+      const data = await res.json();
+      if (data.parts) setParts(data.parts);
+      if (data.vehicles) setVehicles(data.vehicles);
+    } catch {
+      Alert.alert("Search failed", "Could not search by photo. Try again.");
+    } finally {
+      setPhotoSearching(false);
+    }
+  }
 
   function openPart(p: MarketPart) {
     incrementListingView(p.id);
@@ -121,6 +154,9 @@ export default function Market() {
           placeholderTextColor={colors.muted}
           style={styles.searchInput}
         />
+        <Pressable onPress={searchByPhoto} disabled={photoSearching} hitSlop={8} style={styles.photoSearchBtn}>
+          <Camera size={18} color={photoSearching ? colors.muted : colors.accent} />
+        </Pressable>
       </View>
 
       {loading ? (
@@ -349,6 +385,7 @@ const styles = StyleSheet.create({
   tabLabel: { color: colors.muted, fontSize: font.small, fontWeight: "700" },
   search: { flexDirection: "row", alignItems: "center", gap: space.sm, marginHorizontal: space.md, marginBottom: space.sm, paddingHorizontal: space.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md },
   searchInput: { flex: 1, color: colors.foreground, fontSize: font.body, paddingVertical: space.sm + 2 },
+  photoSearchBtn: { padding: space.xs, marginLeft: space.xs },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   list: { padding: space.md, gap: space.sm, flexGrow: 1 },
   card: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: space.md },

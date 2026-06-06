@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Send, Copy, ExternalLink, Info, CircleCheck, Share2, Tag, ShoppingBag, Globe } from "lucide-react";
+import { Send, Copy, Download, FileDown, ExternalLink, Info, CircleCheck, Share2, Tag, ShoppingBag, Globe } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge, StatusBadge } from "../UI";
 import { buildListingText } from "../data";
 import { useData, csToast } from "../Dashboard";
@@ -24,6 +24,39 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
     csToast(`Copied ${ready.length} listings to clipboard`);
   }
 
+  function downloadBlob(content: string, filename: string, mime: string) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    csToast(`Downloaded ${filename}`);
+  }
+
+  function exportCSV() {
+    const headers = ["Part", "Vehicle/Fitment", "Price", "Grade", "Status", "Description"];
+    const rows = ready.map((l: any) => [
+      l.part,
+      l.vehicle || l.fitment || "",
+      l.price ?? "",
+      l.grade ?? "",
+      l.status,
+      (l.description || "").replace(/"/g, '""'),
+    ]);
+    const csv = [headers.join(","), ...rows.map((r: string[]) => r.map((v: string) => `"${v}"`).join(","))].join("\n");
+    downloadBlob(csv, "listings.csv", "text/csv");
+  }
+
+  function exportJSON() {
+    const data = ready.map((l: any) => ({
+      id: l.id, part: l.part, vehicle: l.vehicle, fitment: l.fitment,
+      price: l.price, grade: l.grade, status: l.status, description: l.description,
+    }));
+    downloadBlob(JSON.stringify(data, null, 2), "listings.json", "application/json");
+  }
+
   return (
     <div style={{ maxWidth: 1040, display: "grid", gap: 22 }}>
       <Card style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
@@ -37,9 +70,17 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
             we format clean, copy-ready text and keep your photos attached so your posts look sharp wherever you paste them.
           </p>
         </div>
-        <button onClick={copyAll} disabled={!ready.length} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 11, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600, opacity: ready.length ? 1 : 0.5 }}>
-          <Copy size={16} /> Copy all ({ready.length})
-        </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button onClick={exportCSV} disabled={!ready.length} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 14, fontWeight: 600, opacity: ready.length ? 1 : 0.5 }}>
+            <FileDown size={16} /> CSV
+          </button>
+          <button onClick={exportJSON} disabled={!ready.length} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 14, fontWeight: 600, opacity: ready.length ? 1 : 0.5 }}>
+            <Download size={16} /> JSON
+          </button>
+          <button onClick={copyAll} disabled={!ready.length} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 11, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600, opacity: ready.length ? 1 : 0.5 }}>
+            <Copy size={16} /> Copy all ({ready.length})
+          </button>
+        </div>
       </Card>
 
       <div>

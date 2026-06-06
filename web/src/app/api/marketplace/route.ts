@@ -5,7 +5,15 @@ import { supabaseAdmin } from "@/lib/supabase";
 // The public marketplace feed. A buyer sees everything OTHER shops have posted
 // (active listings + whole-car vehicles) — never their own shop's posts. Falls
 // back to a small demo set so the feed never looks empty in a fresh install.
-export async function GET() {
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const category = url.searchParams.get("category");
+  const conditionMin = url.searchParams.get("condition_min");
+  const priceMax = url.searchParams.get("price_max");
+  const sort = url.searchParams.get("sort");
+  const q = url.searchParams.get("q");
+  const zip = url.searchParams.get("zip");
+
   const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -25,9 +33,14 @@ export async function GET() {
   // Active part listings from other shops (filtered in SQL).
   let listQuery = db.from("listings").select("*").eq("status", "active");
   if (ownShopId) listQuery = listQuery.neq("shop_id", ownShopId);
-  const { data: listingRows } = await listQuery.order("created_at", { ascending: false });
+  if (priceMax) listQuery = listQuery.lte("price_usd", Number(priceMax));
+  if (sort === "price-asc") listQuery = listQuery.order("price_usd", { ascending: true });
+  else if (sort === "price-desc") listQuery = listQuery.order("price_usd", { ascending: false });
+  else if (sort === "views") listQuery = listQuery.order("views", { ascending: false });
+  else listQuery = listQuery.order("created_at", { ascending: false });
+  const { data: listingRows } = await listQuery;
 
-  const parts = (listingRows || []).map((l: any) => {
+  let parts = (listingRows || []).map((l: any) => {
     const c = l.corrected || l.ai_output || {};
     const shop = shopMap.get(l.shop_id);
     return {
@@ -50,12 +63,29 @@ export async function GET() {
     };
   });
 
+  if (q) {
+    const search = q.toLowerCase();
+    parts = parts.filter(p => p.part.toLowerCase().includes(search));
+  }
+  if (category) {
+    parts = parts.filter(p => p.category.toLowerCase() === category.toLowerCase());
+  }
+  const CONDITION_SCORE: Record<string, number> = { Good: 5, Poor: 2 };
+  const GRADE_SCORE: Record<string, number> = { A: 5, B: 4, C: 3, D: 2, F: 1 };
+  if (conditionMin) {
+    const minScore = GRADE_SCORE[conditionMin.toUpperCase()] ?? 0;
+    parts = parts.filter(p => (CONDITION_SCORE[p.grade] || 0) >= minScore);
+  }
+  if (zip) {
+    parts = parts.filter(p => p.location.toLowerCase().includes(zip.toLowerCase()));
+  }
+
   // Whole-car vehicles from other shops (filtered in SQL).
   let vehQuery = db.from("vehicles").select("*").in("sell_mode", ["whole", "both"]).eq("status", "active");
   if (ownShopId) vehQuery = vehQuery.neq("shop_id", ownShopId);
   const { data: vehicleRows } = await vehQuery.order("created_at", { ascending: false });
 
-  const vehicles = (vehicleRows || []).map((v: any) => {
+  let vehicles = (vehicleRows || []).map((v: any) => {
     const shop = shopMap.get(v.shop_id);
     return {
       id: v.id,
@@ -69,6 +99,18 @@ export async function GET() {
       location: shop?.location || "",
     };
   });
+
+  if (q) {
+    const search = q.toLowerCase();
+    vehicles = vehicles.filter(v =>
+      (v.make || "").toLowerCase().includes(search) ||
+      (v.model || "").toLowerCase().includes(search) ||
+      String(v.year || "").includes(search)
+    );
+  }
+  if (zip) {
+    vehicles = vehicles.filter(v => v.location.toLowerCase().includes(zip.toLowerCase()));
+  }
 
   // Demo fallback so the marketplace is never empty for a brand-new shop.
   const usedDemo = parts.length === 0 && vehicles.length === 0;

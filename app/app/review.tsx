@@ -8,10 +8,13 @@ import {
   Alert,
   ScrollView,
   Pressable,
+  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { TriangleAlert, Eye, EyeOff, ShieldCheck } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
+import { TriangleAlert, Eye, EyeOff, ShieldCheck, Scan } from "lucide-react-native";
 import type { AIPartOutput } from "@ahlam/shared";
+import { decodeVin, type VinInfo } from "@ahlam/shared";
 import { colors, space, font } from "@/theme";
 import { Button } from "@/components/Button";
 import {
@@ -39,6 +42,9 @@ export default function Review() {
   const [saving, setSaving] = useState(false);
   const [scannedWith, setScannedWith] = useState<"gpt" | "gemini">("gemini");
   const [showConfidence, setShowConfidence] = useState(true);
+  const [vinInfo, setVinInfo] = useState<VinInfo | null>(null);
+  const [vinScanning, setVinScanning] = useState(false);
+  const [vinText, setVinText] = useState("");
 
   async function run(useProvider: "gpt" | "gemini" = "gemini") {
     if (!pending) {
@@ -74,6 +80,43 @@ export default function Review() {
     setDrafts((prev) =>
       prev.map((d, i) => (i === index ? { ...d, ...patch } : d))
     );
+  }
+
+  async function snapVin() {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Camera access is required to scan a VIN plate.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.6,
+      base64: true,
+      allowsEditing: false,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    });
+    if (result.canceled || !result.assets?.[0]?.base64) return;
+    const asset = result.assets[0];
+    setVinScanning(true);
+    try {
+      const info = await decodeVin(asset.base64 as string);
+      setVinInfo(info);
+      if (info.make || info.model) {
+        const line = `${info.year ?? ""} ${info.make ?? ""} ${info.model ?? ""}`.trim();
+        setDrafts((prev) =>
+          prev.map((d) => ({
+            ...d,
+            fitmentText: [line, d.fitmentText].filter(Boolean).join("\n"),
+          }))
+        );
+        Alert.alert("VIN decoded", `Vehicle: ${line || "Unknown"}`);
+      } else {
+        Alert.alert("Could not decode", "We couldn't read the VIN from that photo. Try again.");
+      }
+    } catch {
+      Alert.alert("Error", "Failed to decode VIN. Check the photo and try again.");
+    } finally {
+      setVinScanning(false);
+    }
   }
 
   async function queueForLater() {
@@ -168,6 +211,23 @@ export default function Review() {
 
       {state.phase === "ready" && (
         <>
+          <View style={styles.vinRow}>
+            <Pressable
+              onPress={snapVin}
+              disabled={vinScanning}
+              style={({ pressed }) => [styles.vinBtn, pressed && { opacity: 0.6 }]}
+            >
+              <Scan size={16} color={colors.accent} />
+              <Text style={styles.vinBtnText}>
+                {vinScanning ? "Decoding…" : vinInfo ? "Re-scan VIN" : "Snap VIN plate"}
+              </Text>
+            </Pressable>
+            {vinInfo?.make && (
+              <Text style={styles.vinInfo}>
+                {vinInfo.year} {vinInfo.make} {vinInfo.model} {vinInfo.trim}
+              </Text>
+            )}
+          </View>
           <ConfidenceBar
             ais={state.ais}
             provider={scannedWith}
@@ -280,6 +340,28 @@ function ConfidenceBar({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   photo: { width: "100%", height: 180, backgroundColor: colors.surface },
+  vinRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  vinBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.xs,
+    paddingVertical: 6,
+    paddingHorizontal: space.md,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+  vinBtnText: { color: colors.accent, fontSize: font.small, fontWeight: "700" },
+  vinInfo: { flex: 1, color: colors.muted, fontSize: font.small, fontWeight: "600" },
   providerRow: {
     flexDirection: "row",
     alignItems: "center",

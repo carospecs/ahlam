@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { identifyPart } from "@/lib/identify";
 
 /**
  * Offline submission queue. Salvage yards often have poor signal, so a captured
@@ -46,4 +47,16 @@ export async function removeFromQueue(id: string): Promise<void> {
 
 export async function queueCount(): Promise<number> {
   return (await getQueue()).length;
+}
+
+export async function processQueue(): Promise<void> {
+  const items = await getQueue();
+  for (const item of items) {
+    try {
+      await identifyPart({ imageBase64: item.imageBase64 });
+      await removeFromQueue(item.id);
+    } catch {
+      // leave in queue, try next time
+    }
+  }
 }

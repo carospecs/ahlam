@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { Car, Wrench, MapPin, Store, Search, MessageSquare, X, Send, LoaderCircle, Eye, SlidersHorizontal, ChevronDown, Plus } from "lucide-react";
-import { PhotoCell, ConditionBadge, SellModeBadge } from "../UI";
+import { Camera, Car, Wrench, MapPin, Store, Search, MessageSquare, X, Send, LoaderCircle, Eye, SlidersHorizontal, ChevronDown, Plus } from "lucide-react";
+import { PhotoCell, ConditionBadge, SellModeBadge, conditionColorOf } from "../UI";
 import { csToast } from "../Dashboard";
 
 interface MktPart {
@@ -36,6 +36,30 @@ export function Browse() {
   const [vehMake, setVehMake] = React.useState("All");
   const [visible, setVisible] = React.useState(12);
   const PAGE = 12;
+  const [photoSearchResult, setPhotoSearchResult] = React.useState<MktPart[] | null>(null);
+  const [selectedConditions, setSelectedConditions] = React.useState<Set<string>>(new Set());
+  const [priceMin, setPriceMin] = React.useState("");
+  const [priceMax, setPriceMax] = React.useState("");
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  function toggleCondition(g: string) {
+    setSelectedConditions((prev) => {
+      const next = new Set(prev);
+      if (next.has(g)) next.delete(g);
+      else next.add(g);
+      return next;
+    });
+  }
+
+  async function onPhotoSelected(file: File) {
+    const fd = new FormData();
+    fd.append("photo", file);
+    try {
+      const r = await fetch("/api/search-by-photo", { method: "POST", body: fd });
+      const d = await r.json();
+      setPhotoSearchResult(d.results || []);
+    } catch {}
+  }
 
   // Reset how many cards are shown whenever the result set changes.
   React.useEffect(() => { setVisible(PAGE); }, [tab, q, sort, partCat, vehMake]);
@@ -76,6 +100,9 @@ export function Browse() {
   const fParts = bySort(
     parts
       .filter((p) => partCat === "All" || p.category === partCat)
+      .filter((p) => selectedConditions.size === 0 || selectedConditions.has(p.grade))
+      .filter((p) => !priceMin || p.price >= Number(priceMin))
+      .filter((p) => !priceMax || p.price <= Number(priceMax))
       .filter((p) => !ql || `${p.part} ${p.fitment} ${p.category} ${p.shopName}`.toLowerCase().includes(ql)),
     sort === "views" ? (p) => p.views : (p) => p.price
   );
@@ -110,14 +137,37 @@ export function Browse() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 12px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 11, width: 260 }}>
           <Search size={15} color="var(--muted)" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search parts, cars, shops…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 13.5, padding: "9px 0" }} />
+          <button onClick={() => fileRef.current?.click()} style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, border: "none", background: photoSearchResult ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", color: "var(--muted)", cursor: "pointer" }}>
+            <Camera size={17} color={photoSearchResult ? "var(--accent)" : "var(--muted)"} />
+          </button>
         </div>
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onPhotoSelected(f); e.target.value = ""; }} />
       </div>
 
       {!loading && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--muted)" }}><SlidersHorizontal size={14} /> Filter</span>
           {tab === "parts" ? (
-            <Select label="Category" value={partCat} onChange={setPartCat} options={partCats} />
+            <>
+              <Select label="Category" value={partCat} onChange={setPartCat} options={partCats} />
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>Grade:</span>
+              {["A","B","C","D","F"].map((g) => {
+                const on = selectedConditions.has(g);
+                const color = conditionColorOf(g);
+                return (
+                  <button key={g} onClick={() => toggleCondition(g)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "6px 9px", borderRadius: 7, border: on ? `2px solid ${color}` : "1px solid var(--line)", background: on ? `color-mix(in srgb, ${color} 14%, transparent)` : "transparent", color: on ? color : "var(--muted)", fontSize: 12, fontWeight: 700 }}>
+                    {g}
+                  </button>
+                );
+              })}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>$</span>
+                <input type="number" value={priceMin} onChange={(e) => setPriceMin(e.target.value)} placeholder="Min" style={{ width: 62, padding: "6px 8px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 12, outline: "none" }} />
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>–</span>
+                <input type="number" value={priceMax} onChange={(e) => setPriceMax(e.target.value)} placeholder="Max" style={{ width: 62, padding: "6px 8px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 12, outline: "none" }} />
+              </div>
+            </>
           ) : (
             <Select label="Make" value={vehMake} onChange={setVehMake} options={vehMakes} />
           )}
@@ -131,7 +181,40 @@ export function Browse() {
       {loading ? (
         <div style={{ padding: 40, textAlign: "center", color: "var(--muted)", fontSize: 14 }}>Loading marketplace…</div>
       ) : tab === "parts" ? (
-        fParts.length === 0 ? <Empty label="No parts match your search." /> : (
+        <>
+        {photoSearchResult && (
+          <div style={{ display: "grid", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700 }}>
+              <Camera size={16} /> Photo search <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {photoSearchResult.length} match{photoSearchResult.length === 1 ? "" : "es"}</span>
+              <button onClick={() => setPhotoSearchResult(null)} style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
+              {photoSearchResult.map((l) => (
+                <div key={l.id} style={{ ...card, cursor: "pointer" }} onClick={() => openPart(l)} className="cs-hover-card">
+                  <div style={{ position: "relative" }}>
+                    <PhotoCell icon="Wrench" style={{ height: 150, borderRadius: 0 }} iconSize={40} />
+                    <div style={{ position: "absolute", top: 10, left: 10 }}><ConditionBadge grade={l.grade} size="sm" /></div>
+                  </div>
+                  <div style={{ padding: 14, display: "grid", gap: 4 }}>
+                    <div className="tnum" style={{ fontSize: 19, fontWeight: 800, color: "var(--success)" }}>${l.price}</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.part}</div>
+                    {l.fitment && <div style={{ fontSize: 12, color: "var(--muted)" }}>Fits {l.fitment}</div>}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
+                      <Store size={13} /> <ShopLink id={l.shopId} name={l.shopName} />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
+                      <MapPin size={13} /> {l.location || "—"} · <Eye size={12} /> {l.views} views
+                    </div>
+                    <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}` }); }}>
+                      <MessageSquare size={14} /> Message seller
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {fParts.length > 0 && (
           <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
             {shownParts.map((l) => (
@@ -159,7 +242,9 @@ export function Browse() {
           </div>
           {fParts.length > visible && <LoadMore onClick={() => setVisible((v) => v + PAGE)} remaining={fParts.length - visible} />}
           </>
-        )
+        )}
+        {fParts.length === 0 && !photoSearchResult && <Empty label="No parts match your search." />}
+        </>
       ) : (
         fVehicles.length === 0 ? <Empty label="No vehicles match your search." /> : (
           <>

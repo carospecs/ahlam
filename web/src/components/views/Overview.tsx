@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { TrendingUp, ArrowRight, Car, Wrench, Tag, DollarSign, ScanLine, TriangleAlert, MessageSquare, CircleCheck, Send, CirclePlus, Store, Circle } from "lucide-react";
 import { Card, PhotoCell } from "../UI";
 import { useData } from "../Dashboard";
@@ -11,6 +12,9 @@ export function Overview({ go }: { go: (id: string) => void; onVehicle?: (v: any
   const soldListings = listings.filter((l: any) => l.status === "Sold");
   const soldTotal = soldListings.reduce((s: number, l: any) => s + (l.price || 0), 0);
   const soldCount = soldListings.length;
+
+  const [demandAlerts, setDemandAlerts] = React.useState<any[]>([]);
+  React.useEffect(() => { fetch("/api/demand-alerts").then((r) => r.json()).then((d) => setDemandAlerts(d.alerts || [])).catch(() => {}); }, []);
 
   // Brand-new accounts have nothing to summarize — guide them instead of showing a wall of zeros.
   const isNew = vehicles.length === 0 && listings.length === 0;
@@ -48,6 +52,19 @@ export function Overview({ go }: { go: (id: string) => void; onVehicle?: (v: any
           );
         })}
       </div>
+      {demandAlerts.length > 0 && (
+        <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
+          {demandAlerts.map((a: any, i: number) => (
+            <Card key={i} style={{ display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap", flexShrink: 0 }}>
+              <span style={{ fontSize: 18 }}>🔥</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Trending — {a.searches} searches for {a.part} this week</div>
+                {a.category && <div style={{ fontSize: 12, color: "var(--muted)" }}>{a.category}</div>}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
       {isNew ? (
         <GettingStarted go={go} firstName={firstName} shopName={shop?.name} hasVehicle={vehicles.length > 0} hasListing={listings.length > 0} hasPosted={activeListings > 0} />
       ) : (

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   View,
   Text,
@@ -19,16 +19,19 @@ import {
   Store,
   LogOut,
   ChevronRight,
+  List,
 } from "lucide-react-native";
 import { colors, space, font, radius } from "@/theme";
 import { Button } from "@/components/Button";
 import { setPendingCapture } from "@/lib/captureStore";
 import { useSession } from "@/lib/auth";
+import { queueCount } from "@/lib/queue";
 
 export default function Home() {
   const router = useRouter();
   const { shop, signOut } = useSession();
   const [busy, setBusy] = useState(false);
+  const [queueItems, setQueueItems] = useState(0);
 
   async function capture(mode: "camera" | "library") {
     setBusy(true);
@@ -68,6 +71,12 @@ export default function Home() {
     }
   }
 
+  useEffect(() => {
+    queueCount().then(setQueueItems);
+    const id = setInterval(() => queueCount().then(setQueueItems), 10000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <SafeAreaView style={styles.safe} edges={["bottom"]}>
       <View style={styles.topBar}>
@@ -77,6 +86,13 @@ export default function Home() {
             {shop?.name ?? "Your shop"}
           </Text>
         </View>
+        {queueItems > 0 && (
+          <View style={styles.queueBadge}>
+            <Text style={styles.queueBadgeText}>
+              📷 {queueItems} items waiting to upload
+            </Text>
+          </View>
+        )}
         <Pressable
           onPress={signOut}
           hitSlop={12}
@@ -113,6 +129,15 @@ export default function Home() {
             icon={<ImageUp size={18} color={colors.foreground} />}
             onPress={() => capture("library")}
             disabled={busy}
+          />
+        </View>
+
+        <View style={styles.actions}>
+          <Button
+            label="List a whole vehicle"
+            variant="secondary"
+            icon={<List size={18} color={colors.foreground} />}
+            onPress={() => router.push("/bulk")}
           />
         </View>
 
@@ -253,5 +278,19 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
     marginTop: space.sm,
+  },
+  queueBadge: {
+    backgroundColor: colors.signalBg,
+    borderWidth: 1,
+    borderColor: colors.signal,
+    borderRadius: radius.sm,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    marginRight: space.sm,
+  },
+  queueBadgeText: {
+    color: colors.signal,
+    fontSize: font.tiny,
+    fontWeight: "700",
   },
 });

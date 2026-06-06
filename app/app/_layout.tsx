@@ -1,10 +1,11 @@
-import { useEffect } from "react";
-import { View, ActivityIndicator } from "react-native";
+import { useEffect, useRef } from "react";
+import { View, ActivityIndicator, AppState } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { colors } from "@/theme";
 import { SessionProvider, useSession } from "@/lib/auth";
+import { processQueue } from "@/lib/queue";
 
 /** Redirects based on auth + shop state. */
 function useAuthGate() {
@@ -70,10 +71,25 @@ function RootNav() {
   );
 }
 
+function useQueueProcessor() {
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    processQueue();
+    intervalRef.current = setInterval(() => {
+      processQueue();
+    }, 30000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+}
+
 export default function RootLayout() {
+  useQueueProcessor();
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <SessionProvider>
         <RootNav />
       </SessionProvider>

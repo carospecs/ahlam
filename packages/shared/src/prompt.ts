@@ -51,9 +51,12 @@ VEHICLE SIDE — DO NOT decide left vs right yourself. (This is the #1 source of
 - Put NO "left"/"right"/"driver"/"passenger" word in "partName". The system converts your imageSide + vehicleFront into the correct automotive side. You only report the raw observations.
 - If you truly cannot place a part in the frame, use "center".
 
-CONDITION RUBRIC (use exactly these two grades, judged PER PART):
-- Good: ${CONDITION_RUBRIC.Good.detail}
-- Poor: ${CONDITION_RUBRIC.Poor.detail}
+CONDITION RUBRIC (grade A–F):
+- A (Like New): No visible wear, no damage, works perfectly. Original finish intact.
+- B (Good): Minor scuffs or light scratches that do not affect function. All tabs and mounts intact.
+- C (Fair): Visible wear, scratches, scuffs, or minor dents. Functions but shows age.
+- D (Poor): Heavy wear, cracks, dents, or damage. Functions but needs repair.
+- F (Core/Scrap): Broken, non-functional, or severely damaged. Only good as core/rebuild/project.
 
 DAMAGE INSPECTION (critical — do this carefully for each part):
 - Look closely for cracks, breaks, chips, shattered glass/lenses, fogging or moisture inside headlights/lenses, dents, bends, scrapes that go past the surface, broken mounting tabs, and missing pieces.

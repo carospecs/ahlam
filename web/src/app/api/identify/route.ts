@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -16,6 +17,12 @@ export interface VehicleFit {
   notes?: string;
 }
 
+export interface PricingInsight {
+  suggestedPrice: number;
+  priceRange: { min: number; max: number };
+  similarCount: number;
+}
+
 export interface AIPartOutput {
   partName: string;
   partCategory: string;
@@ -26,6 +33,7 @@ export interface AIPartOutput {
   suggestedPriceUsd: number | null;
   confidence: Confidence;
   lowConfidenceFields?: (keyof AIPartOutput)[];
+  pricingInsight?: PricingInsight;
 }
 
 export interface VehicleEstimate {
@@ -191,7 +199,11 @@ export async function POST(req: Request): Promise<NextResponse<AIResult>> {
       : null);
 
   if (!imageUrl) {
-    return NextResponse.json(busyResult("no image provided"), { status: 400 });
+    return NextResponse.json({
+      ok: false,
+      userMessage: "Please provide a clear photo of the car part.",
+      internalError: "no image provided",
+    }, { status: 400 });
   }
 
   const rawBase64 = (body.imageBase64 ?? imageUrl).replace(/^data:[^;]+;base64,/, "");
@@ -259,6 +271,39 @@ export async function POST(req: Request): Promise<NextResponse<AIResult>> {
         lowConfidenceFields: Array.from(lowFields),
       };
     });
+
+    const db = supabaseAdmin();
+
+    const { data: allListings } = await db
+      .from("listings")
+      .select("price_usd, ai_output, corrected")
+      .eq("status", "active");
+
+    for (const part of data) {
+      const searchTerm = part.partName.toLowerCase();
+      const prices: number[] = (allListings || [])
+        .filter((r: any) => {
+          const c = r.corrected || r.ai_output || {};
+          const name = (c.partName || c.part_name || "").toLowerCase();
+          return name.includes(searchTerm);
+        })
+        .map((r: any) => r.price_usd)
+        .filter((p: any) => p != null && p > 0);
+
+      if (prices.length > 0) {
+        const sorted = [...prices].sort((a, b) => a - b);
+        const min = sorted[0];
+        const max = sorted[sorted.length - 1];
+        const median = sorted.length % 2 === 0
+          ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
+          : sorted[Math.floor(sorted.length / 2)];
+        part.pricingInsight = {
+          suggestedPrice: Math.round(median),
+          priceRange: { min, max },
+          similarCount: prices.length,
+        };
+      }
+    }
 
     return NextResponse.json({ ok: true, data, vehicle, vehicleFront });
   } catch (err) {

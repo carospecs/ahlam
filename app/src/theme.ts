@@ -2,19 +2,19 @@
 import type { ConditionGrade } from "@ahlam/shared";
 
 export const colors = {
-  background: "#0F172A",
-  surface: "#1B2336",
-  surface2: "#272F42",
-  foreground: "#F8FAFC",
-  muted: "#94A3B8",
-  line: "#334155",
-  accent: "#DC2626",
+  background: "#F4EFE4",          /* Paper — page backdrop */
+  surface: "#FFFCF5",             /* white-cream — card backs */
+  surface2: "#D0B98B",            /* Sand — hover/fill, card fronts */
+  foreground: "#0d1c30",          /* Ink — body text */
+  muted: "#8B7D62",               /* muted ink */
+  line: "#D0B98B",                /* Sand border */
+  accent: "#DC2626",              /* Redline */
   accentHover: "#B91C1C",
-  signal: "#F59E0B",
-  signalBg: "rgba(245, 158, 11, 0.12)",
-  success: "#22C55E",
-  caution: "#F59E0B",
-  danger: "#EF4444",
+  signal: "#B45309",
+  signalBg: "rgba(180, 83, 9, 0.14)",
+  success: "#15803D",
+  caution: "#B45309",
+  danger: "#DC2626",
   white: "#FFFFFF",
 };
 
@@ -44,11 +44,14 @@ export const font = {
 
 /** Semantic color per condition grade (always paired with the text label). */
 export const conditionColor: Record<ConditionGrade, string> = {
-  Good: colors.success,
-  Poor: colors.danger,
+  A: colors.success,
+  B: colors.success,
+  C: colors.caution,
+  D: colors.danger,
+  F: colors.danger,
 };
 
-/** Safe lookup that tolerates legacy data graded "Fair" before the two-grade switch. */
+/** Safe lookup that tolerates legacy data. */
 export function conditionColorOf(grade: string): string {
   return (conditionColor as Record<string, string>)[grade] ?? colors.muted;
 }
