@@ -12,7 +12,7 @@ export function Vehicles({ go, onVehicle }: { go: (id: string) => void; onVehicl
         <button key={v.id} onClick={() => onVehicle(v)} style={{ all: "unset", cursor: "pointer", display: "block" }}>
           <Card pad={0} style={{ overflow: "hidden" }}>
             <div style={{ position: "relative" }}>
-              <PhotoCell icon="Car" label={`${v.photos} photos`} style={{ height: 150, borderRadius: 0 }} iconSize={44} />
+              <PhotoCell icon="Car" url={v.image} label={`${v.photos} photos`} style={{ height: 150, borderRadius: 0 }} iconSize={44} />
               <div style={{ position: "absolute", top: 10, left: 10 }}><SellModeBadge mode={v.sellMode} size="sm" /></div>
             </div>
             <div style={{ padding: 16 }}>

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 export async function GET(req: Request) {
   const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
@@ -48,6 +51,25 @@ export async function POST(req: Request) {
   // Save-as-draft keeps everything private (not surfaced in the public market).
   const status = body.draft ? "draft" : "active";
 
+  // 0. Upload the photos so every post carries a real picture. Each base64 JPEG
+  // goes to the part-photos bucket; we keep the resulting public URLs by index.
+  const images: string[] = Array.isArray(body.images) ? body.images : [];
+  const heroIndex: number = Number.isInteger(body.heroIndex) ? body.heroIndex : 0;
+  const photoUrls: (string | null)[] = [];
+  if (images.length) {
+    const stamp = Date.now();
+    for (let i = 0; i < images.length; i++) {
+      try {
+        const b64 = String(images[i]).replace(/^data:[^;]+;base64,/, "");
+        const bytes = Buffer.from(b64, "base64");
+        const path = `${shopId}/${stamp}-${i}.jpg`;
+        const up = await db.storage.from("part-photos").upload(path, bytes, { contentType: "image/jpeg", upsert: true });
+        photoUrls.push(up.error ? null : db.storage.from("part-photos").getPublicUrl(path).data.publicUrl);
+      } catch { photoUrls.push(null); }
+    }
+  }
+  const heroUrl = photoUrls[heroIndex] || photoUrls.find(Boolean) || null;
+
   // 1. Vehicle — active so whole/both variants surface in the market.
   const { data: veh, error: vErr } = await db
     .from("vehicles")
@@ -66,6 +88,7 @@ export async function POST(req: Request) {
       asking_price: carPrice,
       sell_mode: sellMode,
       photos: vehicle.photos || 0,
+      photo_url: heroUrl,
       status,
     })
     .select()
@@ -75,17 +98,21 @@ export async function POST(req: Request) {
   // 2. Part listings — skipped when selling the whole car only.
   let listingCount = 0;
   if (sellMode !== "whole" && parts.length) {
-    const rows = parts.map((p) => ({
-      shop_id: shopId,
-      created_by: user.id,
-      seller_id: user.id,
-      vehicle_id: veh.id,
-      listing_type: "part",
-      photo_url: "",                   // no hosted photo in this flow yet
-      ai_output: p,
-      price_usd: typeof p.suggestedPriceUsd === "number" ? p.suggestedPriceUsd : null,
-      status,
-    }));
+    const rows = parts.map((p) => {
+      const { photoIndex, ...ai } = p;
+      const url = (Number.isInteger(photoIndex) ? photoUrls[photoIndex] : null) || heroUrl || "";
+      return {
+        shop_id: shopId,
+        created_by: user.id,
+        seller_id: user.id,
+        vehicle_id: veh.id,
+        listing_type: "part",
+        photo_url: url,
+        ai_output: ai,
+        price_usd: typeof p.suggestedPriceUsd === "number" ? p.suggestedPriceUsd : null,
+        status,
+      };
+    });
     const { data: ins, error: lErr } = await db.from("listings").insert(rows).select("id");
     if (lErr) return NextResponse.json({ error: lErr.message }, { status: 500 });
     listingCount = ins?.length || 0;

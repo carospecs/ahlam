@@ -138,7 +138,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
           <Card pad={0}>
             {ready.map((l: any, i: number) => (
               <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 13, padding: "12px 16px", borderBottom: i < ready.length - 1 ? "1px solid var(--line)" : "none", flexWrap: "wrap" }}>
-                <PhotoCell icon="Wrench" style={{ width: 44, height: 38, flexShrink: 0 }} iconSize={16} />
+                <PhotoCell icon="Wrench" url={l.image} style={{ width: 44, height: 38, flexShrink: 0 }} iconSize={16} />
                 <div style={{ flex: 1, minWidth: 140 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>{l.vehicle || l.fitment} · ${l.price}</div>

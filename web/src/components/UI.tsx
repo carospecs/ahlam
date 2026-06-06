@@ -113,8 +113,17 @@ export function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function PhotoCell({ icon = "Car", label, style = {}, iconSize = 30 }: { icon?: string; label?: string; style?: React.CSSProperties; iconSize?: number }) {
+export function PhotoCell({ icon = "Car", label, style = {}, iconSize = 30, url }: { icon?: string; label?: string; style?: React.CSSProperties; iconSize?: number; url?: string | null }) {
   const IconComp = icon === "Car" ? Car : Wrench;
+  if (url) {
+    return (
+      <div className="photo-cell" style={{ borderRadius: "var(--radius-md)", overflow: "hidden", padding: 0, ...style }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt={label || ""} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        {label && <span style={{ position: "absolute", bottom: 8, left: 10, fontSize: 11, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>{label}</span>}
+      </div>
+    );
+  }
   return (
     <div className="photo-cell" style={{ borderRadius: "var(--radius-md)", ...style }}>
       <IconComp size={iconSize} strokeWidth={1.5} />

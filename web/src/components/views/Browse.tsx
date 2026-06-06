@@ -15,7 +15,7 @@ interface MktVehicle {
   id: string; year: string; make: string; model: string; trim: string; body: string;
   color: string; mileage: string; sellMode: string; askingPrice: number | null;
   views: number; shopId: string; shopName: string; location: string; phone?: string | null;
-  distance?: number | null; driveTime?: number | null;
+  photoUrl?: string | null; distance?: number | null; driveTime?: number | null;
 }
 
 // Record a view (best-effort) when a buyer opens a post's detail.
@@ -284,7 +284,7 @@ export function Browse() {
               {photoSearchResult.map((l) => (
                 <div key={l.id} style={{ ...card, cursor: "pointer" }} onClick={() => openPart(l)} className="cs-hover-card">
                   <div style={{ position: "relative" }}>
-                    <PhotoCell icon="Wrench" style={{ height: 150, borderRadius: 0 }} iconSize={40} />
+                    <PhotoCell icon="Wrench" url={l.photoUrl} style={{ height: 150, borderRadius: 0 }} iconSize={40} />
                     <div style={{ position: "absolute", top: 10, left: 10 }}><ConditionBadge grade={l.grade} size="sm" /></div>
                   </div>
                   <div style={{ padding: 14, display: "grid", gap: 4 }}>
@@ -312,7 +312,7 @@ export function Browse() {
             {shownParts.map((l) => (
               <div key={l.id} style={{ ...card, cursor: "pointer" }} onClick={() => openPart(l)} className="cs-hover-card">
                 <div style={{ position: "relative" }}>
-                  <PhotoCell icon="Wrench" style={{ height: 150, borderRadius: 0 }} iconSize={40} />
+                  <PhotoCell icon="Wrench" url={l.photoUrl} style={{ height: 150, borderRadius: 0 }} iconSize={40} />
                   <div style={{ position: "absolute", top: 10, left: 10 }}><ConditionBadge grade={l.grade} size="sm" /></div>
                 </div>
                 <div style={{ padding: 14, display: "grid", gap: 4 }}>
@@ -344,7 +344,7 @@ export function Browse() {
             {shownVehicles.map((v) => (
               <div key={v.id} style={{ ...card, cursor: "pointer" }} onClick={() => openVehicle(v)} className="cs-hover-card">
                 <div style={{ position: "relative" }}>
-                  <PhotoCell icon="Car" style={{ height: 168, borderRadius: 0 }} iconSize={46} />
+                  <PhotoCell icon="Car" url={v.photoUrl} style={{ height: 168, borderRadius: 0 }} iconSize={46} />
                   <div style={{ position: "absolute", top: 10, left: 10 }}><SellModeBadge mode={v.sellMode} size="sm" /></div>
                 </div>
                 <div style={{ padding: 14, display: "grid", gap: 4 }}>
@@ -406,7 +406,7 @@ function PartDetailModal({ part, onClose, onContact }: { part: MktPart; onClose:
   return (
     <DetailShell onClose={onClose}>
       <div style={{ position: "relative" }}>
-        <PhotoCell icon="Wrench" style={{ height: 230, borderRadius: 0 }} iconSize={56} />
+        <PhotoCell icon="Wrench" url={part.photoUrl} style={{ height: 230, borderRadius: 0 }} iconSize={56} />
         <div style={{ position: "absolute", top: 12, left: 12 }}><ConditionBadge grade={part.grade} /></div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, padding: "6px 16px 0" }}>
@@ -437,7 +437,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onContact }: { vehicle: MktVe
   return (
     <DetailShell onClose={onClose}>
       <div style={{ position: "relative" }}>
-        <PhotoCell icon="Car" style={{ height: 240, borderRadius: 0 }} iconSize={60} />
+        <PhotoCell icon="Car" url={v.photoUrl} style={{ height: 240, borderRadius: 0 }} iconSize={60} />
         <div style={{ position: "absolute", top: 12, left: 12 }}><SellModeBadge mode={v.sellMode} /></div>
       </div>
       <div style={{ padding: 18, display: "grid", gap: 10 }}>

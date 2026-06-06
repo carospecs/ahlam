@@ -171,7 +171,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
 
       <Card pad={0} style={{ overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "320px 1fr" }} className="cs-veh-hero">
-          <PhotoCell icon="Car" style={{ height: "100%", minHeight: 220, borderRadius: 0 }} iconSize={56} />
+          <PhotoCell icon="Car" url={v.image} style={{ height: "100%", minHeight: 220, borderRadius: 0 }} iconSize={56} />
           <div style={{ padding: 22 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <SellModeBadge mode={sellMode} />
@@ -316,7 +316,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
               <React.Fragment key={l.id}>
                 <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", borderBottom: i < parts.length - 1 && !isOpen ? "1px solid var(--line)" : i < parts.length - 1 ? "none" : "none" }}>
                   <input type="checkbox" checked={on} onChange={() => toggleSel(l.id)} style={{ width: 17, height: 17, accentColor: "var(--accent)", cursor: "pointer", flexShrink: 0 }} aria-label={`Select ${l.part}`} />
-                  <PhotoCell icon="Wrench" style={{ width: 46, height: 40, flexShrink: 0 }} iconSize={17} />
+                  <PhotoCell icon="Wrench" url={l.image} style={{ width: 46, height: 40, flexShrink: 0 }} iconSize={17} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
                     <div style={{ fontSize: 12, color: "var(--muted)" }}>{l.category}</div>

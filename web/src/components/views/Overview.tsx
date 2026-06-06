@@ -83,7 +83,7 @@ export function Overview({ go }: { go: (id: string) => void; onVehicle?: (v: any
             )}
             {vehicles.slice(0, 4).map((v: any, i: number) => (
               <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 13, padding: "13px 18px", borderBottom: i < 3 ? "1px solid var(--line)" : "none" }}>
-                <PhotoCell icon="Car" style={{ width: 52, height: 40, flexShrink: 0 }} iconSize={20} />
+                <PhotoCell icon="Car" url={v.image} style={{ width: 52, height: 40, flexShrink: 0 }} iconSize={20} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600 }}>{v.year} {v.make} {v.model} <span style={{ color: "var(--muted)", fontWeight: 500 }}>{v.trim}</span></div>
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>{v.parts} parts · {v.photos} photos · added {v.added}</div>

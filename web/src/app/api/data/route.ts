@@ -42,7 +42,7 @@ export async function GET() {
       vehicles = (vehRes.data || []).map((v: any) => ({
         id: v.id, year: v.year, make: v.make, model: v.model, trim: v.trim || "",
         body: v.body || "", vin: v.vin || "", color: v.color || "",
-        added: timeAgo(v.created_at), photos: v.photos || 0,
+        added: timeAgo(v.created_at), photos: v.photos || 0, image: v.photo_url || null,
         parts: 0, value: 0, listed: 0, sold: 0,
         sellMode: v.sell_mode || "parts", askingPrice: v.asking_price, mileage: v.mileage || "",
         description: v.description || "", title: v.title || "", status: statusLabel(v.status),
@@ -59,7 +59,7 @@ export async function GET() {
           views: l.views || 0, photos: 0, fitment: formatFit(c.fitment),
           category: c.partCategory || c.part_category || "", confidence: c.confidence || "high",
           note: c.conditionNotes || c.condition_notes || "", desc: c.description || "",
-          sellerId: l.seller_id, ebayUrl: l.ebay_url || null,
+          sellerId: l.seller_id, ebayUrl: l.ebay_url || null, image: l.photo_url || null,
         };
       });
 

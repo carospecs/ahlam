@@ -5,6 +5,7 @@ import { ImageUp, Upload, ScanLine, Sparkles, Check, Info, CircleCheck, Car, Wre
 import { Card, PhotoCell, ConditionBadge } from "../UI";
 import { SELL_MODE } from "../data";
 import { csToast } from "../Dashboard";
+import { looksLikeImage, normalizeImageFile, fileToJpegDataUrl } from "@/lib/image";
 
 interface UploadedPhoto { url: string; name: string; file: File }
 
@@ -60,41 +61,7 @@ function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { 
   };
 }
 
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result));
-    r.onerror = () => reject(new Error("read failed"));
-    r.readAsDataURL(file);
-  });
-}
-
-// Normalize any uploaded photo to a downscaled JPEG before sending to the AI.
-// OpenAI's vision API rejects HEIC/other formats and chokes on multi-MB phone
-// photos; re-encoding to JPEG (max 1600px) fixes both and speeds up the call.
-// Falls back to the raw data URL if the browser can't decode the image.
-async function toJpegDataUrl(file: File, maxDim = 1600, quality = 0.85): Promise<string> {
-  const raw = await readAsDataUrl(file);
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error("decode failed"));
-      el.src = raw;
-    });
-    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-    const w = Math.max(1, Math.round(img.width * scale));
-    const h = Math.max(1, Math.round(img.height * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return raw;
-    ctx.drawImage(img, 0, 0, w, h);
-    return canvas.toDataURL("image/jpeg", quality);
-  } catch {
-    return raw; // e.g. HEIC on a browser that can't decode it — send as-is
-  }
-}
+// Photo intake/encoding (incl. HEIC→JPEG) lives in @/lib/image.
 
 // Roll the AI's per-part fitment up into a single most-likely source vehicle.
 // Purely derived from what the model returned — never fabricated.
@@ -142,19 +109,21 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const chosen = PROVIDERS.find((p) => p.id === provider) || PROVIDERS[0];
   const photoCount = photos.length;
 
-  // One box — drop everything in. The AI figures out what each photo is.
-  function addFiles(list: FileList | null) {
+  // One box — drop everything in (HEIC, JPG, PNG, anything). The AI figures out
+  // what each photo is; HEIC is converted to JPEG so it previews & uploads fine.
+  async function addFiles(list: FileList | null) {
     if (!list) return;
-    const imgs = Array.from(list).filter((f) => f.type.startsWith("image/"));
-    if (!imgs.length) return;
-    setPhotos((prev) => {
-      const room = MAX_PHOTOS - prev.length;
-      if (room <= 0) { csToast(`You can add up to ${MAX_PHOTOS} photos`); return prev; }
-      const take = imgs.slice(0, room);
-      if (take.length < imgs.length) csToast(`Added ${take.length} — ${MAX_PHOTOS}-photo limit reached`);
-      const mapped = take.map((f) => ({ url: URL.createObjectURL(f), name: f.name, file: f }));
-      return [...prev, ...mapped];
-    });
+    const imgs = Array.from(list).filter(looksLikeImage);
+    if (!imgs.length) { csToast("Those files weren't images — add JPG, PNG or HEIC photos"); return; }
+    const room = MAX_PHOTOS - photos.length;
+    if (room <= 0) { csToast(`You can add up to ${MAX_PHOTOS} photos`); return; }
+    const take = imgs.slice(0, room);
+    if (take.length < imgs.length) csToast(`Added ${take.length} — ${MAX_PHOTOS}-photo limit reached`);
+    const mapped = await Promise.all(take.map(async (f) => {
+      const file = await normalizeImageFile(f); // HEIC → JPEG; others pass through
+      return { url: URL.createObjectURL(file), name: f.name, file };
+    }));
+    setPhotos((prev) => [...prev, ...mapped].slice(0, MAX_PHOTOS));
   }
   const atPhotoLimit = photos.length >= MAX_PHOTOS;
   function removePhoto(i: number) {
@@ -172,7 +141,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
     try {
       const results = await Promise.all(
         photos.map(async (photo) => {
-          const dataUrl = await toJpegDataUrl(photo.file);
+          const dataUrl = await fileToJpegDataUrl(photo.file);
           const res = await fetch("/api/identify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -282,16 +251,25 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
     setSaving(true);
     setSavingKind(draft ? "draft" : "post");
     try {
+      // Encode every uploaded photo to a JPEG data URL so the server can persist
+      // them — this is what makes each post carry a real picture.
+      const images = await Promise.all(photos.map((p) => fileToJpegDataUrl(p.file)));
+      const idxOf = new Map(photos.map((p, i) => [p.url, i]));
+      const heroIndex = mainPhoto && idxOf.has(mainPhoto) ? idxOf.get(mainPhoto)! : 0;
+
       const payload = {
         sellMode,
         carPrice,
         mileage,
         draft,
+        images,
+        heroIndex,
         vehicle: { make: vehicle?.make, model: vehicle?.model, year: vehicle?.year, body: vehicle?.body, vin: vin.trim() || undefined, stockNumber: stockNumber.trim() || undefined, photos: photos.length },
-        // Strip client-only fields (blob URL + local ids) before sending.
+        // Strip client-only fields (blob URL + local ids); keep a photoIndex so
+        // each part links to the photo it was scanned from.
         parts: parts
           .filter((p) => p.partName.trim())
-          .map(({ photoUrl, _id, _aiPrice, ...rest }) => rest),
+          .map(({ photoUrl, _id, _aiPrice, ...rest }) => ({ ...rest, photoIndex: photoUrl && idxOf.has(photoUrl) ? idxOf.get(photoUrl)! : heroIndex })),
       };
       const res = await fetch("/api/listings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const d = await res.json();
@@ -325,7 +303,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
 
       {phase === "upload" && (
         <Card pad={22} style={{ display: "grid", gap: 18 }}>
-          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+          <input ref={fileRef} type="file" accept="image/*,.heic,.heif" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
 
           {/* One box — drop every photo in; the AI defines what each one is */}
           <div

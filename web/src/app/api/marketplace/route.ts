@@ -126,6 +126,7 @@ export async function GET(req: Request) {
       sellMode: v.sell_mode || "whole",
       askingPrice: v.asking_price,
       views: v.views || 0,
+      photoUrl: v.photo_url || null,
       shopId: v.shop_id,
       shopName: shop?.name || "Independent seller",
       location: shop?.zip_code || shop?.location || "",
