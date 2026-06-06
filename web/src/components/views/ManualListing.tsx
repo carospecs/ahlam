@@ -67,24 +67,22 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
   const vehicleObj = () => ({ year, make, model, trim, body });
   const vehStr = [year, make, model].filter(Boolean).join(" ");
 
-  // Reuse the existing vision AI to autofill from the first photo.
+  // Groq vision (no Gemini) autofills fields from the first photo + drafts copy.
   async function scanPhoto() {
     if (!photos.length || busy) return;
     setBusy("scan");
     try {
-      const dataUrl = await fileToJpegDataUrl(photos[0].file);
-      const r = await fetch("/api/identify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageBase64: dataUrl, provider: "gemini" }) });
+      const imageBase64 = await fileToJpegDataUrl(photos[0].file);
+      const r = await fetch("/api/assistant/listing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, imageBase64, partName, vehicle: vehicleObj(), condition }) });
       const d = await r.json();
-      if (!d.ok) { csToast(d.userMessage || "Couldn't read that photo"); setBusy(null); return; }
+      if (!d.ok) { csToast(d.error || "Couldn't read that photo"); setBusy(null); return; }
       const v = d.vehicle;
-      if (v) { if (v.make) setMake(v.make); if (v.model) setModel(v.model); if (v.yearStart) setYear(String(v.yearStart)); if (v.bodyStyle) setBody(v.bodyStyle); if (v.mileage && kind === "car") setMileage(v.mileage); }
-      if (kind === "part" && Array.isArray(d.data) && d.data[0]) {
-        const p = d.data[0];
-        if (p.partName) setPartName(p.partName);
-        if (p.condition === "Good" || p.condition === "Poor") setCondition(p.condition);
-        if (p.description) setDescription(p.description);
-        if (typeof p.suggestedPriceUsd === "number") setPrice(String(p.suggestedPriceUsd));
-      }
+      if (v) { if (v.make) setMake(v.make); if (v.model) setModel(v.model); if (v.year) setYear(String(v.year)); if (v.body) setBody(v.body); if (v.mileage && kind === "car") setMileage(v.mileage); }
+      if (kind === "part" && d.partName) setPartName(d.partName);
+      if (d.condition === "Good" || d.condition === "Poor") setCondition(d.condition);
+      if (d.title) setTitle(d.title);
+      if (d.description) setDescription(d.description);
+      if (d.suggestedPriceUsd != null && !price) setPrice(String(d.suggestedPriceUsd));
       csToast("Filled from your photo — edit anything");
     } catch { csToast("Scan failed — try again"); }
     setBusy(null);
