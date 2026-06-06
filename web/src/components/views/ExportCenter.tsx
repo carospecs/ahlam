@@ -1,138 +1,204 @@
 "use client";
 
 import React from "react";
-import { Send, Copy, Download, FileDown, ExternalLink, Info, CircleCheck, Share2, Tag, ShoppingBag, Globe } from "lucide-react";
+import { Send, Copy, Download, FileDown, ExternalLink, Info, CircleCheck, Share2, Tag, ShoppingBag, Globe, LoaderCircle, Link2, RefreshCw, ChevronDown } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge, StatusBadge } from "../UI";
 import { buildListingText } from "../data";
 import { useData, csToast } from "../Dashboard";
 
-const CHANNELS = [
-  { name: "Facebook Marketplace", icon: Share2, note: "Copy & paste — no auto-post API", color: "#1877f2" },
-  { name: "OfferUp", icon: Tag, note: "Copy & paste + attach saved photos", color: "var(--accent)" },
-  { name: "eBay Motors", icon: ShoppingBag, note: "CSV bulk upload supported", color: "var(--signal)" },
-  { name: "Craigslist", icon: Globe, note: "Copy formatted listing text", color: "var(--success)" },
+// Platforms with no listing API — we prepare the text + photos and open the
+// posting page so the seller just pastes and hits post.
+const PREPARE_CHANNELS = [
+  { name: "Facebook Marketplace", icon: Share2, color: "#1877f2", url: "https://www.facebook.com/marketplace/create/item", note: "Facebook has no posting API — we copy your text and open the form." },
+  { name: "OfferUp", icon: Tag, color: "var(--accent)", url: "https://offerup.com/post/", note: "Copy & paste + attach your saved photos." },
+  { name: "Craigslist", icon: Globe, color: "var(--success)", url: "https://post.craigslist.org/", note: "Copy the formatted listing text and pick your city." },
 ];
 
 export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
   const { listings, shop } = useData();
   const ready = listings.filter((l: any) => l.status === "Draft" || l.status === "Posted");
-  const posted = listings.filter((l: any) => l.status === "Posted").length;
 
-  function copyAll() {
-    const text = ready.map((l: any) => buildListingText(l, shop)).join("\n\n———\n\n");
-    try { navigator.clipboard?.writeText(text); } catch {}
-    csToast(`Copied ${ready.length} listings to clipboard`);
+  const [ebay, setEbay] = React.useState<{ configured: boolean; connected: boolean; account: string | null; env: string } | null>(null);
+  const [listing, setListing] = React.useState<string | null>(null); // listingId being pushed to eBay
+  const [advanced, setAdvanced] = React.useState(false);
+
+  const loadEbay = React.useCallback(() => {
+    fetch("/api/ebay/status").then((r) => r.json()).then((d) => d.ok && setEbay(d)).catch(() => setEbay(null));
+  }, []);
+  React.useEffect(() => { loadEbay(); }, [loadEbay]);
+
+  // Toast the result of the OAuth round-trip, then clean the URL.
+  React.useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("ebay") === "connected") { csToast("eBay account connected"); loadEbay(); }
+    if (p.get("ebay") === "error") csToast("Couldn't connect eBay — try again");
+    if (p.has("ebay")) window.history.replaceState({}, "", window.location.pathname);
+  }, [loadEbay]);
+
+  function prepareAndOpen(ch: typeof PREPARE_CHANNELS[number], l: any) {
+    try { navigator.clipboard?.writeText(buildListingText(l, shop)); } catch {}
+    csToast(`Copied — opening ${ch.name}`);
+    window.open(ch.url, "_blank", "noopener");
+  }
+
+  async function listOnEbay(l: any) {
+    if (listing) return;
+    setListing(l.id);
+    try {
+      const r = await fetch("/api/ebay/list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: l.id }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.url) { csToast("Listed on eBay 🎉"); window.open(d.url, "_blank", "noopener"); (window as any).csReloadData?.(); }
+      else if (d.notConnected) csToast("Connect your eBay account first");
+      else csToast(d.error || "eBay listing failed");
+    } catch { csToast("eBay listing failed — check your connection"); }
+    setListing(null);
   }
 
   function downloadBlob(content: string, filename: string, mime: string) {
     const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    csToast(`Downloaded ${filename}`);
+    const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url); csToast(`Downloaded ${filename}`);
   }
-
   function exportCSV() {
     const headers = ["Part", "Vehicle/Fitment", "Price", "Grade", "Status", "Description"];
-    const rows = ready.map((l: any) => [
-      l.part,
-      l.vehicle || l.fitment || "",
-      l.price ?? "",
-      l.grade ?? "",
-      l.status,
-      (l.description || "").replace(/"/g, '""'),
-    ]);
+    const rows = ready.map((l: any) => [l.part, l.vehicle || l.fitment || "", l.price ?? "", l.grade ?? "", l.status, (l.description || "").replace(/"/g, '""')]);
     const csv = [headers.join(","), ...rows.map((r: string[]) => r.map((v: string) => `"${v}"`).join(","))].join("\n");
     downloadBlob(csv, "listings.csv", "text/csv");
   }
-
   function exportJSON() {
-    const data = ready.map((l: any) => ({
-      id: l.id, part: l.part, vehicle: l.vehicle, fitment: l.fitment,
-      price: l.price, grade: l.grade, status: l.status, description: l.description,
-    }));
+    const data = ready.map((l: any) => ({ id: l.id, part: l.part, vehicle: l.vehicle, fitment: l.fitment, price: l.price, grade: l.grade, status: l.status, description: l.description }));
     downloadBlob(JSON.stringify(data, null, 2), "listings.json", "application/json");
   }
 
   return (
-    <div style={{ maxWidth: 1040, display: "grid", gap: 22 }}>
-      <Card style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-          <Send size={20} color="var(--accent)" />
+    <div style={{ maxWidth: 1000, display: "grid", gap: 18 }}>
+      {/* eBay — the real integration */}
+      <Card style={{ display: "grid", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 13, flexWrap: "wrap" }}>
+          <span style={{ width: 46, height: 46, borderRadius: 12, background: "var(--accent-tint)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+            <ShoppingBag size={22} color="var(--accent)" />
+          </span>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+              List on eBay automatically
+              {ebay?.env === "sandbox" && <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--signal)", background: "var(--signal-bg)", borderRadius: 6, padding: "2px 7px" }}>SANDBOX</span>}
+            </div>
+            <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 3 }}>
+              {!ebay ? "Checking connection…"
+                : !ebay.configured ? "Not set up on the server yet — add your eBay API keys to enable."
+                : ebay.connected ? <>Connected{ebay.account ? ` as ${ebay.account}` : ""} — publish any listing straight to eBay.</>
+                : "Connect your eBay seller account to publish listings with one click."}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {ebay?.connected && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--success)" }}><CircleCheck size={15} /> Connected</span>
+            )}
+            {ebay?.configured && (
+              <a href="/api/ebay/connect" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px", borderRadius: 10, border: ebay.connected ? "1px solid var(--line)" : "none", background: ebay.connected ? "transparent" : "var(--accent)", color: ebay.connected ? "var(--foreground)" : "#fff", fontSize: 13.5, fontWeight: 600, textDecoration: "none" }}>
+                {ebay.connected ? <><RefreshCw size={14} /> Reconnect</> : <><Link2 size={15} /> Connect eBay</>}
+              </a>
+            )}
+          </div>
         </div>
-        <div style={{ flex: 1, minWidth: 240 }}>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>Post everywhere you sell</div>
-          <p style={{ margin: "6px 0 0", fontSize: 13.5, color: "var(--muted)", lineHeight: 1.55 }}>
-            Every listing is already sold inside Ahlam. Cross-posting to Facebook, OfferUp, eBay and Craigslist is a bonus —
-            we format clean, copy-ready text and keep your photos attached so your posts look sharp wherever you paste them.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <button onClick={exportCSV} disabled={!ready.length} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 14, fontWeight: 600, opacity: ready.length ? 1 : 0.5 }}>
-            <FileDown size={16} /> CSV
-          </button>
-          <button onClick={exportJSON} disabled={!ready.length} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 14, fontWeight: 600, opacity: ready.length ? 1 : 0.5 }}>
-            <Download size={16} /> JSON
-          </button>
-          <button onClick={copyAll} disabled={!ready.length} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 11, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600, opacity: ready.length ? 1 : 0.5 }}>
-            <Copy size={16} /> Copy all ({ready.length})
-          </button>
-        </div>
+        {ebay && !ebay.configured && (
+          <div style={{ display: "flex", gap: 8, fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, background: "var(--surface2)", borderRadius: 10, padding: "11px 14px" }}>
+            <Info size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>Add <code>EBAY_CLIENT_ID</code>, <code>EBAY_CLIENT_SECRET</code> and <code>EBAY_REDIRECT_URI</code> in your environment, then redeploy. See the setup guide.</span>
+          </div>
+        )}
       </Card>
 
+      {/* Other channels — prepare & open */}
       <div>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Channels</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
-          {CHANNELS.map((c) => (
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Other marketplaces</div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>These don't allow third-party auto-posting — we prep your text + photos and open the form so you just paste.</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
+          {PREPARE_CHANNELS.map((c) => (
             <Card key={c.name} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-              <span style={{ width: 38, height: 38, borderRadius: 10, background: "var(--surface2)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                <c.icon size={18} color={c.color} />
-              </span>
-              <div>
+              <span style={{ width: 38, height: 38, borderRadius: 10, background: "var(--surface2)", display: "grid", placeItems: "center", flexShrink: 0 }}><c.icon size={18} color={c.color} /></span>
+              <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700 }}>{c.name}</div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.4 }}>{c.note}</div>
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>{c.note}</div>
               </div>
             </Card>
           ))}
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8, fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, background: "var(--surface2)", borderRadius: 10, padding: "11px 14px" }}>
-        <Info size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-        <span>Facebook & OfferUp don't allow automated posting. Ahlam prepares the text and photos — you paste and hit post. eBay supports CSV bulk upload.</span>
-      </div>
-
+      {/* Listings */}
       <div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>Ready to post <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {ready.length}</span></div>
-          <div style={{ fontSize: 12.5, color: "var(--success)", display: "flex", alignItems: "center", gap: 6 }}><CircleCheck size={14} /> {posted} live</div>
-        </div>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Your listings <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {ready.length}</span></div>
         {ready.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: "var(--muted)", fontSize: 14, border: "1px dashed var(--line)", borderRadius: 14 }}>
-            No listings ready yet. <button onClick={() => go("add")} style={{ color: "var(--accent)", background: "none", border: "none", fontWeight: 600, cursor: "pointer" }}>Add a vehicle</button> to draft some.
+            No listings yet. <button onClick={() => go("add")} style={{ color: "var(--accent)", background: "none", border: "none", fontWeight: 600, cursor: "pointer" }}>Add a vehicle</button> to create some.
           </div>
         ) : (
           <Card pad={0}>
             {ready.map((l: any, i: number) => (
-              <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", borderBottom: i < ready.length - 1 ? "1px solid var(--line)" : "none" }}>
-                <PhotoCell icon="Wrench" style={{ width: 44, height: 38, flexShrink: 0 }} iconSize={16} />
-                <div style={{ flex: 1, minWidth: 0 }}>
+              <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 13, padding: "12px 16px", borderBottom: i < ready.length - 1 ? "1px solid var(--line)" : "none", flexWrap: "wrap" }}>
+                <PhotoCell icon="Wrench" url={l.image} style={{ width: 44, height: 38, flexShrink: 0 }} iconSize={16} />
+                <div style={{ flex: 1, minWidth: 140 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>{l.vehicle || l.fitment} · ${l.price}</div>
                 </div>
                 <ConditionBadge grade={l.grade} size="sm" />
-                <StatusBadge status={l.status} />
-                <button onClick={() => (window as any).csOpenExport?.(l)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-                  <ExternalLink size={14} /> Open
-                </button>
+                {l.ebayUrl ? (
+                  <a href={l.ebayUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--success)", textDecoration: "none" }}><CircleCheck size={14} /> On eBay</a>
+                ) : ebay?.connected ? (
+                  <button onClick={() => listOnEbay(l)} disabled={!!listing} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: listing && listing !== l.id ? 0.5 : 1 }}>
+                    {listing === l.id ? <LoaderCircle size={14} className="spin" /> : <ShoppingBag size={14} />} List on eBay
+                  </button>
+                ) : null}
+                <PrepareMenu channels={PREPARE_CHANNELS} onPick={(ch) => prepareAndOpen(ch, l)} />
               </div>
             ))}
           </Card>
         )}
       </div>
+
+      {/* Advanced: bulk file exports */}
+      <div>
+        <button onClick={() => setAdvanced((a) => !a)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "none", color: "var(--muted)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+          <ChevronDown size={15} style={{ transform: advanced ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} /> Advanced — bulk file export
+        </button>
+        {advanced && (
+          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+            <button onClick={exportCSV} disabled={!ready.length} style={advBtn}><FileDown size={16} /> Export CSV</button>
+            <button onClick={exportJSON} disabled={!ready.length} style={advBtn}><Download size={16} /> Export JSON</button>
+            <button onClick={() => { try { navigator.clipboard?.writeText(ready.map((l: any) => buildListingText(l, shop)).join("\n\n———\n\n")); } catch {} csToast(`Copied ${ready.length} listings`); }} disabled={!ready.length} style={advBtn}><Copy size={16} /> Copy all text</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const advBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 13.5, fontWeight: 600, cursor: "pointer" };
+
+// Small dropdown to prepare a listing for a non-API channel.
+function PrepareMenu({ channels, onPick }: { channels: typeof PREPARE_CHANNELS; onPick: (c: typeof PREPARE_CHANNELS[number]) => void }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    function onDoc(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener("mousedown", onDoc); return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+  return (
+    <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+        <Send size={13} /> Post elsewhere <ChevronDown size={13} />
+      </button>
+      {open && (
+        <div className="fade-up" style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, zIndex: 30, minWidth: 200, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, boxShadow: "0 18px 40px -16px rgba(0,0,0,0.35)", overflow: "hidden" }}>
+          {channels.map((c) => (
+            <button key={c.name} className="cs-row" onClick={() => { setOpen(false); onPick(c); }} style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", padding: "10px 12px", border: "none", background: "transparent", color: "var(--foreground)", fontSize: 13, cursor: "pointer" }}>
+              <c.icon size={15} color={c.color} /> {c.name} <ExternalLink size={12} color="var(--muted)" style={{ marginLeft: "auto" }} />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

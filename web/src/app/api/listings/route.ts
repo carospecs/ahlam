@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 export async function GET(req: Request) {
   const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
@@ -44,46 +47,75 @@ export async function POST(req: Request) {
   const sellMode: string = ["parts", "whole", "both"].includes(body.sellMode) ? body.sellMode : "parts";
   const carPrice = body.carPrice != null && body.carPrice !== "" ? Number(body.carPrice) : null;
   const mileage = typeof body.mileage === "string" ? body.mileage : null;
+  const stockNumber = typeof vehicle.stockNumber === "string" ? vehicle.stockNumber : null;
   // Save-as-draft keeps everything private (not surfaced in the public market).
   const status = body.draft ? "draft" : "active";
 
+  // 0. Upload the photos so every post carries a real picture. Each base64 JPEG
+  // goes to the part-photos bucket; we keep the resulting public URLs by index.
+  const images: string[] = Array.isArray(body.images) ? body.images : [];
+  const heroIndex: number = Number.isInteger(body.heroIndex) ? body.heroIndex : 0;
+  const photoUrls: (string | null)[] = [];
+  if (images.length) {
+    const stamp = Date.now();
+    for (let i = 0; i < images.length; i++) {
+      try {
+        const b64 = String(images[i]).replace(/^data:[^;]+;base64,/, "");
+        const bytes = Buffer.from(b64, "base64");
+        const path = `${shopId}/${stamp}-${i}.jpg`;
+        const up = await db.storage.from("part-photos").upload(path, bytes, { contentType: "image/jpeg", upsert: true });
+        photoUrls.push(up.error ? null : db.storage.from("part-photos").getPublicUrl(path).data.publicUrl);
+      } catch { photoUrls.push(null); }
+    }
+  }
+  const heroUrl = photoUrls[heroIndex] || photoUrls.find(Boolean) || null;
+
   // 1. Vehicle — active so whole/both variants surface in the market.
-  const { data: veh, error: vErr } = await db
-    .from("vehicles")
-    .insert({
-      shop_id: shopId,
-      created_by: user.id,
-      year: String(vehicle.year || ""),
-      make: vehicle.make || "Unknown",
-      model: vehicle.model || "",
-      trim: vehicle.trim || null,
-      body: vehicle.body || null,
-      color: vehicle.color || null,
-      vin: vehicle.vin || null,
-      mileage: mileage,                // private — never exposed in the public feed
-      asking_price: carPrice,
-      sell_mode: sellMode,
-      photos: vehicle.photos || 0,
-      status,
-    })
-    .select()
-    .single();
+  const vehRow: Record<string, any> = {
+    shop_id: shopId,
+    created_by: user.id,
+    year: String(vehicle.year || ""),
+    make: vehicle.make || "Unknown",
+    model: vehicle.model || "",
+    trim: vehicle.trim || null,
+    body: vehicle.body || null,
+    color: vehicle.color || null,
+    vin: vehicle.vin || null,
+    stock_number: stockNumber,
+    mileage: mileage,                // private — never exposed in the public feed
+    asking_price: carPrice,
+    sell_mode: sellMode,
+    photos: vehicle.photos || 0,
+    photo_url: heroUrl,
+    status,
+  };
+  let { data: veh, error: vErr } = await db.from("vehicles").insert(vehRow).select().single();
+  // Graceful when migration 0017 (vehicles.photo_url) isn't applied yet: retry
+  // without it so posting still works (the part photos still persist).
+  if (vErr && /photo_url/.test(vErr.message || "")) {
+    delete vehRow.photo_url;
+    ({ data: veh, error: vErr } = await db.from("vehicles").insert(vehRow).select().single());
+  }
   if (vErr || !veh) return NextResponse.json({ error: vErr?.message || "Could not save vehicle" }, { status: 500 });
 
   // 2. Part listings — skipped when selling the whole car only.
   let listingCount = 0;
   if (sellMode !== "whole" && parts.length) {
-    const rows = parts.map((p) => ({
-      shop_id: shopId,
-      created_by: user.id,
-      seller_id: user.id,
-      vehicle_id: veh.id,
-      listing_type: "part",
-      photo_url: "",                   // no hosted photo in this flow yet
-      ai_output: p,
-      price_usd: typeof p.suggestedPriceUsd === "number" ? p.suggestedPriceUsd : null,
-      status,
-    }));
+    const rows = parts.map((p) => {
+      const { photoIndex, ...ai } = p;
+      const url = (Number.isInteger(photoIndex) ? photoUrls[photoIndex] : null) || heroUrl || "";
+      return {
+        shop_id: shopId,
+        created_by: user.id,
+        seller_id: user.id,
+        vehicle_id: veh.id,
+        listing_type: "part",
+        photo_url: url,
+        ai_output: ai,
+        price_usd: typeof p.suggestedPriceUsd === "number" ? p.suggestedPriceUsd : null,
+        status,
+      };
+    });
     const { data: ins, error: lErr } = await db.from("listings").insert(rows).select("id");
     if (lErr) return NextResponse.json({ error: lErr.message }, { status: 500 });
     listingCount = ins?.length || 0;
@@ -125,9 +157,12 @@ export async function PATCH(req: Request) {
       if (!enumStatus) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
       update.status = enumStatus;
     }
-    if (typeof body.description === "string") {
-      // Merge into the corrected JSON so we don't clobber other reviewed fields.
-      const corrected = { ...(row.corrected || row.ai_output || {}), description: body.description };
+    // Editable part title (name) + description merge into the corrected JSON so
+    // we don't clobber other reviewed fields.
+    if (typeof body.description === "string" || typeof body.partName === "string") {
+      const corrected = { ...(row.corrected || row.ai_output || {}) };
+      if (typeof body.description === "string") corrected.description = body.description;
+      if (typeof body.partName === "string" && body.partName.trim()) corrected.partName = body.partName.trim();
       update.corrected = corrected;
     }
     if (Object.keys(update).length === 0) return NextResponse.json({ ok: true });
@@ -168,17 +203,25 @@ export async function PATCH(req: Request) {
     vehUpdate.status = enumStatus;
   }
 
-  if (typeof body.description === "string") {
-    vehUpdate.description = body.description;
+  if (typeof body.description === "string") vehUpdate.description = body.description;
+  if (typeof body.title === "string") vehUpdate.title = body.title.trim() || null;
+  if (typeof body.mileage === "string") vehUpdate.mileage = body.mileage.trim() || null;
+  if (body.askingPrice !== undefined) {
+    const n = body.askingPrice === "" || body.askingPrice == null ? null : Number(body.askingPrice);
+    vehUpdate.asking_price = Number.isFinite(n as number) ? n : null;
   }
 
   if (Object.keys(vehUpdate).length === 0) return NextResponse.json({ ok: true });
 
-  const { error } = await db
-    .from("vehicles")
-    .update(vehUpdate)
-    .eq("id", vehicleId)
-    .eq("shop_id", shopId);
+  let { error } = await db.from("vehicles").update(vehUpdate).eq("id", vehicleId).eq("shop_id", shopId);
+  // The `title` column may not exist yet (migration 0015). Retry without it.
+  if (error && "title" in vehUpdate && /title/i.test(error.message)) {
+    const { title, ...rest } = vehUpdate;
+    if (Object.keys(rest).length) {
+      ({ error } = await db.from("vehicles").update(rest).eq("id", vehicleId).eq("shop_id", shopId));
+    } else error = null as any;
+    if (!error) return NextResponse.json({ ok: true, titleSkipped: true });
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });

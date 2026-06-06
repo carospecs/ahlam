@@ -1,10 +1,11 @@
 "use client";
 
 import React from "react";
-import { ImageUp, Upload, ScanLine, Sparkles, Check, Info, CircleCheck, Car, Wrench, Plus, X, TriangleAlert, CheckCircle2, ArrowLeft, FileText, RotateCcw, Lock, Camera, ChevronUp, ChevronDown } from "lucide-react";
+import { ImageUp, Upload, ScanLine, Sparkles, Check, Info, CircleCheck, Car, Wrench, Plus, X, TriangleAlert, CheckCircle2, ArrowLeft, FileText, RotateCcw, Lock, Camera, ChevronUp, ChevronDown, Tag } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge } from "../UI";
 import { SELL_MODE } from "../data";
 import { csToast } from "../Dashboard";
+import { looksLikeImage, normalizeImageFile, fileToJpegDataUrl } from "@/lib/image";
 
 interface UploadedPhoto { url: string; name: string; file: File }
 
@@ -60,41 +61,7 @@ function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { 
   };
 }
 
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result));
-    r.onerror = () => reject(new Error("read failed"));
-    r.readAsDataURL(file);
-  });
-}
-
-// Normalize any uploaded photo to a downscaled JPEG before sending to the AI.
-// OpenAI's vision API rejects HEIC/other formats and chokes on multi-MB phone
-// photos; re-encoding to JPEG (max 1600px) fixes both and speeds up the call.
-// Falls back to the raw data URL if the browser can't decode the image.
-async function toJpegDataUrl(file: File, maxDim = 1600, quality = 0.85): Promise<string> {
-  const raw = await readAsDataUrl(file);
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error("decode failed"));
-      el.src = raw;
-    });
-    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-    const w = Math.max(1, Math.round(img.width * scale));
-    const h = Math.max(1, Math.round(img.height * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return raw;
-    ctx.drawImage(img, 0, 0, w, h);
-    return canvas.toDataURL("image/jpeg", quality);
-  } catch {
-    return raw; // e.g. HEIC on a browser that can't decode it — send as-is
-  }
-}
+// Photo intake/encoding (incl. HEIC→JPEG) lives in @/lib/image.
 
 // Roll the AI's per-part fitment up into a single most-likely source vehicle.
 // Purely derived from what the model returned — never fabricated.
@@ -142,19 +109,21 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const chosen = PROVIDERS.find((p) => p.id === provider) || PROVIDERS[0];
   const photoCount = photos.length;
 
-  // One box — drop everything in. The AI figures out what each photo is.
-  function addFiles(list: FileList | null) {
+  // One box — drop everything in (HEIC, JPG, PNG, anything). The AI figures out
+  // what each photo is; HEIC is converted to JPEG so it previews & uploads fine.
+  async function addFiles(list: FileList | null) {
     if (!list) return;
-    const imgs = Array.from(list).filter((f) => f.type.startsWith("image/"));
-    if (!imgs.length) return;
-    setPhotos((prev) => {
-      const room = MAX_PHOTOS - prev.length;
-      if (room <= 0) { csToast(`You can add up to ${MAX_PHOTOS} photos`); return prev; }
-      const take = imgs.slice(0, room);
-      if (take.length < imgs.length) csToast(`Added ${take.length} — ${MAX_PHOTOS}-photo limit reached`);
-      const mapped = take.map((f) => ({ url: URL.createObjectURL(f), name: f.name, file: f }));
-      return [...prev, ...mapped];
-    });
+    const imgs = Array.from(list).filter(looksLikeImage);
+    if (!imgs.length) { csToast("Those files weren't images — add JPG, PNG or HEIC photos"); return; }
+    const room = MAX_PHOTOS - photos.length;
+    if (room <= 0) { csToast(`You can add up to ${MAX_PHOTOS} photos`); return; }
+    const take = imgs.slice(0, room);
+    if (take.length < imgs.length) csToast(`Added ${take.length} — ${MAX_PHOTOS}-photo limit reached`);
+    const mapped = await Promise.all(take.map(async (f) => {
+      const file = await normalizeImageFile(f); // HEIC → JPEG; others pass through
+      return { url: URL.createObjectURL(file), name: f.name, file };
+    }));
+    setPhotos((prev) => [...prev, ...mapped].slice(0, MAX_PHOTOS));
   }
   const atPhotoLimit = photos.length >= MAX_PHOTOS;
   function removePhoto(i: number) {
@@ -172,7 +141,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
     try {
       const results = await Promise.all(
         photos.map(async (photo) => {
-          const dataUrl = await toJpegDataUrl(photo.file);
+          const dataUrl = await fileToJpegDataUrl(photo.file);
           const res = await fetch("/api/identify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -245,6 +214,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   function setPartName(id: string, val: string) {
     setParts((prev) => prev.map((p) => (p._id === id ? { ...p, partName: val } : p)));
   }
+  function setPartDesc(id: string, val: string) {
+    setParts((prev) => prev.map((p) => (p._id === id ? { ...p, description: val } : p)));
+  }
   // Add a blank, fully-editable part row (e.g. something the AI missed).
   function addBlankPart() {
     setParts((prev) => [...prev, { partName: "", partCategory: "", fitment: [], condition: "Good", conditionNotes: "", description: "", suggestedPriceUsd: null, confidence: "high", _id: newId(), _aiPrice: null }]);
@@ -271,6 +243,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   }
   const anyAiPriced = parts.some((p) => (p._aiPrice || 0) > 0);
 
+  const [stockNumber, setStockNumber] = React.useState("");
   const [savingKind, setSavingKind] = React.useState<"post" | "draft" | null>(null);
   // Persist the reviewed vehicle + parts, then reload data and jump to the list.
   // draft=true keeps everything private (status 'draft'), nothing posted to the market.
@@ -278,16 +251,25 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
     setSaving(true);
     setSavingKind(draft ? "draft" : "post");
     try {
+      // Encode every uploaded photo to a JPEG data URL so the server can persist
+      // them — this is what makes each post carry a real picture.
+      const images = await Promise.all(photos.map((p) => fileToJpegDataUrl(p.file)));
+      const idxOf = new Map(photos.map((p, i) => [p.url, i]));
+      const heroIndex = mainPhoto && idxOf.has(mainPhoto) ? idxOf.get(mainPhoto)! : 0;
+
       const payload = {
         sellMode,
         carPrice,
         mileage,
         draft,
-        vehicle: { make: vehicle?.make, model: vehicle?.model, year: vehicle?.year, body: vehicle?.body, vin: vin.trim() || undefined, photos: photos.length },
-        // Strip client-only fields (blob URL + local ids) before sending.
+        images,
+        heroIndex,
+        vehicle: { make: vehicle?.make, model: vehicle?.model, year: vehicle?.year, body: vehicle?.body, vin: vin.trim() || undefined, stockNumber: stockNumber.trim() || undefined, photos: photos.length },
+        // Strip client-only fields (blob URL + local ids); keep a photoIndex so
+        // each part links to the photo it was scanned from.
         parts: parts
           .filter((p) => p.partName.trim())
-          .map(({ photoUrl, _id, _aiPrice, ...rest }) => rest),
+          .map(({ photoUrl, _id, _aiPrice, ...rest }) => ({ ...rest, photoIndex: photoUrl && idxOf.has(photoUrl) ? idxOf.get(photoUrl)! : heroIndex })),
       };
       const res = await fetch("/api/listings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const d = await res.json();
@@ -321,7 +303,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
 
       {phase === "upload" && (
         <Card pad={22} style={{ display: "grid", gap: 18 }}>
-          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+          <input ref={fileRef} type="file" accept="image/*,.heic,.heif" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
 
           {/* One box — drop every photo in; the AI defines what each one is */}
           <div
@@ -329,9 +311,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={(e) => { e.preventDefault(); setDragging(false); }}
             onDrop={onDrop}
-            style={{ cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "34px 20px", border: `1.5px dashed ${dragging ? "var(--accent)" : "var(--line)"}`, borderRadius: "var(--radius-md)", background: dragging ? "rgba(220,38,38,0.08)" : "rgba(39,47,66,0.3)", transition: "border-color 0.15s, background 0.15s" }}
+            style={{ cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "34px 20px", border: `1.5px dashed ${dragging ? "var(--accent)" : "var(--line)"}`, borderRadius: "var(--radius-md)", background: dragging ? "var(--accent-soft)" : "var(--surface2)", transition: "border-color 0.15s, background 0.15s" }}
           >
-            <div style={{ width: 50, height: 50, borderRadius: 14, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center" }}>
+            <div style={{ width: 50, height: 50, borderRadius: 14, background: "var(--accent-tint)", display: "grid", placeItems: "center" }}>
               <ImageUp size={24} color="var(--accent)" />
             </div>
             <div style={{ fontSize: 15, fontWeight: 600 }}>{dragging ? "Drop your photos here" : "Drag & drop all your photos, or click to upload"}</div>
@@ -370,8 +352,8 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             <ScanLine size={26} color={chosen.tone} style={{ position: "absolute", inset: 0, margin: "auto" }} />
           </div>
           <div>
-            <div style={{ fontSize: 17, fontWeight: 700 }}>Analyzing with {chosen.name}…</div>
-            <div style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 420, marginTop: 6, lineHeight: 1.5 }}>Reading your {photoCount} photo{photoCount === 1 ? "" : "s"}, identifying the vehicle, and grading every part the model can see.</div>
+            <div style={{ fontSize: 17, fontWeight: 700 }}>Scanning your car…</div>
+            <div style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 420, marginTop: 6, lineHeight: 1.5 }}>Reading your photos to identify the vehicle and every sellable part — including the VIN or stock number if they show in a picture.</div>
           </div>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: "var(--signal)", background: "var(--signal-bg)", border: "1px solid color-mix(in srgb, var(--signal) 35%, transparent)", borderRadius: 999, padding: "7px 14px" }}>
             <Info size={14} /> This might take up to 30 seconds — hang tight.
@@ -437,9 +419,11 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                 <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>Identified by AI — confirm before posting.</div>
               </div>
               <div style={{ display: "grid", gap: 5, minWidth: 220 }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><ScanLine size={13} color="var(--accent)" /> VIN / plate</label>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><ScanLine size={13} color="var(--accent)" /> VIN / plate <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, opacity: 0.8 }}>· optional</span></label>
                 <input value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} placeholder="Read from your photos — confirm or add" maxLength={17} style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, letterSpacing: "0.04em", fontFamily: "var(--font-sans)" }} />
                 <span style={{ fontSize: 11, color: "var(--muted)" }}>Kept private — never shown on public listings.</span>
+                <label style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><Tag size={13} color="var(--accent)" /> Stock # <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, opacity: 0.8 }}>· optional</span></label>
+                <input value={stockNumber} onChange={(e) => setStockNumber(e.target.value)} placeholder="Your yard inventory code" style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, fontFamily: "var(--font-sans)" }} />
               </div>
             </Card>
           )}
@@ -546,7 +530,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                           <input value={p.partName} placeholder="Part name" onChange={(e) => setPartName(p._id!, e.target.value)} style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", borderBottom: "1px solid transparent", padding: "1px 0" }} onFocus={(e) => (e.target.style.borderBottomColor = "var(--line)")} onBlur={(e) => (e.target.style.borderBottomColor = "transparent")} />
                           {warn && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 700, color: "var(--signal)", background: "var(--signal-bg)", borderRadius: 6, padding: "2px 7px", flexShrink: 0 }}><TriangleAlert size={11} /> Review</span>}
                         </div>
-                        <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 3 }}>{p.conditionNotes || p.partCategory || "Added manually"}</div>
+                        <textarea value={p.description || ""} placeholder="Description — AI fills this in; tap to edit" rows={2} onChange={(e) => setPartDesc(p._id!, e.target.value)} style={{ width: "100%", marginTop: 4, fontSize: 12.5, color: "var(--muted)", border: "1px solid transparent", outline: "none", background: "transparent", resize: "vertical", fontFamily: "var(--font-sans)", lineHeight: 1.45, borderRadius: 8, padding: "4px 6px" }} onFocus={(e) => { e.target.style.borderColor = "var(--line)"; e.target.style.color = "var(--foreground)"; }} onBlur={(e) => { e.target.style.borderColor = "transparent"; e.target.style.color = "var(--muted)"; }} />
                       </div>
                       <ConditionBadge grade={p.condition} size="sm" />
                       <div style={{ width: 110, display: "grid", gap: 2, justifyItems: "end" }}>

@@ -60,7 +60,7 @@ export function Inventory({ go, onVehicle }: { go: (id: string) => void; onVehic
               return (
                 <button key={v.id} onClick={() => onVehicle(v)} style={{ all: "unset", cursor: "pointer", display: "block" }}>
                   <Card pad={0} style={{ overflow: "hidden" }}>
-                    <PhotoCell icon="Car" style={{ height: 130, borderRadius: 0 }} iconSize={40} />
+                    <PhotoCell icon="Car" url={v.image} style={{ height: 130, borderRadius: 0 }} iconSize={40} />
                     <div style={{ padding: 14 }}>
                       <div style={{ fontSize: 14, fontWeight: 700 }}>{v.year} {v.make} {v.model} <span style={{ fontWeight: 500, color: "var(--muted)" }}>{v.trim}</span></div>
                       <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 12, color: "var(--muted)" }}>
@@ -85,7 +85,7 @@ export function Inventory({ go, onVehicle }: { go: (id: string) => void; onVehic
           <Card pad={0}>
             {listings.map((l: any, i: number) => (
               <div key={l.id} onClick={() => (window as any).csOpenExport?.(l)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "11px 16px", cursor: "pointer", borderBottom: i < listings.length - 1 ? "1px solid var(--line)" : "none" }}>
-                <PhotoCell icon="Wrench" style={{ width: 42, height: 36, flexShrink: 0 }} iconSize={15} />
+                <PhotoCell icon="Wrench" url={l.image} style={{ width: 42, height: 36, flexShrink: 0 }} iconSize={15} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
                   <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{l.vehicle}</div>

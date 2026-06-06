@@ -41,13 +41,35 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true, time });
 }
 
-// PATCH { conversationId } → mark a conversation read (unread = 0).
+// PATCH { conversationId, status? } → mark read (unread = 0), and/or set the
+// conversation lifecycle status (open | dealt | closed).
+const VALID_STATUS = ["open", "dealt", "closed"] as const;
+
 export async function PATCH(req: Request) {
-  const { conversationId } = await req.json().catch(() => ({}));
+  const { conversationId, status } = await req.json().catch(() => ({}));
   const ctx = await authConversation(conversationId);
   if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
 
-  const { error } = await ctx.db.from("conversations").update({ unread: 0 }).eq("id", conversationId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const patch: Record<string, unknown> = { unread: 0 };
+  if (status !== undefined) {
+    if (!VALID_STATUS.includes(status)) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    patch.status = status;
+  }
+
+  const { error } = await ctx.db.from("conversations").update(patch).eq("id", conversationId);
+  if (error) {
+    // The status column may not exist yet (migration 0014 not applied). PostgREST
+    // reports this as code PGRST204 ("Could not find the 'status' column …").
+    // Detect it broadly and fall back to just marking read so the inbox works.
+    const missingStatusCol = status !== undefined && (
+      (error as any).code === "PGRST204" ||
+      (/status/i.test(error.message) && /(column|schema cache|does not exist)/i.test(error.message))
+    );
+    if (missingStatusCol) {
+      await ctx.db.from("conversations").update({ unread: 0 }).eq("id", conversationId);
+      return NextResponse.json({ error: "Status needs migration 0014 applied to Supabase.", needsMigration: true }, { status: 409 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }

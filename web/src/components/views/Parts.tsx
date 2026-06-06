@@ -62,7 +62,7 @@ export function Parts({ go }: { go: (id: string) => void; onVehicle?: (v: any) =
 
       {rows.length === 0 && (
         <div style={{ padding: 48, textAlign: "center", border: "1px dashed var(--line)", borderRadius: 14 }}>
-          <div style={{ width: 46, height: 46, borderRadius: 12, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center", margin: "0 auto 14px" }}>
+          <div style={{ width: 46, height: 46, borderRadius: 12, background: "var(--accent-tint)", display: "grid", placeItems: "center", margin: "0 auto 14px" }}>
             <Wrench size={22} color="var(--accent)" />
           </div>
           <div style={{ fontSize: 14, color: "var(--muted)", marginBottom: 14 }}>
@@ -91,7 +91,7 @@ export function Parts({ go }: { go: (id: string) => void; onVehicle?: (v: any) =
             </div>
             {rows.map((l: any, i: number) => (
               <div key={l.id} onClick={() => (window as any).csOpenExport?.(l)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", cursor: "pointer", borderBottom: i < rows.length - 1 ? "1px solid var(--line)" : "none" }}>
-                <PhotoCell icon="Wrench" style={{ width: 48, height: 40, flexShrink: 0 }} iconSize={17} />
+                <PhotoCell icon="Wrench" url={l.image} style={{ width: 48, height: 40, flexShrink: 0 }} iconSize={17} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>{carTitle(l)}</div>
@@ -122,9 +122,9 @@ export function Parts({ go }: { go: (id: string) => void; onVehicle?: (v: any) =
             const open = expanded.has(key);
             return (
               <Card key={key} pad={0}>
-                <button onClick={() => toggle(key)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 18px", borderBottom: open ? "1px solid var(--line)" : "none", width: "100%", background: "transparent", border: "none", textAlign: "left", cursor: "pointer", color: "var(--foreground)" }}>
+                <button onClick={() => toggle(key)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 18px", borderWidth: 0, borderBottomWidth: open ? 1 : 0, borderStyle: "solid", borderColor: "var(--line)", width: "100%", background: "transparent", textAlign: "left", cursor: "pointer", color: "var(--foreground)" }}>
                   <ChevronRight size={16} color="var(--muted)" style={{ flexShrink: 0, transition: "transform 0.15s", transform: open ? "rotate(90deg)" : "none" }} />
-                  <PhotoCell icon="Car" style={{ width: 44, height: 34, flexShrink: 0 }} iconSize={18} />
+                  <PhotoCell icon="Car" url={v?.image} style={{ width: 44, height: 34, flexShrink: 0 }} iconSize={18} />
                   <span style={{ fontSize: 14, fontWeight: 700 }}>{title} {trim && <span style={{ color: "var(--muted)", fontWeight: 500 }}>{trim}</span>}</span>
                   <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
                     <span className="tnum" style={{ fontSize: 13, fontWeight: 700, color: "var(--success)" }}>${total.toLocaleString()}</span>
@@ -132,8 +132,8 @@ export function Parts({ go }: { go: (id: string) => void; onVehicle?: (v: any) =
                   </span>
                 </button>
                 {open && vParts.map((l: any, i: number) => (
-                  <div key={l.id} onClick={() => (window as any).csOpenExport?.(l)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", cursor: "pointer", borderBottom: i < vParts.length - 1 ? "1px solid var(--line)" : "none" }}>
-                    <PhotoCell icon="Wrench" style={{ width: 48, height: 40, flexShrink: 0 }} iconSize={17} />
+                  <div key={l.id} onClick={() => (window as any).csOpenExport?.(l)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", cursor: "pointer", borderWidth: 0, borderBottomWidth: i < vParts.length - 1 ? 1 : 0, borderStyle: "solid", borderColor: "var(--line)" }}>
+                    <PhotoCell icon="Wrench" url={l.image} style={{ width: 48, height: 40, flexShrink: 0 }} iconSize={17} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
                       <div style={{ fontSize: 12, color: "var(--muted)" }}>{l.category || carTitle(l)}</div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { normalizeGrade } from "@/lib/grade";
 
 export async function GET() {
   const supabase = await supabaseServer();
@@ -41,10 +42,11 @@ export async function GET() {
       vehicles = (vehRes.data || []).map((v: any) => ({
         id: v.id, year: v.year, make: v.make, model: v.model, trim: v.trim || "",
         body: v.body || "", vin: v.vin || "", color: v.color || "",
-        added: timeAgo(v.created_at), photos: v.photos || 0,
+        added: timeAgo(v.created_at), photos: v.photos || 0, image: v.photo_url || null,
         parts: 0, value: 0, listed: 0, sold: 0,
         sellMode: v.sell_mode || "parts", askingPrice: v.asking_price, mileage: v.mileage || "",
-        description: v.description || "",
+        description: v.description || "", title: v.title || "", status: statusLabel(v.status),
+        stock_number: v.stock_number || "",
       }));
 
       listings = (listRes.data || []).map((l: any) => {
@@ -52,12 +54,12 @@ export async function GET() {
         return {
           id: l.id, part: c.partName || c.part_name || "Unknown Part",
           vehicleId: l.vehicle_id, listingType: l.listing_type || "part",
-          grade: c.condition || "Good", price: l.price_usd ?? c.priceUsd ?? c.suggestedPriceUsd ?? c.suggested_price ?? 0,
+          grade: normalizeGrade(c.condition), price: l.price_usd ?? c.priceUsd ?? c.suggestedPriceUsd ?? c.suggested_price ?? 0,
           status: statusLabel(l.status), markets: l.marketplace_url ? [marketName(l.marketplace_url)] : [],
           views: l.views || 0, photos: 0, fitment: formatFit(c.fitment),
           category: c.partCategory || c.part_category || "", confidence: c.confidence || "high",
           note: c.conditionNotes || c.condition_notes || "", desc: c.description || "",
-          sellerId: l.seller_id,
+          sellerId: l.seller_id, ebayUrl: l.ebay_url || null, image: l.photo_url || null,
         };
       });
 
@@ -69,6 +71,7 @@ export async function GET() {
 
       threads = (convRes.data || []).map((c: any) => ({
         id: c.id, name: c.contact_name, market: c.market,
+        status: c.status || "open",
         part: c.part_name || "", unread: c.unread || 0,
         time: c.last_time || "", avatar: c.contact_avatar || c.contact_name?.slice(0, 2).toUpperCase(),
         messages: (c.messages || []).map((m: any) => ({

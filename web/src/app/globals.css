@@ -11,6 +11,8 @@
   --line: #334155;
   --accent: #DC2626;
   --accent-hover: #B91C1C;
+  --accent-tint: rgba(220, 38, 38, 0.14);   /* icon-tile / selected fill */
+  --accent-soft: rgba(220, 38, 38, 0.08);   /* drag / hover wash */
   --signal: #F59E0B;
   --signal-bg: rgba(245, 158, 11, 0.12);
   --caution: #F59E0B;
@@ -27,16 +29,21 @@
    warm gray #E7E1D4, Redline #DC2626. Toggle by setting data-theme="light"
    on <html>. */
 :root[data-theme="light"] {
-  --background: #F4EFE4;          /* Paper — page backdrop */
-  --foreground: #0d1c30;          /* Ink — body text, wordmark */
-  --surface: #FFFCF5;             /* white-cream — card backs lift off Paper */
-  --surface2: #D0B98B;            /* Sand — hover/fill, card fronts */
-  --muted: #8B7D62;               /* muted ink for secondary text */
-  --line: #D0B98B;                /* Sand border */
-  --accent: #DC2626;              /* Redline — constant brand accent */
-  --accent-hover: #B91C1C;
+  /* Soft warm-neutral light theme. Paper backdrop, clean white cards, gentle
+     sand-gray fills/borders — Sand & navy are accents, never the default fill.
+     Primary action color is Ink navy; Redline is reserved for dark + alerts. */
+  --background: #F4EFE4;          /* Paper — warm page backdrop */
+  --foreground: #14233B;          /* Ink — crisp, high-contrast text */
+  --surface: #FFFFFF;             /* clean white cards lift off Paper */
+  --surface2: #F0EADD;            /* soft warm fill — hover/active/inputs */
+  --muted: #6E6655;               /* readable warm gray for secondary text */
+  --line: #E6DECE;                /* soft warm border, not a hard tan line */
+  --accent: #14233B;              /* Ink navy — light-mode primary */
+  --accent-hover: #243A5C;
+  --accent-tint: rgba(20, 35, 59, 0.07);    /* navy tile / selected fill */
+  --accent-soft: rgba(20, 35, 59, 0.04);    /* drag / hover wash */
   --signal: #B45309;
-  --signal-bg: rgba(180, 83, 9, 0.14);
+  --signal-bg: rgba(180, 83, 9, 0.12);
   --caution: #B45309;
   --success: #15803D;
   --danger: #DC2626;
@@ -45,14 +52,14 @@
 /* Light-mode surfaces for elements with hardcoded dark fills */
 :root[data-theme="light"] .grain {
   background-image:
-    radial-gradient(circle at 18% 8%, rgba(220, 38, 38, 0.12), transparent 42%),
-    radial-gradient(circle at 92% 0%, rgba(208, 185, 139, 0.55), transparent 46%);
+    radial-gradient(circle at 16% 6%, rgba(20, 35, 59, 0.06), transparent 44%),
+    radial-gradient(circle at 94% 0%, rgba(208, 185, 139, 0.28), transparent 48%);
 }
 :root[data-theme="light"] .photo-cell {
   background:
-    radial-gradient(circle at 30% 25%, rgba(13,28,48,0.06), transparent 60%),
-    linear-gradient(135deg, #DAC598 0%, #C8B083 100%);
-  color: #8a7a55;
+    radial-gradient(circle at 30% 25%, rgba(20,35,59,0.05), transparent 60%),
+    linear-gradient(135deg, #EFE7D8 0%, #E2D8C4 100%);
+  color: #A89A7B;
 }
 :root[data-theme="light"] .photo-cell::after {
   background-image: repeating-linear-gradient(135deg, rgba(13,28,48,0.025) 0 2px, transparent 2px 9px);
@@ -76,6 +83,22 @@ body {
 /* tabular figures for prices / numbers */
 .tnum {
   font-variant-numeric: tabular-nums;
+}
+
+/* Browser autofill: Chrome/Safari paint a blue/yellow fill that ignores our
+   theme. Mask it with an inset shadow in the field color + theme text color. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill {
+  -webkit-text-fill-color: var(--foreground);
+  -webkit-box-shadow: 0 0 0 1000px var(--surface2) inset;
+  box-shadow: 0 0 0 1000px var(--surface2) inset;
+  caret-color: var(--foreground);
+  border-radius: inherit;
+  /* delay the autofill bg repaint effectively forever so our shadow wins */
+  transition: background-color 600000s 0s, color 600000s 0s;
 }
 
 /* grain wash — landing + login panels */

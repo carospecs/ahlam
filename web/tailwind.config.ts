@@ -5,20 +5,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Automotive dark palette (see docs/DESIGN_SYSTEM.md)
-        background: "#0F172A",
-        surface: "#1B2336",
-        surface2: "#272F42",
-        foreground: "#F8FAFC",
-        muted: "#94A3B8",
-        line: "#334155",
-        accent: "#DC2626",
-        accenthover: "#B91C1C",
-        signal: "#F59E0B",
-        "signal-bg": "rgba(245, 158, 11, 0.12)",
-        caution: "#F59E0B",
-        success: "#22C55E",
-        danger: "#EF4444",
+        // Brand palette wired to CSS variables so utility classes
+        // (bg-background, text-foreground, …) follow the active theme.
+        // Tokens are defined in globals.css for dark + [data-theme="light"].
+        background: "var(--background)",
+        surface: "var(--surface)",
+        surface2: "var(--surface2)",
+        foreground: "var(--foreground)",
+        muted: "var(--muted)",
+        line: "var(--line)",
+        accent: "var(--accent)",
+        accenthover: "var(--accent-hover)",
+        signal: "var(--signal)",
+        "signal-bg": "var(--signal-bg)",
+        caution: "var(--caution)",
+        success: "var(--success)",
+        danger: "var(--danger)",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],

@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { normalizeGrade } from "@/lib/grade";
+
+const R = 3959; // Earth radius in miles
+
+function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function driveTimeMinutes(miles: number): number {
+  return Math.round(miles / 35 * 60); // avg 35 mph surface street
+}
 
 // The public marketplace feed. A buyer sees everything OTHER shops have posted
 // (active listings + whole-car vehicles) — never their own shop's posts. Falls
@@ -12,7 +27,8 @@ export async function GET(req: Request) {
   const priceMax = url.searchParams.get("price_max");
   const sort = url.searchParams.get("sort");
   const q = url.searchParams.get("q");
-  const zip = url.searchParams.get("zip");
+  const buyerLat = url.searchParams.get("lat") ? parseFloat(url.searchParams.get("lat")!) : null;
+  const buyerLng = url.searchParams.get("lng") ? parseFloat(url.searchParams.get("lng")!) : null;
 
   const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
@@ -37,16 +53,22 @@ export async function GET(req: Request) {
   if (sort === "price-asc") listQuery = listQuery.order("price_usd", { ascending: true });
   else if (sort === "price-desc") listQuery = listQuery.order("price_usd", { ascending: false });
   else if (sort === "views") listQuery = listQuery.order("views", { ascending: false });
-  else listQuery = listQuery.order("created_at", { ascending: false });
+  else if (sort !== "distance") listQuery = listQuery.order("created_at", { ascending: false });
   const { data: listingRows } = await listQuery;
 
   let parts = (listingRows || []).map((l: any) => {
     const c = l.corrected || l.ai_output || {};
     const shop = shopMap.get(l.shop_id);
+    const shopLat = shop?.lat ? parseFloat(shop.lat) : null;
+    const shopLng = shop?.lng ? parseFloat(shop.lng) : null;
+    let distance: number | null = null;
+    if (buyerLat !== null && buyerLng !== null && shopLat !== null && shopLng !== null) {
+      distance = Math.round(haversine(buyerLat, buyerLng, shopLat, shopLng) * 10) / 10;
+    }
     return {
       id: l.id,
       part: c.partName || c.part_name || "Used Part",
-      grade: c.condition || "Good",
+      grade: normalizeGrade(c.condition),
       price: l.price_usd ?? c.priceUsd ?? c.suggestedPriceUsd ?? c.suggested_price ?? 0,
       fitment: formatFit(c.fitment),
       category: c.partCategory || c.part_category || "",
@@ -55,7 +77,10 @@ export async function GET(req: Request) {
       sellerId: l.seller_id || l.created_by,
       shopId: l.shop_id,
       shopName: shop?.name || "Independent seller",
-      location: shop?.location || "",
+      location: shop?.zip_code || shop?.location || "",
+      phone: shop?.business_phone || null,
+      distance,
+      driveTime: distance !== null ? driveTimeMinutes(distance) : null,
       note: c.conditionNotes || c.condition_notes || "",
       desc: c.description || "",
       confidence: c.confidence || "high",
@@ -70,14 +95,15 @@ export async function GET(req: Request) {
   if (category) {
     parts = parts.filter(p => p.category.toLowerCase() === category.toLowerCase());
   }
-  const CONDITION_SCORE: Record<string, number> = { Good: 5, Poor: 2 };
   const GRADE_SCORE: Record<string, number> = { A: 5, B: 4, C: 3, D: 2, F: 1 };
   if (conditionMin) {
     const minScore = GRADE_SCORE[conditionMin.toUpperCase()] ?? 0;
-    parts = parts.filter(p => (CONDITION_SCORE[p.grade] || 0) >= minScore);
+    parts = parts.filter(p => (GRADE_SCORE[p.grade] || 0) >= minScore);
   }
-  if (zip) {
-    parts = parts.filter(p => p.location.toLowerCase().includes(zip.toLowerCase()));
+
+  // Distance sort (happens in-memory since Supabase can't do Haversine in JS).
+  if (sort === "distance") {
+    parts.sort((a: any, b: any) => (a.distance ?? 9999) - (b.distance ?? 9999));
   }
 
   // Whole-car vehicles from other shops (filtered in SQL).
@@ -87,6 +113,12 @@ export async function GET(req: Request) {
 
   let vehicles = (vehicleRows || []).map((v: any) => {
     const shop = shopMap.get(v.shop_id);
+    const shopLat = shop?.lat ? parseFloat(shop.lat) : null;
+    const shopLng = shop?.lng ? parseFloat(shop.lng) : null;
+    let distance: number | null = null;
+    if (buyerLat !== null && buyerLng !== null && shopLat !== null && shopLng !== null) {
+      distance = Math.round(haversine(buyerLat, buyerLng, shopLat, shopLng) * 10) / 10;
+    }
     return {
       id: v.id,
       year: v.year, make: v.make, model: v.model, trim: v.trim || "",
@@ -94,9 +126,13 @@ export async function GET(req: Request) {
       sellMode: v.sell_mode || "whole",
       askingPrice: v.asking_price,
       views: v.views || 0,
+      photoUrl: v.photo_url || null,
       shopId: v.shop_id,
       shopName: shop?.name || "Independent seller",
-      location: shop?.location || "",
+      location: shop?.zip_code || shop?.location || "",
+      phone: shop?.business_phone || null,
+      distance,
+      driveTime: distance !== null ? driveTimeMinutes(distance) : null,
     };
   });
 
@@ -108,8 +144,9 @@ export async function GET(req: Request) {
       String(v.year || "").includes(search)
     );
   }
-  if (zip) {
-    vehicles = vehicles.filter(v => v.location.toLowerCase().includes(zip.toLowerCase()));
+
+  if (sort === "distance") {
+    vehicles.sort((a: any, b: any) => (a.distance ?? 9999) - (b.distance ?? 9999));
   }
 
   // Demo fallback so the marketplace is never empty for a brand-new shop.
@@ -137,16 +174,16 @@ function formatFit(fit: any): string {
 }
 
 const DEMO_PARTS = [
-  { id: "m1", part: "OEM Alternator", grade: "Good", price: 95, fitment: "2013–2017 Honda Accord 2.4L", category: "Electrical", photoUrl: null, views: 64, sellerId: null, shopId: "demo-a", shopName: "Eastgate Auto Recyclers", location: "Anaheim, CA", note: "Bench-tested, holds charge", desc: "Pulled from a clean 2015 Accord. Tested good on the bench.", confidence: "high", markets: [] },
-  { id: "m2", part: "Tailgate Assembly", grade: "Good", price: 410, fitment: "2009–2014 Ford F-150", category: "Body / Exterior", photoUrl: null, views: 188, sellerId: null, shopId: "demo-b", shopName: "Harbor Salvage", location: "San Pedro, CA", note: "No rust on inner lip", desc: "Solid tailgate, latch and handle work. Oxford White.", confidence: "high", markets: [] },
-  { id: "m3", part: "Front Bumper Cover", grade: "Good", price: 160, fitment: "2016–2018 Toyota Camry", category: "Body / Exterior", photoUrl: null, views: 41, sellerId: null, shopId: "demo-a", shopName: "Eastgate Auto Recyclers", location: "Anaheim, CA", note: "Minor scuffs, all tabs intact", desc: "Factory bumper cover, fog brackets included.", confidence: "high", markets: [] },
-  { id: "m4", part: "Alloy Wheel (set of 4)", grade: "Good", price: 280, fitment: "2015–2017 Subaru Outback", category: "Wheels / Tires", photoUrl: null, views: 97, sellerId: null, shopId: "demo-c", shopName: "Vega Used Parts", location: "Carson, CA", note: "17in, balanced, light curb rash", desc: "Four factory alloys, all straight and balanced.", confidence: "high", markets: [] },
-  { id: "m5", part: "Left Headlight Assembly", grade: "Poor", price: 35, fitment: "2014–2018 Nissan Altima", category: "Lighting", photoUrl: null, views: 22, sellerId: null, shopId: "demo-b", shopName: "Harbor Salvage", location: "San Pedro, CA", note: "Hazy lens, sold as core", desc: "Headlight core, lens is foggy. Good for a restore.", confidence: "medium", markets: [] },
-  { id: "m6", part: "Starter Motor", grade: "Good", price: 70, fitment: "2012–2016 Chevy Cruze 1.4L", category: "Electrical", photoUrl: null, views: 53, sellerId: null, shopId: "demo-c", shopName: "Vega Used Parts", location: "Carson, CA", note: "Spins strong, clean teeth", desc: "Removed working. 30-day guarantee.", confidence: "high", markets: [] },
+  { id: "m1", part: "OEM Alternator", grade: "B", price: 95, fitment: "2013–2017 Honda Accord 2.4L", category: "Electrical", photoUrl: null, views: 64, sellerId: null, shopId: "demo-a", shopName: "Eastgate Auto Recyclers", location: "92805", distance: 3.2, driveTime: 5, note: "Bench-tested, holds charge", desc: "Pulled from a clean 2015 Accord. Tested good on the bench.", confidence: "high", markets: [] },
+  { id: "m2", part: "Tailgate Assembly", grade: "B", price: 410, fitment: "2009–2014 Ford F-150", category: "Body / Exterior", photoUrl: null, views: 188, sellerId: null, shopId: "demo-b", shopName: "Harbor Salvage", location: "90732", distance: 8.1, driveTime: 14, note: "No rust on inner lip", desc: "Solid tailgate, latch and handle work. Oxford White.", confidence: "high", markets: [] },
+  { id: "m3", part: "Front Bumper Cover", grade: "B", price: 160, fitment: "2016–2018 Toyota Camry", category: "Body / Exterior", photoUrl: null, views: 41, sellerId: null, shopId: "demo-a", shopName: "Eastgate Auto Recyclers", location: "92805", distance: 3.2, driveTime: 5, note: "Minor scuffs, all tabs intact", desc: "Factory bumper cover, fog brackets included.", confidence: "high", markets: [] },
+  { id: "m4", part: "Alloy Wheel (set of 4)", grade: "B", price: 280, fitment: "2015–2017 Subaru Outback", category: "Wheels / Tires", photoUrl: null, views: 97, sellerId: null, shopId: "demo-c", shopName: "Vega Used Parts", location: "90746", distance: 5.7, driveTime: 10, note: "17in, balanced, light curb rash", desc: "Four factory alloys, all straight and balanced.", confidence: "high", markets: [] },
+  { id: "m5", part: "Left Headlight Assembly", grade: "D", price: 35, fitment: "2014–2018 Nissan Altima", category: "Lighting", photoUrl: null, views: 22, sellerId: null, shopId: "demo-b", shopName: "Harbor Salvage", location: "90732", distance: 8.1, driveTime: 14, note: "Hazy lens, sold as core", desc: "Headlight core, lens is foggy. Good for a restore.", confidence: "medium", markets: [] },
+  { id: "m6", part: "Starter Motor", grade: "B", price: 70, fitment: "2012–2016 Chevy Cruze 1.4L", category: "Electrical", photoUrl: null, views: 53, sellerId: null, shopId: "demo-c", shopName: "Vega Used Parts", location: "90746", distance: 5.7, driveTime: 10, note: "Spins strong, clean teeth", desc: "Removed working. 30-day guarantee.", confidence: "high", markets: [] },
 ];
 
 const DEMO_VEHICLES = [
-  { id: "mv1", year: "2013", make: "Ford", model: "F-150", trim: "XLT", body: "Pickup", color: "Oxford White", mileage: "148k mi", sellMode: "both", askingPrice: 4200, views: 212, vin: "", shopId: "demo-b", shopName: "Harbor Salvage", location: "San Pedro, CA" },
-  { id: "mv2", year: "2016", make: "Toyota", model: "Camry", trim: "LE", body: "Sedan", color: "Silver", mileage: "96k mi", sellMode: "whole", askingPrice: 3800, views: 154, vin: "", shopId: "demo-a", shopName: "Eastgate Auto Recyclers", location: "Anaheim, CA" },
-  { id: "mv3", year: "2015", make: "Subaru", model: "Outback", trim: "2.5i", body: "Wagon", color: "Dark Gray", mileage: "131k mi", sellMode: "both", askingPrice: 5100, views: 88, vin: "", shopId: "demo-c", shopName: "Vega Used Parts", location: "Carson, CA" },
+  { id: "mv1", year: "2013", make: "Ford", model: "F-150", trim: "XLT", body: "Pickup", color: "Oxford White", mileage: "148k mi", sellMode: "both", askingPrice: 4200, views: 212, vin: "", shopId: "demo-b", shopName: "Harbor Salvage", location: "90732", distance: 8.1, driveTime: 14 },
+  { id: "mv2", year: "2016", make: "Toyota", model: "Camry", trim: "LE", body: "Sedan", color: "Silver", mileage: "96k mi", sellMode: "whole", askingPrice: 3800, views: 154, vin: "", shopId: "demo-a", shopName: "Eastgate Auto Recyclers", location: "92805", distance: 3.2, driveTime: 5 },
+  { id: "mv3", year: "2015", make: "Subaru", model: "Outback", trim: "2.5i", body: "Wagon", color: "Dark Gray", mileage: "131k mi", sellMode: "both", askingPrice: 5100, views: 88, vin: "", shopId: "demo-c", shopName: "Vega Used Parts", location: "90746", distance: 5.7, driveTime: 10 },
 ];

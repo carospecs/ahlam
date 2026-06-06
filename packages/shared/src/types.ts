@@ -1,7 +1,7 @@
 // Core data model shared across web + app + database.
 // Keep this in sync with supabase/migrations.
 
-export type ConditionGrade = "A" | "B" | "C" | "D" | "F";
+export type ConditionGrade = "Good" | "Poor";
 
 /** AI confidence bucket. "low" triggers the yellow "review carefully" UI. */
 export type Confidence = "high" | "medium" | "low";
