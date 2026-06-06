@@ -27,12 +27,12 @@
    warm gray #E7E1D4, Redline #DC2626. Toggle by setting data-theme="light"
    on <html>. */
 :root[data-theme="light"] {
-  --background: #E7E1D4;          /* warm gray backdrop */
+  --background: #F4EFE4;          /* Paper — page backdrop */
   --foreground: #0d1c30;          /* Ink — body text, wordmark */
-  --surface: #F4EFE4;             /* Paper — card backs, panels */
+  --surface: #FFFCF5;             /* white-cream — card backs lift off Paper */
   --surface2: #D0B98B;            /* Sand — hover/fill, card fronts */
   --muted: #8B7D62;               /* muted ink for secondary text */
-  --line: #C5B48C;                /* light warm border */
+  --line: #D0B98B;                /* Sand border */
   --accent: #DC2626;              /* Redline — constant brand accent */
   --accent-hover: #B91C1C;
   --signal: #B45309;

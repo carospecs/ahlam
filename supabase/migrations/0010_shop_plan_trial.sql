@@ -1,5 +1,6 @@
 -- Ahlam migration 0010: add plan and trial tracking to shops
 -- Also tighten RLS for marketplace-visible tables
+-- Add description column to vehicles for whole-car listing text
 
 -- ---------------------------------------------------------------------------
 -- Shop plan & trial
@@ -32,3 +33,8 @@ create policy if not exists "public read shop info" on shops
 -- Disable anon key from directly reading profiles (must go through API)
 create policy if not exists "users read own profile" on profiles
   for select using (auth.uid() = id);
+
+-- ---------------------------------------------------------------------------
+-- Vehicle description column (whole-car listing text)
+-- ---------------------------------------------------------------------------
+alter table vehicles add column if not exists description text;

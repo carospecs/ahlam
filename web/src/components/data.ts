@@ -84,6 +84,8 @@ export function buildVehicleText(v: Vehicle, shop = SHOP) {
   const lines: string[] = [];
   lines.push(`${v.year} ${v.make} ${v.model} ${v.trim}`);
   lines.push(`${v.body} • ${v.color} • ${v.mileage}`);
+  const desc = (v as any).description || "";
+  if (desc) lines.push("", desc);
   lines.push("", "Mechanic-owned salvage vehicle. Clean parts car or project. Runs and drives — sold as-is.");
   if (v.askingPrice) lines.push("", `Asking: $${v.askingPrice.toLocaleString()}`);
   const tail = [shop.name, shop.location, shop.phone].filter(Boolean).join(" • ");

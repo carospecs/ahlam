@@ -148,6 +148,10 @@ export async function PATCH(req: Request) {
     vehUpdate.status = enumStatus;
   }
 
+  if (typeof body.description === "string") {
+    vehUpdate.description = body.description;
+  }
+
   if (Object.keys(vehUpdate).length === 0) return NextResponse.json({ ok: true });
 
   const { error } = await db

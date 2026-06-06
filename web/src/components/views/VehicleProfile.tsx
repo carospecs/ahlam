@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Car, Wrench, ChevronLeft, Copy, Send, Sparkles, ScanLine, Check, CheckCircle2, Pencil, Lightbulb } from "lucide-react";
+import { Car, Wrench, ChevronLeft, Copy, Send, Sparkles, ScanLine, Check, CheckCircle2, Pencil, Lightbulb, LoaderCircle } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge, SellModeBadge, StatusBadge } from "../UI";
 import { buildVehicleText, partsForVehicle, SELL_MODE } from "../data";
 import { csToast, useData } from "../Dashboard";
@@ -19,8 +19,17 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
   // Which parts are ticked for the bulk "Post" action (selection only — does
   // not change a part's live status). Seeds to all parts.
   const [selected, setSelected] = React.useState<Set<string>>(() => new Set(parts.map((p: any) => p.id)));
+  // Track which parts have their edit panel open.
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
   // Local price overrides so inline edits show immediately before reload.
   const [prices, setPrices] = React.useState<Record<string, number>>({});
+  // Local description overrides per part.
+  const [partDescs, setPartDescs] = React.useState<Record<string, string>>({});
+  // Per-part saving indicator.
+  const [savingParts, setSavingParts] = React.useState<Set<string>>(new Set());
+
+  const [vehDesc, setVehDesc] = React.useState<string>(v.description || "");
+  const [savingDesc, setSavingDesc] = React.useState(false);
 
   const mode = SELL_MODE[sellMode];
   const showCar = sellMode === "whole" || sellMode === "both";
@@ -69,20 +78,50 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
     setSavingMode(false);
   }
 
-  // Persist an inline price edit for a single part listing.
-  async function savePrice(id: string, value: string) {
-    const num = Number(value);
-    if (!Number.isFinite(num) || num < 0) return;
-    setPrices((p) => ({ ...p, [id]: num }));
+  // Toggle the inline edit panel for a part.
+  const toggleExpand = (id: string) => setExpanded((prev) => {
+    const n = new Set(prev);
+    if (n.has(id)) { n.delete(id); setEditForm((ef) => { const copy = { ...ef }; delete copy[id]; return copy; }); }
+    else n.add(id);
+    return n;
+  });
+
+  // Local form state for each open part panel (price + desc).
+  const [editForm, setEditForm] = React.useState<Record<string, { price: string; desc: string }>>({});
+  const formOf = (p: any) => editForm[p.id] || { price: String(priceOf(p)), desc: p.desc || p.description || "" };
+
+  // Persist price + description for a single part listing.
+  async function savePart(id: string) {
+    if (savingParts.has(id)) return;
+    const f = editForm[id];
+    if (!f) return;
+    setSavingParts((prev) => new Set(prev).add(id));
+    const num = Number(f.price);
+    const body: Record<string, any> = { listingId: id };
+    if (Number.isFinite(num) && num >= 0) { body.priceUsd = num; setPrices((pr) => ({ ...pr, [id]: num })); }
+    if (f.desc != null) { body.description = f.desc; setPartDescs((pd) => ({ ...pd, [id]: f.desc })); }
     try {
-      await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: id, priceUsd: num }) });
-      (window as any).csReloadData?.();
-    } catch { csToast("Couldn't save price"); }
+      const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't save"); }
+      else { csToast("Part saved"); toggleExpand(id); (window as any).csReloadData?.(); }
+    } catch { csToast("Couldn't save — check your connection"); }
+    setSavingParts((prev) => { const n = new Set(prev); n.delete(id); return n; });
   }
 
   function copyCar() {
     try { navigator.clipboard && navigator.clipboard.writeText(buildVehicleText(v)); } catch (e) {}
     csToast("Whole-car listing copied");
+  }
+
+  async function saveDescription() {
+    if (savingDesc) return;
+    setSavingDesc(true);
+    try {
+      const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vehicleId: v.id, description: vehDesc }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't save"); }
+      else { csToast("Description saved"); (window as any).csReloadData?.(); }
+    } catch { csToast("Couldn't save — check your connection"); }
+    setSavingDesc(false);
   }
 
   // Static "what to add" hints for a stronger whole-car listing.
@@ -152,7 +191,12 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
             <span style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Car size={16} color="var(--signal)" /> Whole-car listing</span>
             <button style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 600 }} onClick={copyCar}><Copy size={14} /> Copy text</button>
           </div>
-          <pre style={{ margin: 0, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: "var(--radius-md)", padding: 15, fontSize: 13, lineHeight: 1.6, color: "var(--foreground)", fontFamily: "var(--font-sans)", whiteSpace: "pre-wrap" }}>{buildVehicleText(v)}</pre>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>Description buyers will see</div>
+          <textarea value={vehDesc} onChange={(e) => setVehDesc(e.target.value)} rows={4} placeholder="Describe the vehicle — condition, history, what's included…" style={{ width: "100%", padding: "11px 13px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, lineHeight: 1.5, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
+          <button onClick={saveDescription} disabled={savingDesc} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, marginTop: 8, opacity: savingDesc ? 0.6 : 1 }}>
+            {savingDesc ? "Saving…" : "Save description"}
+          </button>
+          <pre style={{ margin: "12px 0 0", background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: "var(--radius-md)", padding: 15, fontSize: 13, lineHeight: 1.6, color: "var(--foreground)", fontFamily: "var(--font-sans)", whiteSpace: "pre-wrap" }}>{buildVehicleText({ ...v, description: vehDesc })}</pre>
           <div style={{ marginTop: 14 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 700, color: "var(--muted)", marginBottom: 8 }}><Lightbulb size={14} color="var(--signal)" /> Suggested to add</div>
             <div style={{ display: "grid", gap: 6 }}>
@@ -177,29 +221,49 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
           </div>
           {parts.map((l: any, i: number) => {
             const on = selected.has(l.id);
+            const isOpen = expanded.has(l.id);
+            const isSaving = savingParts.has(l.id);
+            const f = formOf(l);
             return (
-              <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", borderBottom: i < parts.length - 1 ? "1px solid var(--line)" : "none" }}>
-                <input type="checkbox" checked={on} onChange={() => toggleSel(l.id)} style={{ width: 17, height: 17, accentColor: "var(--accent)", cursor: "pointer", flexShrink: 0 }} aria-label={`Select ${l.part}`} />
-                <PhotoCell icon="Wrench" style={{ width: 46, height: 40, flexShrink: 0 }} iconSize={17} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
-                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{l.category}</div>
+              <React.Fragment key={l.id}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", borderBottom: i < parts.length - 1 && !isOpen ? "1px solid var(--line)" : i < parts.length - 1 ? "none" : "none" }}>
+                  <input type="checkbox" checked={on} onChange={() => toggleSel(l.id)} style={{ width: 17, height: 17, accentColor: "var(--accent)", cursor: "pointer", flexShrink: 0 }} aria-label={`Select ${l.part}`} />
+                  <PhotoCell icon="Wrench" style={{ width: 46, height: 40, flexShrink: 0 }} iconSize={17} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)" }}>{l.category}</div>
+                  </div>
+                  <ConditionBadge grade={l.grade} size="sm" />
+                  <div className="tnum" style={{ fontSize: 14, fontWeight: 700, color: "var(--foreground)", whiteSpace: "nowrap" }}>${priceOf(l).toLocaleString()}</div>
+                  <StatusBadge status={l.status} />
+                  <button onClick={() => toggleExpand(l.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "1px solid var(--line)", background: isOpen ? "var(--surface2)" : "transparent", color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, flexShrink: 0 }}><Pencil size={13} /> {isOpen ? "Close" : "Edit"}</button>
                 </div>
-                <ConditionBadge grade={l.grade} size="sm" />
-                <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                  <span style={{ fontSize: 13, color: "var(--muted)" }}>$</span>
-                  <input
-                    type="number"
-                    defaultValue={priceOf(l)}
-                    onBlur={(e) => savePrice(l.id, e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                    className="tnum"
-                    style={{ width: 72, textAlign: "right", fontSize: 14, fontWeight: 700, padding: "5px 7px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", outline: "none" }}
-                  />
-                </div>
-                <StatusBadge status={l.status} />
-                <button onClick={() => (window as any).csOpenExport?.({ ...l, price: priceOf(l) })} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, flexShrink: 0 }}><Pencil size={13} /> Edit</button>
-              </div>
+                {isOpen && (
+                  <div style={{ padding: "10px 18px 16px", background: "var(--surface2)", borderBottom: i < parts.length - 1 ? "1px solid var(--line)" : "none" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 10 }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>Price ($)</div>
+                        <input type="number" value={f.price} onChange={(e) => setEditForm((ef) => ({ ...ef, [l.id]: { ...(ef[l.id] || f), price: e.target.value } }))} className="tnum" style={{ width: "100%", boxSizing: "border-box", fontSize: 14, fontWeight: 700, padding: "7px 9px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", outline: "none" }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>Status</div>
+                        <StatusBadge status={l.status} />
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>Description for buyers</div>
+                      <textarea value={f.desc} onChange={(e) => setEditForm((ef) => ({ ...ef, [l.id]: { ...(ef[l.id] || f), desc: e.target.value } }))} rows={3} placeholder="Describe condition, compatibility, etc…" style={{ width: "100%", boxSizing: "border-box", padding: "9px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 13, lineHeight: 1.5, outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+                    </div>
+                    <button
+                      onClick={() => savePart(l.id)}
+                      disabled={isSaving}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, opacity: isSaving ? 0.6 : 1 }}
+                    >
+                      {isSaving ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />} {isSaving ? "Saving…" : "Save"}
+                    </button>
+                  </div>
+                )}
+              </React.Fragment>
             );
           })}
         </Card>

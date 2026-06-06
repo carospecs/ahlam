@@ -86,22 +86,22 @@ export function Overview({ go }: { go: (id: string) => void; onVehicle?: (v: any
                 No activity yet — it'll show up here as you add and post listings.
               </div>
             )}
-            {activity.map((a: any, i: number) => {
-              const iconMap: Record<string, any> = { ScanLine, TriangleAlert, MessageSquare, CircleCheck, Send };
-              const IconComp = iconMap[a.icon] || ScanLine;
-              const tones: Record<string, string> = { accent: "var(--accent)", success: "var(--success)", signal: "var(--signal)", muted: "var(--muted)" };
-              const toneC = tones[a.tone] || "var(--muted)";
-              return (
-                <div key={i} style={{ display: "flex", gap: 12, padding: "11px 0", borderBottom: i < activity.length - 1 ? "1px solid var(--line)" : "none" }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 8, flexShrink: 0, background: `color-mix(in srgb, ${toneC} 14%, transparent)`, display: "grid", placeItems: "center" }}>
-                    <IconComp size={15} color={toneC} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, lineHeight: 1.4 }}>{a.text}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{a.time}</div>
-                  </div>
-                </div>
-              );
+             {activity.map((a: any, i: number) => {
+               const iconMap: Record<string, any> = { ScanLine, TriangleAlert, MessageSquare, CircleCheck, Send };
+               const IconComp = iconMap[a.icon] || ScanLine;
+               const tones: Record<string, string> = { accent: "var(--accent)", success: "var(--success)", signal: "var(--signal)", muted: "var(--muted)" };
+               const toneC = tones[a.tone] || "var(--muted)";
+               return (
+                 <div key={i} onClick={() => a.link && go(a.link)} style={{ display: "flex", gap: 12, padding: "11px 0", cursor: a.link ? "pointer" : "default", borderRadius: 6, borderBottom: i < activity.length - 1 ? "1px solid var(--line)" : "none" }}>
+                   <div style={{ width: 30, height: 30, borderRadius: 8, flexShrink: 0, background: `color-mix(in srgb, ${toneC} 14%, transparent)`, display: "grid", placeItems: "center" }}>
+                     <IconComp size={15} color={toneC} />
+                   </div>
+                   <div style={{ flex: 1 }}>
+                     <div style={{ fontSize: 13, lineHeight: 1.4 }}>{a.text}</div>
+                     <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{a.time}</div>
+                   </div>
+                 </div>
+               );
             })}
           </div>
         </Card>
