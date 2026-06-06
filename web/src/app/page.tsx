@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Login } from "@/components/Login";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Landing } from "@/components/Landing";
-import { Dashboard } from "@/components/Dashboard";
 import { supabaseBrowser } from "@/lib/supabase-browser";
+
+const Login = lazy(() => import("@/components/Login").then((m) => ({ default: m.Login })));
+const Dashboard = lazy(() => import("@/components/Dashboard").then((m) => ({ default: m.Dashboard })));
 
 export default function Home() {
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -38,7 +39,7 @@ export default function Home() {
     );
   }
 
-  if (authed) return <Dashboard onSignOut={() => { supabaseBrowser().auth.signOut(); setShowLogin(false); setAuthed(false); }} />;
-  if (showLogin) return <Login onLogin={() => setAuthed(true)} />;
+  if (authed) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Dashboard onSignOut={() => { supabaseBrowser().auth.signOut(); setShowLogin(false); setAuthed(false); }} /></Suspense>;
+  if (showLogin) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Login onLogin={() => setAuthed(true)} /></Suspense>;
   return <Landing onGetStarted={() => setShowLogin(true)} onSignIn={() => setShowLogin(true)} />;
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { Resend } from "resend";
 
 /**
  * POST /api/waitlist
@@ -61,7 +62,6 @@ async function sendConfirmation(email: string) {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.WAITLIST_FROM_EMAIL;
   if (!key || !from) return; // not configured yet — skip silently
-  const { Resend } = await import("resend");
   const resend = new Resend(key);
   await resend.emails.send({
     from,
