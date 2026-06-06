@@ -442,10 +442,12 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
     e.preventDefault();
     if (!name.trim()) { setError(isIndiv ? "Your name is required" : "Shop name is required"); return; }
     setBusy(true); setError("");
-    const r = await fetch("/api/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, location, phone, accountType }) });
-    const d = await r.json();
-    if (!r.ok) { setError(d.error || "Could not create account"); setBusy(false); return; }
-    onDone();
+    try {
+      const r = await fetch("/api/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, location, phone, accountType }) });
+      const d = await r.json();
+      if (!r.ok) { setError(d.error || "Could not create account"); setBusy(false); return; }
+      onDone();
+    } catch { setError("Network error — check your connection"); setBusy(false); }
   }
 
   return (
