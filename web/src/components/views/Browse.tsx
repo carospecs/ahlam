@@ -9,11 +9,13 @@ interface MktPart {
   id: string; part: string; grade: string; price: number; fitment: string;
   category: string; photoUrl: string | null; views: number; shopName: string;
   location: string; note: string; desc: string; shopId?: string;
+  distance?: number | null; driveTime?: number | null;
 }
 interface MktVehicle {
   id: string; year: string; make: string; model: string; trim: string; body: string;
   color: string; mileage: string; sellMode: string; askingPrice: number | null;
   views: number; shopId: string; shopName: string; location: string;
+  distance?: number | null; driveTime?: number | null;
 }
 
 // Record a view (best-effort) when a buyer opens a post's detail.
@@ -41,6 +43,72 @@ export function Browse() {
   const [priceMin, setPriceMin] = React.useState("");
   const [priceMax, setPriceMax] = React.useState("");
   const fileRef = React.useRef<HTMLInputElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [suggestions, setSuggestions] = React.useState<string[]>([]);
+  const [focusedSuggestion, setFocusedSuggestion] = React.useState(-1);
+  const [showSuggestions, setShowSuggestions] = React.useState(false);
+
+  const COMMON_PARTS = [
+    "Hood", "Front Bumper Cover", "Rear Bumper Cover", "Grille", "Front Fender",
+    "Rear Quarter Panel", "Front Door", "Rear Door", "Trunk Lid", "Tailgate",
+    "Liftgate", "Side Mirror", "Roof Panel", "Windshield", "Back Glass",
+    "Front Door Window", "Rear Door Window", "Quarter Glass", "Headlight Assembly",
+    "Tail Light Assembly", "Fog Light", "Wheel", "Tire", "Engine", "Transmission",
+    "Radiator", "Alternator", "Starter", "Battery", "AC Compressor", "Front Seat",
+    "Rear Seat", "Seat Belt", "Steering Wheel", "Center Console", "Dashboard",
+    "Instrument Cluster", "Glove Box", "Airbag", "Door Panel", "Sun Visor",
+    "Rear View Mirror", "Shifter", "Serpentine Belt", "Idler Pulley",
+    "Tensioner Pulley", "Brake Caliper", "Brake Rotor", "Brake Pad",
+    "Shock Absorber", "Strut Assembly", "Control Arm", "Ball Joint",
+    "Tie Rod End", "Sway Bar Link", "CV Axle", "Drive Shaft",
+    "Radiator Fan", "Intercooler", "Turbocharger", "Catalytic Converter",
+    "Exhaust Manifold", "Muffler", "Oxygen Sensor", "Fuel Pump",
+    "Fuel Injector", "Throttle Body", "Mass Airflow Sensor", "ECU",
+    "Ignition Coil", "Spark Plug", "Distributor", "Wiring Harness",
+    "Fuse Box", "Relay", "Power Steering Pump", "Water Pump",
+    "Thermostat", "Heater Core", "Blower Motor", "Condenser",
+    "Evaporator", "Compressor", "Hose", "Belt", "Motor Mount",
+    "Transmission Mount", "Leaf Spring", "Coil Spring", "Wheel Hub",
+    "Wheel Bearing", "Knuckle", "Spindle", "Axle Shaft",
+    "Differential", "Transfer Case", "Clutch", "Flywheel",
+    "Starter Solenoid", "Voltage Regulator",
+  ];
+
+  function updateSearchSuggestions(value: string) {
+    if (!value.trim()) { setSuggestions([]); setShowSuggestions(false); return; }
+    const lower = value.toLowerCase();
+    const fromParts = new Set(parts.map(p => p.part));
+    const fromVehicles = new Set(vehicles.map(v => `${v.year} ${v.make} ${v.model}`));
+    const fromCommon = COMMON_PARTS;
+    const all = [...new Set([...fromCommon, ...fromParts, ...fromVehicles])];
+    const matches = all.filter(s => s.toLowerCase().includes(lower)).slice(0, 8);
+    setSuggestions(matches);
+    setShowSuggestions(matches.length > 0);
+    setFocusedSuggestion(-1);
+  }
+
+  function pickSuggestion(s: string) {
+    setQ(s);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    inputRef.current?.blur();
+  }
+
+  function onSearchKeyDown(e: React.KeyboardEvent) {
+    if (!showSuggestions || suggestions.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setFocusedSuggestion(i => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setFocusedSuggestion(i => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" && focusedSuggestion >= 0) {
+      e.preventDefault();
+      pickSuggestion(suggestions[focusedSuggestion]);
+    } else if (e.key === "Escape") {
+      setShowSuggestions(false);
+    }
+  }
 
   function toggleCondition(g: string) {
     setSelectedConditions((prev) => {
@@ -76,11 +144,25 @@ export function Browse() {
   }
 
   React.useEffect(() => {
-    fetch("/api/marketplace")
-      .then((r) => r.json())
-      .then((d) => { setParts(d.parts || []); setVehicles(d.vehicles || []); setDemo(!!d.demo); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, []);
+    const params = new URLSearchParams();
+    if (sort === "distance") {
+      params.set("sort", "distance");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { params.set("lat", String(pos.coords.latitude)); params.set("lng", String(pos.coords.longitude)); fetchMarket(params); },
+        () => fetchMarket(params),
+        { timeout: 5000, enableHighAccuracy: false }
+      );
+    } else {
+      if (sort && sort !== "recommended") params.set("sort", sort);
+      fetchMarket(params);
+    }
+    function fetchMarket(p: URLSearchParams) {
+      fetch(`/api/marketplace?${p.toString()}`)
+        .then((r) => r.json())
+        .then((d) => { setParts(d.parts || []); setVehicles(d.vehicles || []); setDemo(!!d.demo); setLoading(false); })
+        .catch(() => setLoading(false));
+    }
+  }, [sort]);
 
   const ql = q.trim().toLowerCase();
 
@@ -134,12 +216,22 @@ export function Browse() {
             );
           })}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 12px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 11, width: 260 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 12px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 11, width: 260, position: "relative" }}>
           <Search size={15} color="var(--muted)" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search parts, cars, shops…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 13.5, padding: "9px 0" }} />
+          <input ref={inputRef} value={q} onChange={(e) => { setQ(e.target.value); updateSearchSuggestions(e.target.value); }} onFocus={() => { if (q.trim()) updateSearchSuggestions(q); }} onBlur={() => setTimeout(() => setShowSuggestions(false), 150)} onKeyDown={onSearchKeyDown} placeholder="Search parts, cars, shops…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 13.5, padding: "9px 0" }} />
+          {q && <button onClick={() => { setQ(""); setSuggestions([]); setShowSuggestions(false); }} style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}><X size={14} color="var(--muted)" /></button>}
           <button onClick={() => fileRef.current?.click()} style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, border: "none", background: photoSearchResult ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", color: "var(--muted)", cursor: "pointer" }}>
             <Camera size={17} color={photoSearchResult ? "var(--accent)" : "var(--muted)"} />
           </button>
+          {showSuggestions && (
+            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 11, boxShadow: "0 12px 40px -8px rgba(0,0,0,0.5)", zIndex: 50, overflow: "hidden" }}>
+              {suggestions.map((s, i) => (
+                <button key={s} onMouseDown={() => pickSuggestion(s)} onMouseEnter={() => setFocusedSuggestion(i)} style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 14px", border: "none", borderBottom: i < suggestions.length - 1 ? "1px solid var(--line)" : "none", background: i === focusedSuggestion ? "var(--surface2)" : "transparent", color: "var(--foreground)", fontSize: 13.5, cursor: "pointer", fontFamily: "inherit" }}>
+                  <Search size={12} style={{ marginRight: 8, opacity: 0.5 }} /> {s}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onPhotoSelected(f); e.target.value = ""; }} />
       </div>
@@ -171,7 +263,7 @@ export function Browse() {
           ) : (
             <Select label="Make" value={vehMake} onChange={setVehMake} options={vehMakes} />
           )}
-          <Select label="Sort" value={sort} onChange={setSort} options={[["recommended", "Recommended"], ["price-asc", "Price: low to high"], ["price-desc", "Price: high to low"], ["views", "Most viewed"]]} />
+          <Select label="Sort" value={sort} onChange={setSort} options={[["recommended", "Recommended"], ["distance", "Nearest"], ["price-asc", "Price: low to high"], ["price-desc", "Price: high to low"], ["views", "Most viewed"]]} />
           <span style={{ marginLeft: "auto", fontSize: 12.5, color: "var(--muted)" }}>
             {(tab === "parts" ? fParts.length : fVehicles.length)} result{(tab === "parts" ? fParts.length : fVehicles.length) === 1 ? "" : "s"}
           </span>
@@ -203,7 +295,7 @@ export function Browse() {
                       <Store size={13} /> <ShopLink id={l.shopId} name={l.shopName} />
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                      <MapPin size={13} /> {l.location || "—"} · <Eye size={12} /> {l.views} views
+                      <MapPin size={13} /> ZIP {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views} views
                     </div>
                     <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}` }); }}>
                       <MessageSquare size={14} /> Message seller
@@ -231,7 +323,7 @@ export function Browse() {
                     <Store size={13} /> <ShopLink id={l.shopId} name={l.shopName} />
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                    <MapPin size={13} /> {l.location || "—"} · <Eye size={12} /> {l.views} views
+                    <MapPin size={13} /> ZIP {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views} views
                   </div>
                   <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}` }); }}>
                     <MessageSquare size={14} /> Message seller
@@ -262,7 +354,7 @@ export function Browse() {
                     <span>{v.mileage}</span><span>·</span><span>{v.body}</span><span>·</span><span>{v.color}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                    <Store size={13} /> <ShopLink id={v.shopId} name={v.shopName} /> · <MapPin size={12} /> {v.location || "—"} · <Eye size={12} /> {v.views} views
+                    <Store size={13} /> <ShopLink id={v.shopId} name={v.shopName} /> · <MapPin size={12} /> ZIP {v.location || "—"}{v.distance != null ? ` · ${v.distance} mi` : ""}{v.driveTime != null ? ` · ~${v.driveTime} min` : ""} · <Eye size={12} /> {v.views} views
                   </div>
                   <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ shopId: v.shopId, subject: `${v.year} ${v.make} ${v.model}`, title: `${v.year} ${v.make} ${v.model} · ${v.shopName}` }); }}>
                     <MessageSquare size={14} /> Message seller
@@ -332,7 +424,7 @@ function PartDetailModal({ part, onClose, onContact }: { part: MktPart; onClose:
         )}
         <div style={{ height: 1, background: "var(--line)" }} />
         <MetaRow icon={<Store size={14} />}><ShopLink id={part.shopId} name={part.shopName} /></MetaRow>
-        <MetaRow icon={<MapPin size={14} />}>{part.location || "—"}</MetaRow>
+        <MetaRow icon={<MapPin size={14} />}>ZIP {part.location || "—"}{part.distance != null ? ` · ${part.distance} mi · ~${part.driveTime} min drive` : ""}</MetaRow>
         <MetaRow icon={<Eye size={14} />}>{part.views} {part.views === 1 ? "person has" : "people have"} viewed this</MetaRow>
         <button style={primaryBtn} onClick={onContact}><MessageSquare size={15} /> Message seller</button>
       </div>
@@ -358,7 +450,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onContact }: { vehicle: MktVe
         </p>
         <div style={{ height: 1, background: "var(--line)" }} />
         <MetaRow icon={<Store size={14} />}><ShopLink id={v.shopId} name={v.shopName} /></MetaRow>
-        <MetaRow icon={<MapPin size={14} />}>{v.location || "—"}</MetaRow>
+        <MetaRow icon={<MapPin size={14} />}>ZIP {v.location || "—"}{v.distance != null ? ` · ${v.distance} mi · ~${v.driveTime} min drive` : ""}</MetaRow>
         <MetaRow icon={<Eye size={14} />}>{v.views} {v.views === 1 ? "person has" : "people have"} viewed this</MetaRow>
         <button style={primaryBtn} onClick={onContact}><MessageSquare size={15} /> Message seller</button>
       </div>

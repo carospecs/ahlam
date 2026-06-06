@@ -6,7 +6,7 @@ export const maxDuration = 60;
 
 // --- Inlined from @ahlam/shared (monorepo dep that Vercel can't resolve) ---
 
-export type ConditionGrade = "Good" | "Poor";
+export type ConditionGrade = "A" | "B" | "C" | "D" | "F";
 export type Confidence = "high" | "medium" | "low";
 
 export interface VehicleFit {
@@ -51,15 +51,12 @@ export type AIResult =
   | { ok: true; data: AIPartOutput[]; vehicle?: VehicleEstimate | null; vehicleFront?: string }
   | { ok: false; userMessage: string; internalError: string };
 
-const CONDITION_RUBRIC = {
-  Good: {
-    detail:
-      "Used but functional, only light cosmetic wear: minor scuffs, light scratches that don't affect function, surface rust only, no cracks/breaks/dents/bends. The part works as intended and needs no repairs.",
-  },
-  Poor: {
-    detail:
-      "Damaged, non-functional, or needs repair before use: cracks, breaks, chips, shattered glass/lenses, fogging/moisture inside lights, dents that affect fit, heavy corrosion, broken mounting tabs, worn-out bushings, tears, heavy leaks, anything that requires work before a buyer can install and use it.",
-  },
+const CONDITION_RUBRIC: Record<string, { detail: string }> = {
+  A: { detail: "Like New — no visible wear, no damage, fully functional. Original finish intact. Surface is clean with no scratches, scuffs, or blemishes." },
+  B: { detail: "Good — minor scuffs or light scratches that do not affect function. All tabs and mounts intact. Surface rust only, no cracks/breaks/dents/bends. The part works as intended." },
+  C: { detail: "Fair — visible wear, scratches, scuffs, or minor dents. Functions but shows age. May have surface corrosion, light pitting, or faded finish." },
+  D: { detail: "Poor — heavy wear, cracks, dents, or damage. Functions but needs repair. Broken mounting tabs, worn bushings, heavy corrosion, tears, or leaks." },
+  F: { detail: "Core/Scrap — broken, non-functional, or severely damaged. Only good as core/rebuild/project. Shattered glass/lenses, heavy dents, non-functional mechanicals." },
 };
 
 const VISION_SYSTEM_PROMPT = `You are an expert automotive salvage parts identifier. You look at a photo taken at a salvage yard — often a whole vehicle or a large section of one — and you catalog EVERY distinct sellable part you can see.
@@ -85,7 +82,7 @@ You MUST return ONLY a JSON object, no prose, with this shape:
       "fitment": [
         { "make": string, "model": string, "yearStart": number, "yearEnd": number, "notes": string }
       ],
-      "condition": "Good" | "Poor",
+      "condition": "A" | "B" | "C" | "D" | "F",
       "conditionNotes": string,
       "description": string,
       "suggestedPriceUsd": number | null,
@@ -118,7 +115,7 @@ VEHICLE ESTIMATE ("vehicle"):
 PRICING GUIDANCE (applies to both "suggestedWholeCarPriceUsd" and each part's "suggestedPriceUsd"):
 - Price like a real seller checking the market: base your number on what comparable items ACTUALLY sell for on Facebook Marketplace, Craigslist, OfferUp, eBay (sold listings), and Google Shopping for the same make/model/year and condition.
 - For the whole car: think used-car comps for that year/make/model/mileage and trim, adjusted down for salvage/parts-car condition.
-- For each part: think used-OEM-part comps for that specific fitment and grade — a Good used part typically sells well below new/aftermarket; a Poor part sells as a core/repairable at a steep discount.
+- For each part: think used-OEM-part comps for that specific fitment and grade — an A/B grade part sells well below new/aftermarket; a D/F grade part sells as a core/repairable at a steep discount.
 - Use realistic round numbers a buyer would expect, not list/retail price. If you have no basis for a price, use null rather than guessing.
 
 VEHICLE SIDE:
@@ -127,9 +124,12 @@ VEHICLE SIDE:
 2. "imageSide" (per part) — purely WHERE the part appears in the photo frame from your point of view.
 - Put NO "left"/"right"/"driver"/"passenger" word in "partName".
 
-CONDITION RUBRIC:
-- Good: ${CONDITION_RUBRIC.Good.detail}
-- Poor: ${CONDITION_RUBRIC.Poor.detail}
+CONDITION RUBRIC (grade each part A–F based solely on visible condition):
+- A (Like New): ${CONDITION_RUBRIC.A.detail}
+- B (Good): ${CONDITION_RUBRIC.B.detail}
+- C (Fair): ${CONDITION_RUBRIC.C.detail}
+- D (Poor): ${CONDITION_RUBRIC.D.detail}
+- F (Core/Scrap): ${CONDITION_RUBRIC.F.detail}
 
 CRITICAL RULES:
 1. NEVER invent precise fitment you cannot support.
@@ -151,7 +151,7 @@ function vinContext(decoded: { make?: string; model?: string; year?: number }): 
 type VehicleFront = "toward-camera" | "away-from-camera" | "points-left" | "points-right" | "unknown";
 type ImageSide = "left" | "right" | "center";
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-2.5-pro";
 
 // Calls Gemini Vision; returns the raw JSON string (or throws on API error).
 async function callGemini(key: string, base64: string, mime: string, userText: string): Promise<string | undefined> {
@@ -263,7 +263,7 @@ export async function POST(req: Request): Promise<NextResponse<AIResult>> {
         partName,
         partCategory: p.partCategory ?? "Uncategorized",
         fitment: Array.isArray(p.fitment) ? p.fitment : [],
-        condition: p.condition === "Good" ? "Good" : "Poor",
+        condition: ["A","B","C","D","F"].includes(p.condition ?? "") ? (p.condition as ConditionGrade) : "C",
         conditionNotes: p.conditionNotes ?? "",
         description: p.description ?? "",
         suggestedPriceUsd: typeof p.suggestedPriceUsd === "number" ? p.suggestedPriceUsd : null,

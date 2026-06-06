@@ -196,7 +196,7 @@ export function AIChat(_: { go: (id: string) => void; onVehicle?: (v: any) => vo
                 onDragOver={(e) => { if (dragId) { e.preventDefault(); setDropTarget(p.id); } }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget((t) => t === p.id ? null : t); }}
                 onDrop={(e) => { e.preventDefault(); onDrop(p.id); }}
-                style={{ marginBottom: 2, borderRadius: 8, border: isTarget ? "1px dashed var(--accent)" : "1px solid transparent", background: isTarget ? "rgba(220,38,38,0.06)" : "transparent" }}
+                style={{ marginBottom: 2, borderRadius: 8, border: isTarget ? "1px dashed var(--accent)" : "1px solid transparent", background: isTarget ? "var(--accent-soft)" : "transparent" }}
               >
                 <div className="cs-hover-row" style={sx.projRow}>
                   <button style={sx.projBtn} onClick={() => setOpen((o) => ({ ...o, [p.id]: !o[p.id] }))}>
@@ -221,7 +221,7 @@ export function AIChat(_: { go: (id: string) => void; onVehicle?: (v: any) => vo
             onDragOver={(e) => { if (dragId) { e.preventDefault(); setDropTarget("all"); } }}
             onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget((t) => t === "all" ? null : t); }}
             onDrop={(e) => { e.preventDefault(); onDrop(null); }}
-            style={{ borderRadius: 8, border: dropTarget === "all" ? "1px dashed var(--accent)" : "1px solid transparent", background: dropTarget === "all" ? "rgba(220,38,38,0.06)" : "transparent", paddingBottom: 6 }}
+            style={{ borderRadius: 8, border: dropTarget === "all" ? "1px dashed var(--accent)" : "1px solid transparent", background: dropTarget === "all" ? "var(--accent-soft)" : "transparent", paddingBottom: 6 }}
           >
             <div style={sx.sectionLabel}>{store.projects.length > 0 ? "All chats" : "Chats"} <span style={{ textTransform: "none", fontWeight: 500, opacity: 0.7 }}>· recent first</span></div>
             {ungrouped.length === 0 && <div style={{ fontSize: 11.5, color: "var(--muted)", padding: "4px 8px" }}>Drop a chat here to remove it from its project</div>}
@@ -334,9 +334,9 @@ const sx: Record<string, React.CSSProperties> = {
   renameInput: { flex: 1, minWidth: 0, border: "1px solid var(--accent)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13, padding: "3px 6px", borderRadius: 6 },
   panel: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden" },
   head: { display: "flex", alignItems: "center", gap: 11, padding: "14px 18px", borderBottom: "1px solid var(--line)" },
-  headIcon: { width: 36, height: 36, borderRadius: 10, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center" },
+  headIcon: { width: 36, height: 36, borderRadius: 10, background: "var(--accent-tint)", display: "grid", placeItems: "center" },
   msgs: { flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 14 },
-  aiAvatar: { width: 30, height: 30, borderRadius: 8, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center", flexShrink: 0 },
+  aiAvatar: { width: 30, height: 30, borderRadius: 8, background: "var(--accent-tint)", display: "grid", placeItems: "center", flexShrink: 0 },
   suggestion: { padding: "9px 14px", borderRadius: 999, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 12.5, fontWeight: 500, textAlign: "left", cursor: "pointer" },
   inputRow: { display: "flex", alignItems: "center", gap: 10, padding: 14, borderTop: "1px solid var(--line)" },
   input: { flex: 1, border: "1px solid var(--line)", background: "var(--surface2)", borderRadius: 12, padding: "12px 16px", color: "var(--foreground)", fontSize: 14, outline: "none" },

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Car, Wrench, ChevronLeft, Copy, Send, Sparkles, ScanLine, Check, CheckCircle2, Pencil, Lightbulb, LoaderCircle } from "lucide-react";
+import { Car, Wrench, ChevronLeft, Copy, Send, Sparkles, ScanLine, Check, CheckCircle2, Pencil, Lightbulb, LoaderCircle, ChevronDown, ChevronRight, Building, Cpu, Fuel, Gauge, Hash } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge, SellModeBadge, StatusBadge } from "../UI";
 import { buildVehicleText, partsForVehicle, SELL_MODE } from "../data";
 import { csToast, useData } from "../Dashboard";
@@ -124,6 +124,22 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
     setSavingDesc(false);
   }
 
+  // ── VIN history ──
+  const [vinOpen, setVinOpen] = React.useState(false);
+  const [vinData, setVinData] = React.useState<any>(null);
+  const [vinLoading, setVinLoading] = React.useState(false);
+  async function decodeVin() {
+    if (!v.vin || vinData) { setVinOpen((o) => !o); return; }
+    setVinLoading(true);
+    try {
+      const r = await fetch(`/api/vin-decode?vin=${encodeURIComponent(v.vin)}`);
+      const d = await r.json();
+      setVinData(d.ok ? d.decode : null);
+    } catch { setVinData(null); }
+    setVinLoading(false);
+    setVinOpen(true);
+  }
+
   // Static "what to add" hints for a stronger whole-car listing.
   const suggestions = [
     { ok: !!v.askingPrice, text: "Set an asking price so buyers can filter by budget" },
@@ -175,6 +191,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10, fontSize: 12.5, color: "var(--muted)" }}>
               <ScanLine size={14} /> VIN {v.vin}
             </div>
+            {v.stock_number && <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 4, fontSize: 12.5, color: "var(--muted)" }}><Hash size={14} /> Stock #{v.stock_number}</div>}
             <div style={{ display: "flex", gap: 28, marginTop: 18, paddingTop: 18, borderTop: "1px solid var(--line)" }}>
               {showCar && <Stat label="Asking price" value={`$${v.askingPrice?.toLocaleString()}`} tone="var(--signal)" />}
               <Stat label="Parts identified" value={parts.length} />
@@ -184,6 +201,46 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
           </div>
         </div>
       </Card>
+
+      {/* VIN history report */}
+      {v.vin && (
+        <Card pad={0} style={{ overflow: "hidden" }}>
+          <button onClick={decodeVin} style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", border: "none", background: "transparent", color: "var(--foreground)", fontSize: 14, fontWeight: 700, cursor: "pointer", width: "100%", textAlign: "left" }}>
+            <ScanLine size={16} color="var(--accent)" />
+            <span style={{ flex: 1 }}>VIN history report</span>
+            <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>{v.vin}</span>
+            {vinLoading ? <LoaderCircle size={16} className="spin" /> : vinOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          </button>
+          {vinOpen && (
+            <div style={{ padding: "0 18px 16px", display: "grid", gap: 10 }}>
+              {vinLoading && <div style={{ fontSize: 13, color: "var(--muted)", padding: "8px 0" }}>Decoding VIN…</div>}
+              {!vinLoading && !vinData && <div style={{ fontSize: 13, color: "var(--muted)", padding: "8px 0" }}>Could not decode this VIN.</div>}
+              {vinData && (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {vinData.make && <VINField icon={Building} label="Make" value={vinData.make} />}
+                    {vinData.model && <VINField icon={Car} label="Model" value={vinData.model} />}
+                    {vinData.year && <VINField icon={Hash} label="Year" value={String(vinData.year)} />}
+                    {vinData.trim && <VINField icon={Car} label="Trim" value={vinData.trim} />}
+                    {vinData.bodyClass && <VINField icon={Car} label="Body" value={vinData.bodyClass} />}
+                    {vinData.engine && <VINField icon={Cpu} label="Engine" value={vinData.engine} />}
+                    {vinData.engineCylinders && <VINField icon={Cpu} label="Cylinders" value={vinData.engineCylinders} />}
+                    {vinData.displacement && <VINField icon={Gauge} label="Displacement" value={`${vinData.displacement} CC`} />}
+                    {vinData.fuelType && <VINField icon={Fuel} label="Fuel" value={vinData.fuelType} />}
+                    {vinData.transmission && <VINField icon={Wrench} label="Transmission" value={vinData.transmission} />}
+                    {vinData.driveType && <VINField icon={Wrench} label="Drive" value={vinData.driveType} />}
+                    {vinData.manufacturer && <VINField icon={Building} label="Manufacturer" value={vinData.manufacturer} />}
+                    {vinData.plantCity && <VINField icon={Building} label="Plant" value={[vinData.plantCity, vinData.plantState, vinData.plantCountry].filter(Boolean).join(", ")} />}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--muted)", borderTop: "1px solid var(--line)", paddingTop: 10, marginTop: 4 }}>
+                    Data from NHTSA · may not include accident history or title status
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
 
       {showCar && (
         <Card pad={18}>
@@ -268,6 +325,16 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
           })}
         </Card>
       )}
+    </div>
+  );
+}
+
+function VINField({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, background: "var(--surface2)", fontSize: 13 }}>
+      <Icon size={14} color="var(--muted)" style={{ flexShrink: 0 }} />
+      <span style={{ color: "var(--muted)", minWidth: 80, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontWeight: 600 }}>{value}</span>
     </div>
   );
 }

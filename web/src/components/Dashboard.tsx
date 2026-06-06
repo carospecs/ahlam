@@ -7,7 +7,7 @@ import {
   Check, CircleCheck, Send, PencilLine, Tag, ShoppingBag,
   Globe, ChevronDown, User, Users, CreditCard, Download, Share2,
   CheckCheck, Info, Copy, ExternalLink, ChevronLeft, ChevronRight, LoaderCircle,
-  Sun, Moon, TrendingUp,
+  Sun, Moon, TrendingUp, BookOpen,
 } from "lucide-react";
 import { buildListingText, buildVehicleText, partsForVehicle } from "./data";
 import { Overview } from "./views/Overview";
@@ -16,6 +16,7 @@ import { Browse } from "./views/Browse";
 import { Parts } from "./views/Parts";
 import { Messages } from "./views/Messages";
 import { AIChat } from "./views/AIChat";
+import { Interchange } from "./views/Interchange";
 import { ExportCenter } from "./views/ExportCenter";
 import { AddVehicle } from "./views/AddVehicle";
 import { Analytics } from "./views/Analytics";
@@ -37,6 +38,7 @@ const NAV = [
   { id: "vehicles", label: "Vehicles posted", icon: Car },
   { id: "parts", label: "Parts posted", icon: Wrench },
   { id: "add", label: "Add vehicle / parts", icon: CirclePlus },
+  { id: "interchange", label: "Interchange", icon: BookOpen },
   { id: "analytics", label: "Analytics", icon: TrendingUp },
   { section: "Assist" },
   { id: "aichat", label: "AI assistant", icon: Sparkles },
@@ -54,6 +56,7 @@ const META: Record<string, { title: string; sub: string }> = {
   aichat: { title: "AI assistant", sub: "Ask about pricing, fitment, and listings" },
   export: { title: "Export & posting", sub: "Cross-post your listings to Facebook, OfferUp, eBay & more" },
   messages: { title: "Messages", sub: "Buyer inquiries from your listings" },
+  interchange: { title: "Parts interchange", sub: "Hollander-style cross-reference — search by VIN or part name" },
 };
 
 function Sidebar({ active, onNav, onSignOut, open, onClose }: {
@@ -78,7 +81,7 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
           const IconComp = n.icon;
           return (
             <button key={n.id} className="cs-nav-item" onClick={() => onNav(n.id)} style={{ ...sx.navItem, ...(on ? sx.navItemOn : {}) }}>
-              <IconComp size={18} color={on ? "#fff" : "var(--muted)"} />
+              <IconComp size={18} color={on ? "var(--accent)" : "var(--muted)"} />
               <span style={{ flex: 1, textAlign: "left" }}>{n.label}</span>
             </button>
           );
@@ -189,7 +192,7 @@ function ProfileMenu({ onSignOut, onNav }: { onSignOut: () => void; onNav?: (id:
 
 const VIEWS: Record<string, React.ComponentType<any>> = {
   overview: Overview, vehicles: Vehicles, browse: Browse, parts: Parts, export: ExportCenter, analytics: Analytics,
-  messages: Messages, aichat: AIChat, add: AddVehicle, vehicleProfile: VehicleProfile,
+  messages: Messages, aichat: AIChat, add: AddVehicle, interchange: Interchange, vehicleProfile: VehicleProfile,
   settings: AccountSettings, shop: ShopProfile, team: TeamRoles, billing: Billing, notifications: Notifications,
 };
 
@@ -353,7 +356,7 @@ function ExportModal() {
                   {["Draft", "Posted", "Sold"].map((s) => {
                     const on = status === s;
                     return (
-                      <button key={s} onClick={() => setStatus(s)} style={{ flex: 1, padding: "9px 0", borderRadius: 10, fontSize: 13, fontWeight: 600, border: on ? "1px solid var(--accent)" : "1px solid var(--line)", background: on ? "rgba(220,38,38,0.12)" : "transparent", color: on ? "#fca5a5" : "var(--muted)" }}>
+                      <button key={s} onClick={() => setStatus(s)} style={{ flex: 1, padding: "9px 0", borderRadius: 10, fontSize: 13, fontWeight: 600, border: on ? "1px solid var(--accent)" : "1px solid var(--line)", background: on ? "var(--accent-tint)" : "transparent", color: on ? "var(--accent)" : "var(--muted)" }}>
                         {s}
                       </button>
                     );
@@ -398,7 +401,7 @@ function FirstRunTour({ go }: { go: (id: string) => void }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }} className="cs-grid4">
         {steps.map((s) => (
           <button key={s.id} onClick={() => { done(); go(s.id); }} className="cs-card-btn" style={{ textAlign: "left", display: "grid", gap: 6, padding: 14, borderRadius: "var(--radius-md)", border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)" }}>
-            <span style={{ width: 32, height: 32, borderRadius: 9, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center" }}><s.icon size={17} color="var(--accent)" /></span>
+            <span style={{ width: 32, height: 32, borderRadius: 9, background: "var(--accent-tint)", display: "grid", placeItems: "center" }}><s.icon size={17} color="var(--accent)" /></span>
             <span style={{ fontSize: 13.5, fontWeight: 700 }}>{s.title}</span>
             <span style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.4 }}>{s.desc}</span>
           </button>
@@ -420,14 +423,20 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
   const isIndiv = accountType === "individual";
 
   // On mount, try to claim a pending invite or an existing membership first.
+  // Fail open: if the check is slow or errors (e.g. a migration isn't applied),
+  // never trap the user on the spinner — fall through to the account picker.
   useEffect(() => {
-    fetch("/api/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    fetch("/api/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", signal: ctrl.signal })
       .then(async (r) => {
-        const d = await r.json();
+        const d = await r.json().catch(() => ({}));
         if (r.ok && d.joined) { onDone(); return; }
         setNeedForm(true); setBusy(false);
       })
-      .catch(() => { setNeedForm(true); setBusy(false); });
+      .catch(() => { setNeedForm(true); setBusy(false); })
+      .finally(() => clearTimeout(timer));
+    return () => { clearTimeout(timer); ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -476,7 +485,7 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
                 { type: "individual" as const, icon: User, title: "I'm an individual seller", desc: "Selling your own car or parts. No shop name needed." },
               ].map((o) => (
                 <button key={o.type} onClick={() => pick(o.type)} className="cs-card-btn" style={{ textAlign: "left", display: "flex", gap: 13, alignItems: "flex-start", padding: 16, borderRadius: "var(--radius-md)", border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)" }}>
-                  <span style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center", flexShrink: 0 }}><o.icon size={19} color="var(--accent)" /></span>
+                  <span style={{ width: 38, height: 38, borderRadius: 10, background: "var(--accent-tint)", display: "grid", placeItems: "center", flexShrink: 0 }}><o.icon size={19} color="var(--accent)" /></span>
                   <span>
                     <span style={{ display: "block", fontSize: 14.5, fontWeight: 700 }}>{o.title}</span>
                     <span style={{ display: "block", fontSize: 12.5, color: "var(--muted)", marginTop: 2, lineHeight: 1.4 }}>{o.desc}</span>
@@ -582,13 +591,13 @@ const sx: Record<string, React.CSSProperties> = {
   backdrop: { position: "fixed", inset: 0, zIndex: 90, background: "rgba(7,11,22,0.6)", backdropFilter: "blur(2px)" },
   logo: { width: 34, height: 34, borderRadius: 10, background: "var(--accent)", display: "grid", placeItems: "center" },
   navItem: { display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 10, border: "none", background: "transparent", color: "var(--muted)", fontSize: 14, fontWeight: 600, width: "100%", transition: "background 0.12s, color 0.12s" },
-  navItemOn: { background: "var(--surface2)", color: "var(--foreground)" },
+  navItemOn: { background: "var(--surface2)", color: "var(--foreground)", boxShadow: "inset 3px 0 0 var(--accent)" },
   navSection: { fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", padding: "12px 12px 4px" },
   shopCard: { display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, background: "var(--surface2)", border: "1px solid var(--line)" },
-  shopIcon: { width: 30, height: 30, borderRadius: 8, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center", flexShrink: 0 },
+  shopIcon: { width: 30, height: 30, borderRadius: 8, background: "var(--accent-tint)", display: "grid", placeItems: "center", flexShrink: 0 },
   signout: { display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", fontSize: 13.5, fontWeight: 600 },
   main: { display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" },
-  topbar: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, padding: "16px 28px", borderBottom: "1px solid var(--line)", background: "rgba(27,35,54,0.4)" },
+  topbar: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, padding: "16px 28px", borderBottom: "1px solid var(--line)", background: "var(--surface)" },
   search: { display: "flex", alignItems: "center", gap: 9, padding: "0 12px", width: 280, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 10 },
   searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 13.5, padding: "9px 0" },
   addBtn: { display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600 },
@@ -611,7 +620,7 @@ const mx: Record<string, React.CSSProperties> = {
   leftCol: { display: "flex", flexDirection: "column", gap: 10 },
   rightCol: { display: "flex", flexDirection: "column", gap: 10 },
   sectionLabel: { fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 4 },
-  preview: { margin: 0, background: "rgba(15,23,42,0.6)", border: "1px solid var(--line)", borderRadius: "var(--radius-md)", padding: 14, fontSize: 12.5, lineHeight: 1.65, color: "var(--foreground)", fontFamily: "var(--font-sans)", whiteSpace: "pre-wrap", maxHeight: 220, overflowY: "auto" },
+  preview: { margin: 0, background: "var(--background)", border: "1px solid var(--line)", borderRadius: "var(--radius-md)", padding: 14, fontSize: 12.5, lineHeight: 1.65, color: "var(--foreground)", fontFamily: "var(--font-sans)", whiteSpace: "pre-wrap", maxHeight: 220, overflowY: "auto" },
   marketBtn: { display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "11px 6px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)" },
   primaryBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 16px", borderRadius: 11, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600 },
   ghostBtn: { display: "inline-flex", alignItems: "center", gap: 7, padding: "11px 14px", borderRadius: 11, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13.5, fontWeight: 600 },

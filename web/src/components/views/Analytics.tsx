@@ -48,7 +48,7 @@ export function Analytics({ go }: { go: (id: string) => void; onVehicle?: (v: an
     return (
       <div style={{ maxWidth: 1180 }}>
         <div style={{ padding: 56, textAlign: "center", border: "1px dashed var(--line)", borderRadius: 16 }}>
-          <div style={{ width: 46, height: 46, borderRadius: 12, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center", margin: "0 auto 14px" }}><BarChart3 size={22} color="var(--accent)" /></div>
+          <div style={{ width: 46, height: 46, borderRadius: 12, background: "var(--accent-tint)", display: "grid", placeItems: "center", margin: "0 auto 14px" }}><BarChart3 size={22} color="var(--accent)" /></div>
           <div style={{ fontSize: 14, color: "var(--muted)", marginBottom: 14 }}>No analytics yet — post a few listings and insights on views, inquiries, and sales will appear here.</div>
           <button onClick={() => go("add")} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 18px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 600 }}>Add your first vehicle</button>
         </div>

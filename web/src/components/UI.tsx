@@ -1,9 +1,72 @@
 "use client";
 
+import React from "react";
 import { CONDITION_GRADE_MAP } from "@ahlam/shared";
 import {
   Wrench, WrenchIcon, Car, Check, CircleCheck, Send, PencilLine,
+  ChevronDown, LoaderCircle, Search as SearchIcon,
 } from "lucide-react";
+
+// Combobox: a text field that's also a filterable dropdown. Type freely OR pick
+// from the suggested list. Used by the interchange guided form (part / make /
+// model / year). `onOpen` lets the caller lazy-load options (e.g. NHTSA models).
+export function Combobox({
+  label, value, onChange, options, placeholder, icon, loading, disabled, onOpen, hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder?: string;
+  icon?: React.ReactNode;
+  loading?: boolean;
+  disabled?: boolean;
+  onOpen?: () => void;
+  hint?: string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    function onDoc(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+  const q = value.trim().toLowerCase();
+  const filtered = q ? options.filter((o) => o.toLowerCase().includes(q)).slice(0, 60) : options.slice(0, 60);
+  return (
+    <div ref={ref} style={{ display: "grid", gap: 6, position: "relative" }}>
+      <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--muted)" }}>
+        {label}{hint && <span style={{ fontWeight: 500, opacity: 0.8 }}> · {hint}</span>}
+      </span>
+      <div
+        style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 12px", background: disabled ? "var(--background)" : "var(--surface2)", border: `1px solid ${open ? "var(--accent)" : "var(--line)"}`, borderRadius: 10, opacity: disabled ? 0.6 : 1, transition: "border-color 0.15s" }}
+        onClick={() => { if (!disabled) { setOpen(true); onOpen?.(); } }}
+      >
+        {icon && <span style={{ flexShrink: 0, display: "grid", placeItems: "center", color: "var(--muted)" }}>{icon}</span>}
+        <input
+          value={value}
+          disabled={disabled}
+          onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+          onFocus={() => { if (!disabled) { setOpen(true); onOpen?.(); } }}
+          placeholder={placeholder}
+          style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 13.5, padding: "11px 0", minWidth: 0 }}
+        />
+        {loading ? <LoaderCircle size={15} className="spin" color="var(--muted)" /> : <ChevronDown size={16} color="var(--muted)" style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />}
+      </div>
+      {open && !disabled && (filtered.length > 0 || loading) && (
+        <div className="fade-up" style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 40, marginTop: 4, maxHeight: 240, overflowY: "auto", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, boxShadow: "0 18px 40px -16px rgba(0,0,0,0.35)" }}>
+          {loading && <div style={{ padding: "10px 12px", fontSize: 12.5, color: "var(--muted)" }}>Loading…</div>}
+          {!loading && filtered.map((o) => (
+            <button key={o} type="button" className="cs-row" onClick={() => { onChange(o); setOpen(false); }}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", border: "none", background: o === value ? "var(--accent-tint)" : "transparent", color: "var(--foreground)", fontSize: 13.5, cursor: "pointer" }}>
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function conditionColorOf(grade: string): string {
   return CONDITION_GRADE_MAP[grade]?.color || "var(--muted)";

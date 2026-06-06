@@ -44,6 +44,7 @@ export async function POST(req: Request) {
   const sellMode: string = ["parts", "whole", "both"].includes(body.sellMode) ? body.sellMode : "parts";
   const carPrice = body.carPrice != null && body.carPrice !== "" ? Number(body.carPrice) : null;
   const mileage = typeof body.mileage === "string" ? body.mileage : null;
+  const stockNumber = typeof vehicle.stockNumber === "string" ? vehicle.stockNumber : null;
   // Save-as-draft keeps everything private (not surfaced in the public market).
   const status = body.draft ? "draft" : "active";
 
@@ -60,6 +61,7 @@ export async function POST(req: Request) {
       body: vehicle.body || null,
       color: vehicle.color || null,
       vin: vehicle.vin || null,
+      stock_number: stockNumber,
       mileage: mileage,                // private — never exposed in the public feed
       asking_price: carPrice,
       sell_mode: sellMode,

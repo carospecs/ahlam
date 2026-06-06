@@ -1,6 +1,6 @@
 "use client";
 
-import { Car, Wrench, CirclePlus, ScanLine } from "lucide-react";
+import { Car, Wrench, CirclePlus, ScanLine, Hash } from "lucide-react";
 import { Card, PhotoCell, SellModeBadge } from "../UI";
 import { useData } from "../Dashboard";
 
@@ -27,6 +27,7 @@ export function Vehicles({ go, onVehicle }: { go: (id: string) => void; onVehicl
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10, fontSize: 12, color: "var(--muted)" }}>
                 <ScanLine size={13} /> VIN {v.vin}
+                {v.stock_number && <span style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: 10 }}><Hash size={12} /> #{v.stock_number}</span>}
                 <span style={{ marginLeft: "auto", color: v.askingPrice ? "var(--signal)" : "var(--muted)" }}>{v.askingPrice ? "car asking price" : "parts value"}</span>
               </div>
               <div style={{ display: "flex", gap: 18, marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
@@ -39,7 +40,7 @@ export function Vehicles({ go, onVehicle }: { go: (id: string) => void; onVehicl
         </button>
       ))}
       <button onClick={() => go("add")} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, border: "1.5px dashed var(--line)", borderRadius: "var(--radius-lg)", background: "transparent", color: "var(--foreground)", padding: 24, minHeight: 280 }}>
-        <div style={{ width: 46, height: 46, borderRadius: 12, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center" }}>
+        <div style={{ width: 46, height: 46, borderRadius: 12, background: "var(--accent-tint)", display: "grid", placeItems: "center" }}>
           <CirclePlus size={24} color="var(--accent)" />
         </div>
         <div style={{ fontSize: 14, fontWeight: 600 }}>Add a vehicle</div>

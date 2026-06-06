@@ -60,7 +60,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
   return (
     <div style={{ maxWidth: 1040, display: "grid", gap: 22 }}>
       <Card style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--accent-tint)", display: "grid", placeItems: "center", flexShrink: 0 }}>
           <Send size={20} color="var(--accent)" />
         </div>
         <div style={{ flex: 1, minWidth: 240 }}>

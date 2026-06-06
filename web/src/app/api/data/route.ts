@@ -69,6 +69,7 @@ export async function GET() {
 
       threads = (convRes.data || []).map((c: any) => ({
         id: c.id, name: c.contact_name, market: c.market,
+        status: c.status || "open",
         part: c.part_name || "", unread: c.unread || 0,
         time: c.last_time || "", avatar: c.contact_avatar || c.contact_name?.slice(0, 2).toUpperCase(),
         messages: (c.messages || []).map((m: any) => ({

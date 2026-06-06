@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ImageUp, Upload, ScanLine, Sparkles, Check, Info, CircleCheck, Car, Wrench, Plus, X, TriangleAlert, CheckCircle2, ArrowLeft, FileText, RotateCcw, Lock, Camera, ChevronUp, ChevronDown } from "lucide-react";
+import { ImageUp, Upload, ScanLine, Sparkles, Check, Info, CircleCheck, Car, Wrench, Plus, X, TriangleAlert, CheckCircle2, ArrowLeft, FileText, RotateCcw, Lock, Camera, ChevronUp, ChevronDown, Tag } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge } from "../UI";
 import { SELL_MODE } from "../data";
 import { csToast } from "../Dashboard";
@@ -271,6 +271,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   }
   const anyAiPriced = parts.some((p) => (p._aiPrice || 0) > 0);
 
+  const [stockNumber, setStockNumber] = React.useState("");
   const [savingKind, setSavingKind] = React.useState<"post" | "draft" | null>(null);
   // Persist the reviewed vehicle + parts, then reload data and jump to the list.
   // draft=true keeps everything private (status 'draft'), nothing posted to the market.
@@ -283,7 +284,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         carPrice,
         mileage,
         draft,
-        vehicle: { make: vehicle?.make, model: vehicle?.model, year: vehicle?.year, body: vehicle?.body, vin: vin.trim() || undefined, photos: photos.length },
+        vehicle: { make: vehicle?.make, model: vehicle?.model, year: vehicle?.year, body: vehicle?.body, vin: vin.trim() || undefined, stockNumber: stockNumber.trim() || undefined, photos: photos.length },
         // Strip client-only fields (blob URL + local ids) before sending.
         parts: parts
           .filter((p) => p.partName.trim())
@@ -329,9 +330,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={(e) => { e.preventDefault(); setDragging(false); }}
             onDrop={onDrop}
-            style={{ cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "34px 20px", border: `1.5px dashed ${dragging ? "var(--accent)" : "var(--line)"}`, borderRadius: "var(--radius-md)", background: dragging ? "rgba(220,38,38,0.08)" : "rgba(39,47,66,0.3)", transition: "border-color 0.15s, background 0.15s" }}
+            style={{ cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "34px 20px", border: `1.5px dashed ${dragging ? "var(--accent)" : "var(--line)"}`, borderRadius: "var(--radius-md)", background: dragging ? "var(--accent-soft)" : "var(--surface2)", transition: "border-color 0.15s, background 0.15s" }}
           >
-            <div style={{ width: 50, height: 50, borderRadius: 14, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center" }}>
+            <div style={{ width: 50, height: 50, borderRadius: 14, background: "var(--accent-tint)", display: "grid", placeItems: "center" }}>
               <ImageUp size={24} color="var(--accent)" />
             </div>
             <div style={{ fontSize: 15, fontWeight: 600 }}>{dragging ? "Drop your photos here" : "Drag & drop all your photos, or click to upload"}</div>
@@ -440,6 +441,8 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                 <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><ScanLine size={13} color="var(--accent)" /> VIN / plate</label>
                 <input value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} placeholder="Read from your photos — confirm or add" maxLength={17} style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, letterSpacing: "0.04em", fontFamily: "var(--font-sans)" }} />
                 <span style={{ fontSize: 11, color: "var(--muted)" }}>Kept private — never shown on public listings.</span>
+                <label style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><Tag size={13} color="var(--accent)" /> Stock #</label>
+                <input value={stockNumber} onChange={(e) => setStockNumber(e.target.value)} placeholder="Your yard inventory code" style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, fontFamily: "var(--font-sans)" }} />
               </div>
             </Card>
           )}

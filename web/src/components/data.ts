@@ -1,4 +1,4 @@
-export const CONDITION_COLOR: Record<string, string> = { Good: "var(--success)", Poor: "var(--danger)" };
+export const CONDITION_COLOR: Record<string, string> = { A: "#22C55E", B: "#84CC16", C: "#EAB308", D: "#F97316", F: "#EF4444" };
 
 export interface Vehicle {
   id: string; year: string; make: string; model: string; trim: string;
@@ -39,13 +39,13 @@ export const VEHICLES: Vehicle[] = [
 export const DEMO_VEHICLE = { year: "2014–2017", make: "Honda", model: "Accord", trim: "EX-L", body: "Sedan, 4-door", vin: "1HGCR2F8XEA047219", confidence: "high" };
 
 export const DEMO_PARTS: Part[] = [
-  { id: "p1", name: "Front Bumper Cover", grade: "Good", price: 180, note: "Minor scuffs, no cracks", warn: false },
-  { id: "p2", name: "Hood", grade: "Good", price: 140, note: "Small dent driver side, paint still solid", warn: false },
-  { id: "p3", name: "Left Headlight Assembly", grade: "Good", price: 95, note: "Clear lens, tabs intact", warn: false },
-  { id: "p4", name: "Right Headlight Assembly", grade: "Good", price: 95, note: "Clear lens, tabs intact", warn: false },
-  { id: "p5", name: "Grille (Chrome)", grade: "Good", price: 60, note: "Clean, no broken clips", warn: false },
-  { id: "p6", name: "Driver Front Door", grade: "Good", price: 220, note: "Crease low on panel — verify fitment", warn: true },
-  { id: "p7", name: "Passenger Mirror", grade: "Good", price: 45, note: "Power, paint-matched", warn: false },
+  { id: "p1", name: "Front Bumper Cover", grade: "B", price: 180, note: "Minor scuffs, no cracks", warn: false },
+  { id: "p2", name: "Hood", grade: "B", price: 140, note: "Small dent driver side, paint still solid", warn: false },
+  { id: "p3", name: "Left Headlight Assembly", grade: "B", price: 95, note: "Clear lens, tabs intact", warn: false },
+  { id: "p4", name: "Right Headlight Assembly", grade: "B", price: 95, note: "Clear lens, tabs intact", warn: false },
+  { id: "p5", name: "Grille (Chrome)", grade: "B", price: 60, note: "Clean, no broken clips", warn: false },
+  { id: "p6", name: "Driver Front Door", grade: "C", price: 220, note: "Crease low on panel — verify fitment", warn: true },
+  { id: "p7", name: "Passenger Mirror", grade: "B", price: 45, note: "Power, paint-matched", warn: false },
   { id: "p8", name: "Windshield", grade: "Poor", price: 0, note: "Cracked — scrap / recycle", warn: false },
   { id: "p9", name: "Alloy Wheel (set of 4)", grade: "Good", price: 320, note: "17in, light curb rash", warn: false },
 ];
@@ -54,8 +54,8 @@ export const SHOP = { name: "Westside Auto Salvage", location: "Long Beach, CA",
 
 export const LISTINGS: Listing[] = [
   { id: "l1", part: "Front Bumper Cover", vehicle: "2014 Honda Accord", grade: "Good", price: 180, status: "Posted", markets: ["Facebook", "OfferUp"], views: 142, photos: 3, fitment: "2013–2017 Honda Accord", category: "Body / Exterior", confidence: "high", note: "Minor scuffs, no cracks. Fog light brackets included, all tabs intact.", desc: "Factory front bumper cover pulled from a clean 2014 Accord EX-L. Paint is Modern Steel, no major rash. Mounting tabs and fog brackets all present. Local pickup or can help arrange shipping." },
-  { id: "l2", part: "Tailgate Assembly", vehicle: "2013 Ford F-150", grade: "Good", price: 410, status: "Posted", markets: ["Facebook", "eBay"], views: 318, photos: 4, fitment: "2009–2014 Ford F-150", category: "Body / Exterior", confidence: "high", note: "Inner lip clean, light surface wear on handle. Latch works smoothly.", desc: "Solid tailgate off a 2013 F-150 XLT. No rust on the inner lip, handle and latch both function. Oxford White. Heavy item — local pickup preferred." },
-  { id: "l3", part: "Driver Front Door", vehicle: "2014 Honda Accord", grade: "Good", price: 220, status: "Draft", markets: [], views: 0, photos: 2, fitment: "2013–2017 Honda Accord", category: "Body / Exterior", confidence: "low", note: "Crease low on panel — verify fitment before posting.", desc: "Driver front door shell, glass and regulator included. Low crease on the lower panel, otherwise straight. Power window tested good." },
+  { id: "l2", part: "Tailgate Assembly", vehicle: "2013 Ford F-150", grade: "B", price: 410, status: "Posted", markets: ["Facebook", "eBay"], views: 318, photos: 4, fitment: "2009–2014 Ford F-150", category: "Body / Exterior", confidence: "high", note: "Inner lip clean, light surface wear on handle. Latch works smoothly.", desc: "Solid tailgate off a 2013 F-150 XLT. No rust on the inner lip, handle and latch both function. Oxford White. Heavy item — local pickup preferred." },
+  { id: "l3", part: "Driver Front Door", vehicle: "2014 Honda Accord", grade: "C", price: 220, status: "Draft", markets: [], views: 0, photos: 2, fitment: "2013–2017 Honda Accord", category: "Body / Exterior", confidence: "low", note: "Crease low on panel — verify fitment before posting.", desc: "Driver front door shell, glass and regulator included. Low crease on the lower panel, otherwise straight. Power window tested good." },
   { id: "l4", part: "Alloy Wheel (set of 4)", vehicle: "2016 Toyota Camry", grade: "Good", price: 280, status: "Posted", markets: ["OfferUp"], views: 96, photos: 5, fitment: "2015–2017 Toyota Camry", category: "Wheels / Tires", confidence: "high", note: "17in, all four true and balanced. Light curb rash on one.", desc: "Set of four 17\" factory alloys off a 2016 Camry LE. Balanced last week, all straight, no bends. One has light curb rash. No TPMS sensors." },
   { id: "l5", part: "Left Headlight Assembly", vehicle: "2015 Subaru Forester", grade: "Good", price: 110, status: "Sold", markets: ["Facebook"], views: 204, photos: 2, fitment: "2014–2018 Subaru Forester", category: "Lighting", confidence: "high", note: "Clear lens, tabs intact, no moisture.", desc: "Driver side halogen headlight assembly. Lens is crystal clear, all mounting tabs intact. Bulbs included." },
   { id: "l6", part: "Hood", vehicle: "2017 Nissan Altima", grade: "Good", price: 130, status: "Draft", markets: [], views: 0, photos: 2, fitment: "2013–2018 Nissan Altima", category: "Body / Exterior", confidence: "high", note: "Small dent driver side, light surface rust starting.", desc: "Hood off a 2017 Altima SV, Gun Metallic. Small dent on the driver side and surface rust beginning at the edge. Good core / repair candidate." },
