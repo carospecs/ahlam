@@ -245,6 +245,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   function setPartName(id: string, val: string) {
     setParts((prev) => prev.map((p) => (p._id === id ? { ...p, partName: val } : p)));
   }
+  function setPartDesc(id: string, val: string) {
+    setParts((prev) => prev.map((p) => (p._id === id ? { ...p, description: val } : p)));
+  }
   // Add a blank, fully-editable part row (e.g. something the AI missed).
   function addBlankPart() {
     setParts((prev) => [...prev, { partName: "", partCategory: "", fitment: [], condition: "Good", conditionNotes: "", description: "", suggestedPriceUsd: null, confidence: "high", _id: newId(), _aiPrice: null }]);
@@ -438,10 +441,10 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                 <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>Identified by AI — confirm before posting.</div>
               </div>
               <div style={{ display: "grid", gap: 5, minWidth: 220 }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><ScanLine size={13} color="var(--accent)" /> VIN / plate</label>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><ScanLine size={13} color="var(--accent)" /> VIN / plate <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, opacity: 0.8 }}>· optional</span></label>
                 <input value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} placeholder="Read from your photos — confirm or add" maxLength={17} style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, letterSpacing: "0.04em", fontFamily: "var(--font-sans)" }} />
                 <span style={{ fontSize: 11, color: "var(--muted)" }}>Kept private — never shown on public listings.</span>
-                <label style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><Tag size={13} color="var(--accent)" /> Stock #</label>
+                <label style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><Tag size={13} color="var(--accent)" /> Stock # <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, opacity: 0.8 }}>· optional</span></label>
                 <input value={stockNumber} onChange={(e) => setStockNumber(e.target.value)} placeholder="Your yard inventory code" style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, fontFamily: "var(--font-sans)" }} />
               </div>
             </Card>
@@ -549,7 +552,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                           <input value={p.partName} placeholder="Part name" onChange={(e) => setPartName(p._id!, e.target.value)} style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", borderBottom: "1px solid transparent", padding: "1px 0" }} onFocus={(e) => (e.target.style.borderBottomColor = "var(--line)")} onBlur={(e) => (e.target.style.borderBottomColor = "transparent")} />
                           {warn && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 700, color: "var(--signal)", background: "var(--signal-bg)", borderRadius: 6, padding: "2px 7px", flexShrink: 0 }}><TriangleAlert size={11} /> Review</span>}
                         </div>
-                        <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 3 }}>{p.conditionNotes || p.partCategory || "Added manually"}</div>
+                        <textarea value={p.description || ""} placeholder="Description — AI fills this in; tap to edit" rows={2} onChange={(e) => setPartDesc(p._id!, e.target.value)} style={{ width: "100%", marginTop: 4, fontSize: 12.5, color: "var(--muted)", border: "1px solid transparent", outline: "none", background: "transparent", resize: "vertical", fontFamily: "var(--font-sans)", lineHeight: 1.45, borderRadius: 8, padding: "4px 6px" }} onFocus={(e) => { e.target.style.borderColor = "var(--line)"; e.target.style.color = "var(--foreground)"; }} onBlur={(e) => { e.target.style.borderColor = "transparent"; e.target.style.color = "var(--muted)"; }} />
                       </div>
                       <ConditionBadge grade={p.condition} size="sm" />
                       <div style={{ width: 110, display: "grid", gap: 2, justifyItems: "end" }}>

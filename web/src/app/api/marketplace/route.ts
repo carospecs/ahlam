@@ -78,6 +78,7 @@ export async function GET(req: Request) {
       shopId: l.shop_id,
       shopName: shop?.name || "Independent seller",
       location: shop?.zip_code || shop?.location || "",
+      phone: shop?.business_phone || null,
       distance,
       driveTime: distance !== null ? driveTimeMinutes(distance) : null,
       note: c.conditionNotes || c.condition_notes || "",
@@ -128,6 +129,7 @@ export async function GET(req: Request) {
       shopId: v.shop_id,
       shopName: shop?.name || "Independent seller",
       location: shop?.zip_code || shop?.location || "",
+      phone: shop?.business_phone || null,
       distance,
       driveTime: distance !== null ? driveTimeMinutes(distance) : null,
     };

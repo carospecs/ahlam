@@ -1,20 +1,20 @@
 "use client";
 
 import React from "react";
-import { Camera, Car, Wrench, MapPin, Store, Search, MessageSquare, X, Send, LoaderCircle, Eye, SlidersHorizontal, ChevronDown, Plus } from "lucide-react";
+import { Camera, Car, Wrench, MapPin, Store, Search, MessageSquare, X, Send, LoaderCircle, Eye, SlidersHorizontal, ChevronDown, Plus, Phone } from "lucide-react";
 import { PhotoCell, ConditionBadge, SellModeBadge, conditionColorOf } from "../UI";
 import { csToast } from "../Dashboard";
 
 interface MktPart {
   id: string; part: string; grade: string; price: number; fitment: string;
   category: string; photoUrl: string | null; views: number; shopName: string;
-  location: string; note: string; desc: string; shopId?: string;
+  location: string; note: string; desc: string; shopId?: string; phone?: string | null;
   distance?: number | null; driveTime?: number | null;
 }
 interface MktVehicle {
   id: string; year: string; make: string; model: string; trim: string; body: string;
   color: string; mileage: string; sellMode: string; askingPrice: number | null;
-  views: number; shopId: string; shopName: string; location: string;
+  views: number; shopId: string; shopName: string; location: string; phone?: string | null;
   distance?: number | null; driveTime?: number | null;
 }
 
@@ -425,6 +425,7 @@ function PartDetailModal({ part, onClose, onContact }: { part: MktPart; onClose:
         <div style={{ height: 1, background: "var(--line)" }} />
         <MetaRow icon={<Store size={14} />}><ShopLink id={part.shopId} name={part.shopName} /></MetaRow>
         <MetaRow icon={<MapPin size={14} />}>{part.location || "—"}{part.distance != null ? ` · ${part.distance} mi · ~${part.driveTime} min drive` : ""}</MetaRow>
+        {part.phone && <MetaRow icon={<Phone size={14} />}><a href={`tel:${part.phone}`} style={{ color: "var(--foreground)", textDecoration: "none" }}>{part.phone}</a></MetaRow>}
         <MetaRow icon={<Eye size={14} />}>{part.views} {part.views === 1 ? "person has" : "people have"} viewed this</MetaRow>
         <button style={primaryBtn} onClick={onContact}><MessageSquare size={15} /> Message seller</button>
       </div>
@@ -451,6 +452,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onContact }: { vehicle: MktVe
         <div style={{ height: 1, background: "var(--line)" }} />
         <MetaRow icon={<Store size={14} />}><ShopLink id={v.shopId} name={v.shopName} /></MetaRow>
         <MetaRow icon={<MapPin size={14} />}>{v.location || "—"}{v.distance != null ? ` · ${v.distance} mi · ~${v.driveTime} min drive` : ""}</MetaRow>
+        {v.phone && <MetaRow icon={<Phone size={14} />}><a href={`tel:${v.phone}`} style={{ color: "var(--foreground)", textDecoration: "none" }}>{v.phone}</a></MetaRow>}
         <MetaRow icon={<Eye size={14} />}>{v.views} {v.views === 1 ? "person has" : "people have"} viewed this</MetaRow>
         <button style={primaryBtn} onClick={onContact}><MessageSquare size={15} /> Message seller</button>
       </div>
