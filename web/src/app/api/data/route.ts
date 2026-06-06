@@ -58,7 +58,7 @@ export async function GET() {
           views: l.views || 0, photos: 0, fitment: formatFit(c.fitment),
           category: c.partCategory || c.part_category || "", confidence: c.confidence || "high",
           note: c.conditionNotes || c.condition_notes || "", desc: c.description || "",
-          sellerId: l.seller_id,
+          sellerId: l.seller_id, ebayUrl: l.ebay_url || null,
         };
       });
 
