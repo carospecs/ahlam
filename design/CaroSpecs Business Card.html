@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Carospecs — Founders Business Card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* ---- Carospecs brand tokens (locked) ---- */
+  :root{
+    --midnight:#0F172A;   /* card backs, dark field            */
+    --ink:#0d1c30;        /* wordmark, body, mark on light      */
+    --sand:#D0B98B;       /* front field, mark on dark          */
+    --redline:#DC2626;    /* needle, statement rule, chips      */
+    --paper:#F4EFE4;      /* light support surface              */
+    --warm:#E7E1D4;       /* studio backdrop (not a brand color)*/
+    --card-w:525px;       /* 3.5in × 150dpi                     */
+    --card-h:300px;       /* 2.0in × 150dpi                     */
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--warm);
+    font-family:"Plus Jakarta Sans",system-ui,-apple-system,sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:64px 24px;
+  }
+  .studio{display:flex;flex-direction:column;gap:14px;width:var(--card-w);}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace;}
+
+  /* ---- card shell ---- */
+  .card{
+    width:var(--card-w);
+    height:var(--card-h);
+    border-radius:14px;
+    overflow:hidden;
+    box-shadow:0 26px 50px -24px rgba(15,23,42,.45),0 2px 6px rgba(15,23,42,.10);
+    position:relative;
+  }
+  .caption{
+    font-size:12px;letter-spacing:.34em;text-transform:uppercase;
+    color:rgba(13,28,48,.42);
+    margin:2px 0 18px 2px;
+  }
+
+  /* ---- FRONT ---- */
+  .front{
+    background:var(--sand);
+    padding:34px 36px;
+    display:flex;flex-direction:column;
+  }
+  .lockup{display:flex;align-items:center;gap:13px;}
+  .wordmark{font-size:30px;font-weight:800;letter-spacing:-.01em;color:var(--ink);line-height:1;}
+  .wordmark span{font-weight:600;color:rgba(13,28,48,.78);}
+
+  .statement{
+    display:flex;gap:15px;margin-top:30px;
+  }
+  .rule{width:4px;border-radius:2px;background:var(--redline);flex:none;}
+  .statement p{
+    margin:0;font-size:21px;line-height:1.32;font-weight:700;color:var(--ink);
+    max-width:30ch;letter-spacing:-.01em;
+  }
+
+  .founders{
+    display:grid;grid-template-columns:1fr 1fr;gap:26px;
+    margin-top:auto;padding-top:26px;
+  }
+  .who{display:flex;align-items:center;gap:9px;margin-bottom:9px;}
+  .who .name{font-size:16px;font-weight:700;color:var(--ink);white-space:nowrap;}
+  .chip{
+    font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:500;
+    letter-spacing:.12em;color:var(--redline);
+    border:1px solid var(--redline);border-radius:5px;padding:2px 7px;line-height:1;
+  }
+  .contact{font-size:13px;line-height:1.6;color:rgba(13,28,48,.66);}
+
+  /* ---- BACK ---- */
+  .back{
+    background:var(--midnight);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    position:relative;
+  }
+  .back .url{
+    position:absolute;bottom:30px;left:0;right:0;text-align:center;
+    font-size:13px;letter-spacing:.42em;color:var(--sand);
+    font-family:"JetBrains Mono",monospace;
+  }
+
+  @media print{
+    body{background:#fff;padding:0;}
+    .caption{display:none;}
+    .card{box-shadow:none;page-break-after:always;border-radius:0;}
+  }
+</style>
+</head>
+<body>
+  <div class="studio">
+
+    <!-- ===================== FRONT ===================== -->
+    <div class="card front">
+      <div class="lockup">
+        <!-- tachometer mark · ink C + red needle on sand -->
+        <svg width="44" height="44" viewBox="0 0 100 100" fill="none" aria-label="Carospecs mark">
+          <path d="M81.4 39.8 A33 33 0 1 1 43.1 17.7" stroke="#0d1c30" stroke-width="9" stroke-linecap="round"/>
+          <line x1="50" y1="50" x2="66.2" y2="26.0" stroke="#DC2626" stroke-width="6.5" stroke-linecap="round"/>
+          <circle cx="50" cy="50" r="4" fill="#DC2626"/>
+        </svg>
+        <div class="wordmark">Caro<span>specs</span></div>
+      </div>
+
+      <div class="statement">
+        <div class="rule"></div>
+        <p>The marketplace for cars &amp; parts — every listing measured, every spec verified.</p>
+      </div>
+
+      <div class="founders">
+        <div>
+          <div class="who"><span class="name">Andy Garcia</span><span class="chip">CEO</span></div>
+          <div class="contact mono">andy@carospecs.com<br/>+1 (415) 555 0148</div>
+        </div>
+        <div>
+          <div class="who"><span class="name">Mohammad Abbas</span><span class="chip">CTO</span></div>
+          <div class="contact mono">mohammad@carospecs.com<br/>+1 (415) 555 0162</div>
+        </div>
+      </div>
+    </div>
+    <div class="caption mono">Front · Horizontal Light</div>
+
+    <!-- ===================== BACK ===================== -->
+    <div class="card back">
+      <!-- tachometer mark · sand C + red needle on midnight -->
+      <svg width="150" height="150" viewBox="0 0 100 100" fill="none" aria-label="Carospecs mark">
+        <path d="M81.4 39.8 A33 33 0 1 1 43.1 17.7" stroke="#D0B98B" stroke-width="9" stroke-linecap="round"/>
+        <line x1="50" y1="50" x2="66.2" y2="26.0" stroke="#DC2626" stroke-width="6.5" stroke-linecap="round"/>
+        <circle cx="50" cy="50" r="4" fill="#DC2626"/>
+      </svg>
+      <div class="url">CAROSPECS.COM</div>
+    </div>
+    <div class="caption mono">Back · Brand Mark</div>
+
+  </div>
+</body>
+</html>

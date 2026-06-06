@@ -167,3 +167,37 @@ export async function markSold(id: string): Promise<void> {
     .eq("id", id);
   if (error) throw error;
 }
+
+/**
+ * Edit a saved listing's price, status, and/or description. Description is
+ * merged into the corrected JSON so other reviewed fields are preserved.
+ */
+export async function updateListing(params: {
+  id: string;
+  priceUsd?: number | null;
+  status?: SavedListing["status"];
+  description?: string;
+  current?: SavedListing | null;
+}): Promise<void> {
+  const update: Record<string, unknown> = {};
+  if (params.priceUsd !== undefined) update.price_usd = params.priceUsd;
+  if (params.status !== undefined) update.status = params.status;
+  if (params.description !== undefined) {
+    const base = params.current?.corrected ?? null;
+    const aiFallback = params.current?.ai_output;
+    const merged: CorrectedFields = {
+      partName: base?.partName ?? aiFallback?.partName ?? "",
+      partCategory: base?.partCategory ?? aiFallback?.partCategory ?? "",
+      condition: base?.condition ?? aiFallback?.condition ?? "Good",
+      conditionNotes: base?.conditionNotes ?? aiFallback?.conditionNotes ?? "",
+      description: params.description,
+      fitment: base?.fitment ?? aiFallback?.fitment ?? [],
+      priceUsd: base?.priceUsd ?? params.current?.price_usd ?? 0,
+    };
+    update.corrected = merged;
+  }
+  if (Object.keys(update).length === 0) return;
+
+  const { error } = await supabase.from("listings").update(update).eq("id", params.id);
+  if (error) throw error;
+}

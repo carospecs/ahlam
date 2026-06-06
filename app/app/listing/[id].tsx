@@ -9,6 +9,7 @@ import {
   Alert,
   Share,
   Pressable,
+  TextInput,
 } from "react-native";
 import { useLocalSearchParams, useFocusEffect, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -18,12 +19,14 @@ import {
   CheckCheck,
   TriangleAlert,
   Info,
+  Pencil,
 } from "lucide-react-native";
 import { colors, space, font, radius, conditionColorOf } from "@/theme";
 import { Button } from "@/components/Button";
 import {
   fetchListing,
   markSold,
+  updateListing,
   type SavedListing,
 } from "@/lib/listings";
 import { buildListingText } from "@/lib/format";
@@ -36,6 +39,11 @@ export default function ListingDetail() {
   const [listing, setListing] = useState<SavedListing | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [price, setPrice] = useState("");
+  const [desc, setDesc] = useState("");
+  const [status, setStatus] = useState<SavedListing["status"]>("active");
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -105,6 +113,34 @@ export default function ListingDetail() {
     }
   }
 
+  function beginEdit() {
+    if (!listing) return;
+    setPrice(listing.price_usd != null ? String(listing.price_usd) : "");
+    setDesc(listing.corrected?.description ?? listing.ai_output.description ?? "");
+    setStatus(listing.status);
+    setEditing(true);
+  }
+
+  async function saveEdit() {
+    if (!listing || saving) return;
+    setSaving(true);
+    try {
+      await updateListing({
+        id: listing.id,
+        priceUsd: price === "" ? null : Number(price),
+        status,
+        description: desc,
+        current: listing,
+      });
+      setEditing(false);
+      await load();
+    } catch (e) {
+      Alert.alert("Couldn't save", e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <ScrollView
       style={styles.container}
@@ -165,11 +201,73 @@ export default function ListingDetail() {
             icon={<Share2 size={18} color={colors.foreground} />}
             onPress={share}
           />
-          {listing.status !== "sold" && (
+          {!editing && (
+            <Button
+              label="Edit listing"
+              variant="secondary"
+              icon={<Pencil size={18} color={colors.foreground} />}
+              onPress={beginEdit}
+            />
+          )}
+          {listing.status !== "sold" && !editing && (
             <Button label="Mark as sold" variant="secondary" onPress={sold} />
           )}
         </View>
       </View>
+
+      {editing && (
+        <View style={styles.section}>
+          <Text style={styles.label}>Edit listing</Text>
+          <View style={styles.editCard}>
+            <Text style={styles.fieldLabel}>Price (USD)</Text>
+            <TextInput
+              value={price}
+              onChangeText={setPrice}
+              keyboardType="number-pad"
+              placeholder="0"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+            />
+
+            <Text style={styles.fieldLabel}>Description</Text>
+            <TextInput
+              value={desc}
+              onChangeText={setDesc}
+              multiline
+              placeholder="What buyers will see…"
+              placeholderTextColor={colors.muted}
+              style={[styles.input, styles.textarea]}
+            />
+
+            <Text style={styles.fieldLabel}>Status</Text>
+            <View style={styles.statusRow}>
+              {(["draft", "active", "sold"] as const).map((s) => {
+                const on = status === s;
+                return (
+                  <Pressable
+                    key={s}
+                    onPress={() => setStatus(s)}
+                    style={[styles.statusChip, on && styles.statusChipOn]}
+                  >
+                    <Text style={[styles.statusChipText, on && styles.statusChipTextOn]}>
+                      {s === "active" ? "Posted" : s[0].toUpperCase() + s.slice(1)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={{ flexDirection: "row", gap: space.md, marginTop: space.md }}>
+              <View style={{ flex: 1 }}>
+                <Button label="Cancel" variant="secondary" onPress={() => setEditing(false)} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button label={saving ? "Saving…" : "Save"} onPress={saveEdit} disabled={saving} />
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
 
       {listing.ai_output.confidence === "low" && (
         <View style={[styles.section, styles.lowConf]}>
@@ -236,6 +334,40 @@ const styles = StyleSheet.create({
     padding: space.md,
   },
   lowConfText: { color: colors.signal, fontSize: font.small, flex: 1, lineHeight: 20 },
+  editCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: space.md,
+    gap: space.xs,
+  },
+  fieldLabel: { color: colors.muted, fontSize: font.small, fontWeight: "600", marginTop: space.sm },
+  input: {
+    backgroundColor: colors.surface2,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    color: colors.foreground,
+    fontSize: font.body,
+    marginTop: space.xs,
+  },
+  textarea: { minHeight: 88, textAlignVertical: "top" },
+  statusRow: { flexDirection: "row", gap: space.sm, marginTop: space.xs },
+  statusChip: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: space.sm,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface2,
+  },
+  statusChipOn: { borderColor: colors.accent, backgroundColor: colors.accent },
+  statusChipText: { color: colors.muted, fontSize: font.small, fontWeight: "700" },
+  statusChipTextOn: { color: colors.white },
   backHome: {
     color: colors.accent,
     fontWeight: "600",

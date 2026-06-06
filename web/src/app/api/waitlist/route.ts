@@ -66,13 +66,13 @@ async function sendConfirmation(email: string) {
   await resend.emails.send({
     from,
     to: email,
-    subject: "You're on the CaroSpecs waitlist 🚗",
+    subject: "You're on the Ahlam waitlist 🚗",
     text:
-      "Thanks for joining the CaroSpecs waitlist!\n\n" +
+      "Thanks for joining the Ahlam waitlist!\n\n" +
       "We're building the fastest way to photograph an auto part, identify it, " +
       "grade its condition, and list it — without needing a parts expert on staff.\n\n" +
       "You'll be among the first invited to the free pilot. Reply to this email and " +
       "tell us how many parts you list a day — it helps us prioritize.\n\n" +
-      "— The CaroSpecs team",
+      "— The Ahlam team",
   });
 }

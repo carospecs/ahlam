@@ -69,3 +69,44 @@ export function Card({ children, style = {}, pad = 18 }: { children: React.React
     <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", padding: pad, ...style }}>{children}</div>
   );
 }
+
+export function Skeleton({ w = "100%", h = 14, r = 8, style = {} }: { w?: number | string; h?: number | string; r?: number; style?: React.CSSProperties }) {
+  return <div className="cs-skel" style={{ width: w, height: h, borderRadius: r, ...style }} />;
+}
+
+// Mirrors the Overview layout so the loading state doesn't "jump" into content.
+export function DashboardSkeleton() {
+  return (
+    <div style={{ display: "grid", gap: 20, maxWidth: 1180 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }} className="cs-grid4">
+        {[0, 1, 2, 3].map((i) => (
+          <Card key={i} pad={18} style={{ display: "grid", gap: 14 }}>
+            <Skeleton w={38} h={38} r={10} />
+            <div style={{ display: "grid", gap: 8 }}>
+              <Skeleton w={64} h={28} />
+              <Skeleton w="80%" h={12} />
+            </div>
+          </Card>
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 20 }} className="cs-grid-2">
+        {[0, 1].map((col) => (
+          <Card key={col} pad={0}>
+            <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--line)" }}><Skeleton w={140} h={14} /></div>
+            <div style={{ padding: "6px 18px 14px" }}>
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 13, padding: "11px 0" }}>
+                  <Skeleton w={col === 0 ? 52 : 30} h={col === 0 ? 40 : 30} r={col === 0 ? 8 : 999} />
+                  <div style={{ flex: 1, display: "grid", gap: 7 }}>
+                    <Skeleton w="60%" h={13} />
+                    <Skeleton w="40%" h={11} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}

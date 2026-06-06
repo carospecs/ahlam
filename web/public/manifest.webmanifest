@@ -1,0 +1,14 @@
+{
+  "name": "Ahlam",
+  "short_name": "Ahlam",
+  "description": "Photograph an auto part, let AI identify and price it, and post it anywhere you sell.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

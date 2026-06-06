@@ -16,6 +16,7 @@ import {
   PackageOpen,
   Megaphone,
   MessageSquare,
+  Store,
   LogOut,
   ChevronRight,
 } from "lucide-react-native";
@@ -115,8 +116,19 @@ export default function Home() {
           />
         </View>
 
+        {/* Marketplace */}
+        <Text style={styles.sectionLabel}>Marketplace</Text>
+        <View style={styles.tiles}>
+          <Tile
+            icon={<Store size={22} color={colors.foreground} />}
+            label="Browse market"
+            sub="Buy parts & cars from other shops"
+            onPress={() => router.push("/market")}
+          />
+        </View>
+
         {/* Navigation hub */}
-        <Text style={styles.sectionLabel}>Manage</Text>
+        <Text style={styles.sectionLabel}>My shop</Text>
         <View style={styles.tiles}>
           <Tile
             icon={<PackageOpen size={22} color={colors.foreground} />}

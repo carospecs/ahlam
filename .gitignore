@@ -12,6 +12,13 @@ node_modules/
 web/.next/
 web/out/
 web/build/
+# stray root Next build artifacts (dev server sometimes writes here)
+/.next/
+/next-env.d.ts
+
+# supabase CLI temp + stray root npm lockfile (project uses pnpm)
+supabase/.temp/
+/package-lock.json
 
 # expo
 app/.expo/

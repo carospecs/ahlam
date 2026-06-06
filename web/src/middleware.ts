@@ -1,39 +1,62 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 
-export function middleware(req: NextRequest) {
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:8081",
+  "http://localhost:8082",
+];
+
+function corsMiddleware(req: NextRequest, res: NextResponse) {
   const origin = req.headers.get("origin") ?? "";
-  const allowed = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:8081",
-    "http://localhost:8082",
-  ];
-
-  const cors =
-    allowed.includes(origin) || origin.endsWith(".carospecs.com");
-
-  if (req.method === "OPTIONS" && cors) {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
-    });
-  }
-
+  const cors = allowedOrigins.includes(origin) || origin.endsWith(".carospecs.com");
   if (cors) {
-    const res = NextResponse.next();
     res.headers.set("Access-Control-Allow-Origin", origin);
     res.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.headers.set("Access-Control-Allow-Headers", "Content-Type");
-    return res;
+    res.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  }
+  return res;
+}
+
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next();
+
+  // CORS preflight
+  const origin = req.headers.get("origin") ?? "";
+  const corsOk = allowedOrigins.includes(origin) || origin.endsWith(".carospecs.com");
+  if (req.method === "OPTIONS" && corsOk) {
+    const preflight = new Response(null, { status: 204 });
+    preflight.headers.set("Access-Control-Allow-Origin", origin);
+    preflight.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    preflight.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    return preflight;
   }
 
-  return NextResponse.next();
+  // Supabase session refresh
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
+          cookiesToSet.forEach(({ name, value, options }) =>
+            res.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  await supabase.auth.getUser();
+
+  return corsMiddleware(req, res);
 }
 
 export const config = {
-  matcher: "/api/:path*",
+  matcher: ["/api/:path*", "/dashboard/:path*"],
 };

@@ -2,13 +2,15 @@ import type { AIResult } from "@carospecs/shared";
 import { config } from "@/lib/config";
 
 /**
- * Send a part photo to the CaroSpecs backend for GPT-4o Vision identification.
- * The backend holds the OpenAI key. Returns an AIResult — on failure the app
+ * Send a part photo to the Ahlam backend for Gemini Vision identification.
+ * The backend holds the Gemini key. Returns an AIResult — on failure the app
  * shows result.userMessage (calm "high demand" copy), never a raw error.
  */
 export async function identifyPart(params: {
   imageBase64: string;
   vin?: { make?: string; model?: string; year?: number };
+  /** Vision model. Backend is Gemini-only; kept for API compatibility. */
+  provider?: "gpt" | "gemini";
 }): Promise<AIResult> {
   try {
     const res = await fetch(`${config.apiBaseUrl}/api/identify`, {
@@ -17,6 +19,7 @@ export async function identifyPart(params: {
       body: JSON.stringify({
         imageBase64: params.imageBase64,
         vin: params.vin,
+        provider: params.provider ?? "gemini",
       }),
     });
     const data = (await res.json()) as AIResult;

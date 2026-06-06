@@ -2,6 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --background: #0F172A;
+  --foreground: #F8FAFC;
+  --surface: #1B2336;
+  --surface2: #272F42;
+  --muted: #94A3B8;
+  --line: #334155;
+  --accent: #DC2626;
+  --accent-hover: #B91C1C;
+  --signal: #F59E0B;
+  --signal-bg: rgba(245, 158, 11, 0.12);
+  --caution: #F59E0B;
+  --success: #22C55E;
+  --danger: #EF4444;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+}
+
+/* ---- Cream light mode ---------------------------------------------------- */
+/* Main color: #D0B98B (cream). Secondary: #0D1C30 (deep navy) used for text,
+   borders, and surfaces. The red accent stays the brand constant. Toggle by
+   setting data-theme="light" on <html>. */
+:root[data-theme="light"] {
+  --background: #E4D5B5;          /* cream paper — the page behind cards */
+  --foreground: #15253B;          /* deep navy text */
+  --surface: #F6EEDB;             /* light warm card — lifts off the paper */
+  --surface2: #E7D6B2;            /* deeper cream — clearly visible hover/fill */
+  --muted: #897E60;               /* lighter warm muted — reads as secondary */
+  --line: #C2A971;                /* defined cream border */
+  --accent: #DC2626;
+  --accent-hover: #B91C1C;
+  --signal: #B45309;
+  --signal-bg: rgba(180, 83, 9, 0.14);
+  --caution: #B45309;
+  --success: #15803D;
+  --danger: #DC2626;
+}
+
+/* Light-mode surfaces for elements with hardcoded dark fills */
+:root[data-theme="light"] .grain {
+  background-image:
+    radial-gradient(circle at 18% 8%, rgba(220, 38, 38, 0.12), transparent 42%),
+    radial-gradient(circle at 92% 0%, rgba(208, 185, 139, 0.55), transparent 46%);
+}
+:root[data-theme="light"] .photo-cell {
+  background:
+    radial-gradient(circle at 30% 25%, rgba(13,28,48,0.06), transparent 60%),
+    linear-gradient(135deg, #DAC598 0%, #C8B083 100%);
+  color: #8a7a55;
+}
+:root[data-theme="light"] .photo-cell::after {
+  background-image: repeating-linear-gradient(135deg, rgba(13,28,48,0.025) 0 2px, transparent 2px 9px);
+}
+:root[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #b89f6e; border: 2px solid #ede2cb;
+}
+
 html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
@@ -62,6 +121,69 @@ body {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.9s linear infinite; }
+
+/* loading skeletons */
+@keyframes cs-shimmer { 100% { transform: translateX(100%); } }
+.cs-skel {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface2);
+  border-radius: 8px;
+}
+.cs-skel::after {
+  content: "";
+  position: absolute; inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--foreground) 7%, transparent), transparent);
+  animation: cs-shimmer 1.3s infinite;
+}
+
+/* ---- Interactions: site-wide professional motion ---- */
+:root { --ease-out: cubic-bezier(0.22, 0.8, 0.26, 1); }
+
+/* Every button & link across the web gets smooth, premium feedback. */
+button, a, [role="button"] {
+  transition: background-color 0.18s var(--ease-out), box-shadow 0.2s var(--ease-out),
+              transform 0.16s var(--ease-out), border-color 0.18s var(--ease-out),
+              color 0.18s var(--ease-out), filter 0.18s var(--ease-out), opacity 0.18s var(--ease-out);
+}
+button:not(:disabled) { cursor: pointer; }
+button:not(:disabled):hover { filter: brightness(1.08); }
+button:not(:disabled):active { transform: scale(0.96); filter: brightness(0.98); }
+button:disabled { cursor: not-allowed; }
+button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 2px; }
+
+/* Raised CTAs: lift + soft glow */
+.cs-raise:hover:not(:disabled) { box-shadow: 0 10px 26px -12px rgba(0,0,0,0.75); transform: translateY(-2px); filter: brightness(1.05); }
+.cs-raise:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+
+/* Icon buttons: soft surface fill */
+.cs-icon-btn:hover { background: var(--surface2) !important; filter: none; }
+
+/* Nav / menu rows: surface highlight */
+.cs-nav-item:hover { background: var(--surface2); color: var(--foreground); filter: none; }
+.cs-hover-row { transition: background-color 0.16s var(--ease-out); border-radius: 8px; }
+.cs-hover-row:hover { background: var(--surface2); }
+
+/* Clickable cards (vehicle / part / browse tiles are <button>s): lift + ring */
+.cs-card-btn { transition: transform 0.18s var(--ease-out), box-shadow 0.2s var(--ease-out), border-color 0.18s var(--ease-out); }
+.cs-card-btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 16px 34px -18px rgba(0,0,0,0.7); filter: none; }
+.cs-card-btn:hover:not(:disabled) .photo-cell { filter: brightness(1.06); }
+
+/* Chat rows (Claude-style): highlight + actions revealed on hover */
+.cs-chat-row { transition: background-color 0.16s var(--ease-out), box-shadow 0.16s var(--ease-out), transform 0.12s var(--ease-out); }
+.cs-chat-row:hover { background: var(--surface2); box-shadow: inset 0 0 0 1px var(--line); }
+.cs-chat-row.on { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.cs-chat-row:active { transform: scale(0.99); }
+.cs-chat-actions { opacity: 0; transition: opacity 0.16s var(--ease-out); }
+.cs-chat-row:hover .cs-chat-actions, .cs-chat-row.on .cs-chat-actions { opacity: 1; }
+
+/* Generic surface row (table rows / list items) hover */
+.cs-row:hover { background: var(--surface2); }
+
+/* Entrance for view content */
+@keyframes cs-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.cs-content > * { animation: cs-rise 0.34s var(--ease-out) both; }
 
 /* login responsive */
 [data-mobile-brand] { display: none; }
