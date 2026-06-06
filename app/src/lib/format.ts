@@ -1,4 +1,4 @@
-import type { CorrectedListing } from "@carospecs/shared";
+import type { CorrectedListing } from "@ahlam/shared";
 import type { Shop } from "@/lib/auth";
 
 /**

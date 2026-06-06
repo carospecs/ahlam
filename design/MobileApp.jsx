@@ -1,4 +1,4 @@
-// CaroSpecs mobile — router + device frame. Bottom nav, account top corner.
+// Ahlam mobile — router + device frame. Bottom nav, account top corner.
 const { useState: useStateApp2 } = React;
 
 function MobileToast({ msg }) {

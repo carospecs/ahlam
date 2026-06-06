@@ -177,7 +177,7 @@ const AI_SUGGESTIONS = [
   "Write a Facebook post for the Camry wheels",
 ];
 const AI_SEED = [
-  { from: "ai", text: "Hi Ray — I'm your CaroSpecs assistant. Ask me about part pricing, fitment, or drafting a listing. I can see your shop inventory." },
+  { from: "ai", text: "Hi Ray — I'm your Ahlam assistant. Ask me about part pricing, fitment, or drafting a listing. I can see your shop inventory." },
 ];
 const AI_REPLIES = {
   default: "Based on comparable sold listings in your area, I'd price that in the $80–95 range for Good condition. Want me to draft the listing text?",
@@ -215,7 +215,7 @@ function AIChat() {
           <I name="Sparkles" size={18} color="var(--accent)" />
         </div>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>CaroSpecs Assistant</div>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Ahlam Assistant</div>
           <div style={{ fontSize: 12, color: "var(--muted)" }}>Knows your shop · prices, fitment, listings</div>
         </div>
       </div>

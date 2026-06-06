@@ -1,4 +1,4 @@
--- CaroSpecs migration 0005: marketplace fields, shop profile, team invites,
+-- Ahlam migration 0005: marketplace fields, shop profile, team invites,
 -- notification prefs, and listing views.
 
 -- ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@ begin
     values (p_listing_id, auth.uid(), seller, p_message);
 
   insert into conversations (shop_id, contact_name, contact_avatar, market, part_name, listing_id, buyer_id, unread, last_time)
-    values (l.shop_id, buyer, upper(left(buyer, 2)), 'CaroSpecs', partname, p_listing_id, auth.uid(), 1, t)
+    values (l.shop_id, buyer, upper(left(buyer, 2)), 'Ahlam', partname, p_listing_id, auth.uid(), 1, t)
     returning id into conv;
 
   insert into messages (conversation_id, sender, body, time)
@@ -169,7 +169,7 @@ begin
   t := to_char(now(), 'FMHH12:MI AM');
 
   insert into conversations (shop_id, contact_name, contact_avatar, market, part_name, buyer_id, unread, last_time)
-    values (p_shop_id, buyer, upper(left(buyer, 2)), 'CaroSpecs', p_subject, auth.uid(), 1, t)
+    values (p_shop_id, buyer, upper(left(buyer, 2)), 'Ahlam', p_subject, auth.uid(), 1, t)
     returning id into conv;
 
   insert into messages (conversation_id, sender, body, time)

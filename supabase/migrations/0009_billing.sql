@@ -1,4 +1,4 @@
--- CaroSpecs migration 0009: Stripe billing linkage.
+-- Ahlam migration 0009: Stripe billing linkage.
 -- Set by the checkout webhook after a shop's first successful subscription;
 -- used to open the Stripe customer billing portal.
 

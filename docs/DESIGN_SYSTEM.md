@@ -1,4 +1,4 @@
-# CaroSpecs Design System
+# Ahlam Design System
 
 Generated with the `ui-ux-pro-max` design intelligence skill, tuned for an
 industrial / automotive / trustworthy aesthetic. Single source of truth for

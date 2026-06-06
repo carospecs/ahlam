@@ -1,4 +1,4 @@
--- CaroSpecs migration 0002: shop creation RPC + storage policies.
+-- Ahlam migration 0002: shop creation RPC + storage policies.
 
 -- ---------------------------------------------------------------------------
 -- create_shop: a SECURITY DEFINER function so a newly signed-up user can

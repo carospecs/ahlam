@@ -7,7 +7,7 @@ module.exports = function (api) {
         "module-resolver",
         {
           alias: {
-            "@carospecs/shared": "../packages/shared/src",
+            "@ahlam/shared": "../packages/shared/src",
             "@": "./src",
           },
           extensions: [".ts", ".tsx", ".js", ".jsx", ".json"],

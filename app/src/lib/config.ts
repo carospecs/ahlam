@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
 
 /**
- * App config. The AI key is NEVER here — the app calls the CaroSpecs backend
+ * App config. The AI key is NEVER here — the app calls the Ahlam backend
  * (/api/identify), which holds the OpenAI key server-side.
  */
 function env(name: string): string | undefined {

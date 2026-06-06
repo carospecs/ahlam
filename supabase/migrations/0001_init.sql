@@ -1,4 +1,4 @@
--- CaroSpecs initial schema
+-- Ahlam initial schema
 -- Run in the Supabase SQL editor (or via the Supabase CLI).
 -- Model: single account per shop; members can be added under a shop with roles.
 

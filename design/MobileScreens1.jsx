@@ -1,4 +1,4 @@
-// CaroSpecs mobile — primitives, bottom nav, sign-in, overview, capture (Add tab).
+// Ahlam mobile — primitives, bottom nav, sign-in, overview, capture (Add tab).
 const { useState: useStateMob, useEffect: useEffectMob } = React;
 
 const C = {
@@ -115,7 +115,7 @@ function MSignIn({ onAuth }) {
     <div className="grain" style={{ minHeight: "100%", display: "flex", flexDirection: "column", padding: "60px 26px 40px", background: C.bg }}>
       <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 40 }}>
         <span style={mob.logo}><I name="Wrench" size={20} strokeWidth={2.25} color="#fff" /></span>
-        <span style={{ fontSize: 20, fontWeight: 700, color: C.fg }}>CaroSpecs</span>
+        <span style={{ fontSize: 20, fontWeight: 700, color: C.fg }}>Ahlam</span>
       </div>
       <div style={{ marginTop: 20 }}>
         <h1 style={{ margin: 0, fontSize: 30, fontWeight: 800, color: C.fg, lineHeight: 1.12 }}>

@@ -2,7 +2,7 @@
 // basic offline fallback. Intentionally conservative: it only intercepts page
 // navigations (network-first, falling back to the cached shell) so it never
 // interferes with Next.js build assets or API calls.
-const CACHE = "carospecs-shell-v1";
+const CACHE = "ahlam-shell-v1";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.add("/")).catch(() => {}));

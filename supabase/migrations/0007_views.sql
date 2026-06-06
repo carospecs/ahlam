@@ -1,4 +1,4 @@
--- CaroSpecs migration 0007: vehicle view counter + view-increment RPCs.
+-- Ahlam migration 0007: vehicle view counter + view-increment RPCs.
 -- Lets the marketplace show "how many people viewed it" for both parts and
 -- whole-car vehicles, incremented when a buyer opens a post's detail.
 

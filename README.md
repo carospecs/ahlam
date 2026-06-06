@@ -1,10 +1,10 @@
-# CaroSpecs
+# Ahlam
 
 **Photo → AI part ID → listing, for small auto salvage yards and parts shops.**
 
 Small shops (1–5 employees) waste hours manually photographing, identifying, and re-listing
 parts across Car-Part.com, OfferUp, Facebook Marketplace, and spreadsheets. The real
-bottleneck isn't listing speed — it's the *expertise* to identify a part correctly. CaroSpecs
+bottleneck isn't listing speed — it's the *expertise* to identify a part correctly. Ahlam
 removes that bottleneck: an employee photographs a part, GPT-4o Vision identifies it
 (type, make/model/year, condition grade) and pre-fills a listing, the employee reviews it in a
 fast card UI, then exports it to whatever marketplace they sell on.

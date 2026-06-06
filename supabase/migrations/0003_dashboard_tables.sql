@@ -1,4 +1,4 @@
--- CaroSpecs migration 0003: vehicles, messages, activity_log tables for dashboard
+-- Ahlam migration 0003: vehicles, messages, activity_log tables for dashboard
 
 -- ---------------------------------------------------------------------------
 -- Vehicles (whole-car listings / inventory items)

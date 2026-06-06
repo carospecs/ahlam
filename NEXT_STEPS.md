@@ -1,4 +1,4 @@
-# CaroSpecs — Next Steps
+# Ahlam — Next Steps
 
 State as of 2026-06-03. Everything below is built, typechecked, and pushed.
 
@@ -15,7 +15,7 @@ State as of 2026-06-03. Everything below is built, typechecked, and pushed.
 ## 🚀 Deploy (Vercel, from GitHub)
 ```bash
 npm i -g vercel && vercel login
-cd ~/carospecs
+cd ~/ahlam
 vercel link            # "In which directory is your code located?" → web
 bash scripts/vercel-env-push.sh
 vercel git connect

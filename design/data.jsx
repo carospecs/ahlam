@@ -1,4 +1,4 @@
-// Shared mock data + tiny UI primitives for the CaroSpecs dashboard prototype.
+// Shared mock data + tiny UI primitives for the Ahlam dashboard prototype.
 
 const CONDITION_COLOR = { Good: "var(--success)", Poor: "var(--danger)" };
 

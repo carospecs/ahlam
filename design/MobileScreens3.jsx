@@ -1,4 +1,4 @@
-// CaroSpecs mobile — screens 3: Browse market, Vehicle profile, AI chat, Photos.
+// Ahlam mobile — screens 3: Browse market, Vehicle profile, AI chat, Photos.
 const { useState: useStateMob3, useRef: useRefMob3 } = React;
 const C3 = window.MobileScreens1.C;
 
@@ -150,7 +150,7 @@ function MStat({ label, value, tone }) {
 
 // ---------- AI chat ----------
 const MAI_SUGGESTIONS = ["Fair price for the Accord alternator?", "Which F-150 parts sell fastest?", "Write a post for the Camry wheels"];
-const MAI_SEED = [{ from: "ai", text: "Hi Ray — I'm your CaroSpecs assistant. Ask me about pricing, fitment, or drafting a listing." }];
+const MAI_SEED = [{ from: "ai", text: "Hi Ray — I'm your Ahlam assistant. Ask me about pricing, fitment, or drafting a listing." }];
 function mAiReply(t) {
   const lc = t.toLowerCase();
   if (lc.includes("price") || lc.includes("fair") || lc.includes("alternator")) return "For a Good-condition 2014 Accord alternator, recent solds near you land around $85. I'd list at $95 with room to $85. Want me to draft it?";

@@ -87,7 +87,7 @@ export default function SignIn() {
             <View style={styles.logo}>
               <Wrench size={26} color={colors.white} />
             </View>
-            <Text style={styles.title}>CaroSpecs</Text>
+            <Text style={styles.title}>Ahlam</Text>
             <Text style={styles.subtitle}>
               {mode === "signin"
                 ? "Sign in to your shop"

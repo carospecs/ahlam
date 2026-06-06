@@ -40,7 +40,7 @@ export default function Home() {
       if (!perm.granted) {
         Alert.alert(
           "Permission needed",
-          "CaroSpecs needs access to take or pick a photo of the part."
+          "Ahlam needs access to take or pick a photo of the part."
         );
         return;
       }

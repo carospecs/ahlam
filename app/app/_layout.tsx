@@ -59,7 +59,7 @@ function RootNav() {
     >
       <Stack.Screen name="sign-in" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ title: "Set up your shop" }} />
-      <Stack.Screen name="index" options={{ title: "CaroSpecs" }} />
+      <Stack.Screen name="index" options={{ title: "Ahlam" }} />
       <Stack.Screen name="market" options={{ title: "Browse market" }} />
       <Stack.Screen name="review" options={{ title: "Review listing" }} />
       <Stack.Screen name="listings" options={{ title: "Inventory" }} />

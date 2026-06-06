@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "CaroSpecs",
-    "slug": "carospecs",
-    "scheme": "carospecs",
+    "name": "Ahlam",
+    "slug": "ahlam",
+    "scheme": "ahlam",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -14,14 +14,14 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.carospecs.app",
+      "bundleIdentifier": "io.ahlam.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "CaroSpecs uses the camera to photograph auto parts for identification.",
-        "NSPhotoLibraryUsageDescription": "CaroSpecs lets you upload part photos from your library."
+        "NSCameraUsageDescription": "Ahlam uses the camera to photograph auto parts for identification.",
+        "NSPhotoLibraryUsageDescription": "Ahlam lets you upload part photos from your library."
       }
     },
     "android": {
-      "package": "com.carospecs.app",
+      "package": "io.ahlam.app",
       "permissions": ["CAMERA"],
       "adaptiveIcon": {
         "backgroundColor": "#0F172A"
@@ -32,7 +32,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "CaroSpecs uses the camera to photograph auto parts."
+          "cameraPermission": "Ahlam uses the camera to photograph auto parts."
         }
       ],
       "expo-image-picker"

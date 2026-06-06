@@ -1,4 +1,4 @@
--- CaroSpecs migration 0008: public storage bucket for shop logos / cover images.
+-- Ahlam migration 0008: public storage bucket for shop logos / cover images.
 -- Uploads are performed server-side with the service role (bypasses RLS); the
 -- bucket is public so logos render on listings and the public storefront.
 

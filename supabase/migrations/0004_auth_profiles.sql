@@ -1,4 +1,4 @@
--- CaroSpecs migration 0004: auth profiles, listing type/seller, contact_messages
+-- Ahlam migration 0004: auth profiles, listing type/seller, contact_messages
 
 -- ---------------------------------------------------------------------------
 -- Profiles (extends auth.users)

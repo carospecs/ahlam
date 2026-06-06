@@ -1,4 +1,4 @@
-// CaroSpecs mobile — screens 2: Review (AI), Listing detail (export), Listings, Messages, Account
+// Ahlam mobile — screens 2: Review (AI), Listing detail (export), Listings, Messages, Account
 const { useState: useStateMob2, useEffect: useEffectMob2 } = React;
 const Cx = window.MobileScreens1.C;
 const condCx = window.MobileScreens1.condC;

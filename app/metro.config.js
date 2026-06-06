@@ -1,5 +1,5 @@
-// Metro config for the CaroSpecs monorepo.
-// Lets the app import @carospecs/shared from ../packages and resolves deps
+// Metro config for the Ahlam monorepo.
+// Lets the app import @ahlam/shared from ../packages and resolves deps
 // from both the app and the repo root.
 const { getDefaultConfig } = require("expo/metro-config");
 const path = require("path");

@@ -12,7 +12,7 @@ import {
   CONDITION_RUBRIC,
   type AIPartOutput,
   type ConditionGrade,
-} from "@carospecs/shared";
+} from "@ahlam/shared";
 import { colors, space, radius, font, conditionColor } from "@/theme";
 
 /** Editable draft for one detected part. Parent owns the array of these. */

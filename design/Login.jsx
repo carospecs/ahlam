@@ -1,4 +1,4 @@
-// CaroSpecs login — mirrors the waitlist aesthetic (dark + grain, red CTA,
+// Ahlam login — mirrors the waitlist aesthetic (dark + grain, red CTA,
 // Wrench logo, Plus Jakarta Sans). Split: brand teaser left, form right.
 const { useState: useStateL } = React;
 
@@ -8,7 +8,7 @@ function BrandPanel() {
     <div className="grain login-panel" style={lx.panel}>
       <a style={lx.brand} href="#">
         <span style={lx.logoSm}><I name="Wrench" size={18} strokeWidth={2.25} color="#fff" /></span>
-        <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>CaroSpecs</span>
+        <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span>
       </a>
 
       <div style={{ maxWidth: 380 }}>
@@ -77,7 +77,7 @@ function Login({ onLogin }) {
           <div style={lx.formInner} className="fade-up">
             <a style={{ ...lx.brand, marginBottom: 4 }} href="#" data-mobile-brand>
               <span style={lx.logoSm}><I name="Wrench" size={18} strokeWidth={2.25} color="#fff" /></span>
-              <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>CaroSpecs</span>
+              <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span>
             </a>
 
             <h2 style={lx.formTitle}>
@@ -125,7 +125,7 @@ function Login({ onLogin }) {
             </button>
 
             <p style={lx.switch}>
-              {mode === "signin" ? "New to CaroSpecs? " : "Already have an account? "}
+              {mode === "signin" ? "New to Ahlam? " : "Already have an account? "}
               <a
                 href="#"
                 style={{ color: "var(--accent)", fontWeight: 600 }}

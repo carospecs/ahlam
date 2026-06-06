@@ -1,4 +1,4 @@
-// CaroSpecs dashboard — shell (sidebar + topbar), shared primitives, view router.
+// Ahlam dashboard — shell (sidebar + topbar), shared primitives, view router.
 const { useState: useStateD } = React;
 
 const NAV = [
@@ -114,7 +114,7 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }) {
     <aside style={sx.sidebar} className={"cs-sidebar" + (open ? " open" : "")}>
       <div style={sx.brand}>
         <span style={sx.logo}><I name="Wrench" size={18} strokeWidth={2.25} color="#fff" /></span>
-        <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>CaroSpecs</span>
+        <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span>
         <button className="cs-navclose" onClick={onClose} style={sx.navClose}><I name="X" size={18} color="var(--muted)" /></button>
       </div>
 

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// --- Inlined from @carospecs/shared (monorepo dep that Vercel can't resolve) ---
+// --- Inlined from @ahlam/shared (monorepo dep that Vercel can't resolve) ---
 
 export type ConditionGrade = "Good" | "Poor";
 export type Confidence = "high" | "medium" | "low";

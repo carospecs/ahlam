@@ -1,5 +1,5 @@
 import { decode } from "base64-arraybuffer";
-import type { AIPartOutput, ConditionGrade, VehicleFit } from "@carospecs/shared";
+import type { AIPartOutput, ConditionGrade, VehicleFit } from "@ahlam/shared";
 import { supabase } from "@/lib/supabase";
 
 export interface SavedListing {

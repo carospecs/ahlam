@@ -13,7 +13,7 @@ export interface QueuedCapture {
   createdAt: string;
 }
 
-const KEY = "carospecs:capture-queue";
+const KEY = "ahlam:capture-queue";
 
 export async function enqueueCapture(
   item: Omit<QueuedCapture, "id" | "createdAt">

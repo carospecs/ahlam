@@ -10,7 +10,7 @@ const allowedOrigins = [
 
 function corsMiddleware(req: NextRequest, res: NextResponse) {
   const origin = req.headers.get("origin") ?? "";
-  const cors = allowedOrigins.includes(origin) || origin.endsWith(".carospecs.com");
+  const cors = allowedOrigins.includes(origin) || origin.endsWith(".ahlam.io");
   if (cors) {
     res.headers.set("Access-Control-Allow-Origin", origin);
     res.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -24,7 +24,7 @@ export async function middleware(req: NextRequest) {
 
   // CORS preflight
   const origin = req.headers.get("origin") ?? "";
-  const corsOk = allowedOrigins.includes(origin) || origin.endsWith(".carospecs.com");
+  const corsOk = allowedOrigins.includes(origin) || origin.endsWith(".ahlam.io");
   if (req.method === "OPTIONS" && corsOk) {
     const preflight = new Response(null, { status: 204 });
     preflight.headers.set("Access-Control-Allow-Origin", origin);

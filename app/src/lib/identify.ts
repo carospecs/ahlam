@@ -1,4 +1,4 @@
-import type { AIResult } from "@carospecs/shared";
+import type { AIResult } from "@ahlam/shared";
 import { config } from "@/lib/config";
 
 /**

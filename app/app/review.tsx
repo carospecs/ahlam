@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { TriangleAlert, Eye, EyeOff, ShieldCheck } from "lucide-react-native";
-import type { AIPartOutput } from "@carospecs/shared";
+import type { AIPartOutput } from "@ahlam/shared";
 import { colors, space, font } from "@/theme";
 import { Button } from "@/components/Button";
 import {

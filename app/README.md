@@ -1,4 +1,4 @@
-# CaroSpecs app
+# Ahlam app
 
 Expo / React Native app for yard workers. Photo → GPT-4o Vision → review card →
 listing.

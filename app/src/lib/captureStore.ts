@@ -1,4 +1,4 @@
-import type { AIResult } from "@carospecs/shared";
+import type { AIResult } from "@ahlam/shared";
 
 /**
  * Tiny in-memory hand-off between the capture screen and the review screen.

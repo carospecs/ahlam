@@ -1,5 +1,5 @@
-// CaroSpecs mobile theme — mirrors docs/DESIGN_SYSTEM.md.
-import type { ConditionGrade } from "@carospecs/shared";
+// Ahlam mobile theme — mirrors docs/DESIGN_SYSTEM.md.
+import type { ConditionGrade } from "@ahlam/shared";
 
 export const colors = {
   background: "#0F172A",

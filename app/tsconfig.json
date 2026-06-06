@@ -7,7 +7,7 @@
       "@/*": [
         "./src/*"
       ],
-      "@carospecs/shared": [
+      "@ahlam/shared": [
         "../packages/shared/src"
       ]
     }
