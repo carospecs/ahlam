@@ -26,6 +26,7 @@ import { ShopProfile, TeamRoles, Billing, Notifications } from "./views/Settings
 import { DashboardSkeleton } from "./UI";
 import { BrandChip } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
+import { I18nProvider, useI18n, useT } from "@/lib/i18n";
 
 export const DataContext = createContext<any>({ user: {}, shop: {}, vehicles: [], listings: [], threads: [], activity: [] });
 export function useData() { return useContext(DataContext); }
@@ -64,6 +65,7 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
   open: boolean; onClose: () => void;
 }) {
   const { shop } = useData();
+  const t = useT();
 
   return (
     <aside style={sx.sidebar} className={"cs-sidebar" + (open ? " open" : "")}>
@@ -75,14 +77,14 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
       <nav style={{ display: "grid", gap: 3, marginTop: 4, overflowY: "auto" }}>
         {NAV.map((n, i) => {
           if ("section" in n) {
-            return <div key={"s" + i} style={sx.navSection}>{n.section}</div>;
+            return <div key={"s" + i} style={sx.navSection}>{t(n.section!)}</div>;
           }
           const on = active === n.id;
           const IconComp = n.icon;
           return (
             <button key={n.id} className="cs-nav-item" onClick={() => onNav(n.id)} style={{ ...sx.navItem, ...(on ? sx.navItemOn : {}) }}>
               <IconComp size={18} color={on ? "var(--accent)" : "var(--muted)"} />
-              <span style={{ flex: 1, textAlign: "left" }}>{n.label}</span>
+              <span style={{ flex: 1, textAlign: "left" }}>{t(n.label!)}</span>
             </button>
           );
         })}
@@ -93,11 +95,11 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
             <div style={sx.shopIcon}><Store size={16} color="var(--accent)" /></div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{shop.name}</div>
-              <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Owner · {shop.members?.length || 0} members</div>
+              <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{t("Owner")} · {shop.members?.length || 0} {t("members")}</div>
             </div>
           </div>
         )}
-        <button style={sx.signout} onClick={onSignOut}><LogOut size={16} /> Sign out</button>
+        <button style={sx.signout} onClick={onSignOut}><LogOut size={16} /> {t("Sign out")}</button>
       </div>
     </aside>
   );
@@ -107,13 +109,14 @@ function Topbar({ meta, onMenu, onSignOut, onNav }: {
   meta: { title: string; sub: string }; onMenu: () => void;
   onSignOut: () => void; onNav?: (id: string) => void;
 }) {
+  const t = useT();
   return (
     <header style={sx.topbar} className="cs-topbar">
       <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
         <button className="cs-hamburger" onClick={onMenu} style={sx.hamburger}><Menu size={20} color="var(--foreground)" /></button>
         <div style={{ minWidth: 0 }}>
-          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 700, letterSpacing: "-0.01em" }}>{meta.title}</h1>
-          <p style={{ margin: "3px 0 0", fontSize: 13, color: "var(--muted)" }} className="cs-sub">{meta.sub}</p>
+          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 700, letterSpacing: "-0.01em" }}>{t(meta.title)}</h1>
+          <p style={{ margin: "3px 0 0", fontSize: 13, color: "var(--muted)" }} className="cs-sub">{t(meta.sub)}</p>
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -126,6 +129,8 @@ function Topbar({ meta, onMenu, onSignOut, onNav }: {
 
 function ProfileMenu({ onSignOut, onNav }: { onSignOut: () => void; onNav?: (id: string) => void }) {
   const { user } = useData();
+  const t = useT();
+  const { lang, setLang } = useI18n();
   const [open, setOpen] = useState(false);
   const [light, setLight] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -172,17 +177,25 @@ function ProfileMenu({ onSignOut, onNav }: { onSignOut: () => void; onNav?: (id:
             { icon: Bell, label: "Notifications", id: "notifications" },
           ].map((m) => (
             <button key={m.label} className="cs-nav-item" style={mx.menuItem} onClick={() => { setOpen(false); onNav?.(m.id); }}>
-              <m.icon size={16} color="var(--muted)" /> {m.label}
+              <m.icon size={16} color="var(--muted)" /> {t(m.label)}
             </button>
           ))}
           <div style={{ height: 1, background: "var(--line)", margin: "6px 0" }} />
+          <div style={{ ...mx.menuItem, justifyContent: "space-between", cursor: "default" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}><Globe size={16} color="var(--muted)" /> {t("Language")}</span>
+            <span style={{ display: "inline-flex", border: "1px solid var(--line)", borderRadius: 8, overflow: "hidden" }}>
+              {(["en", "es"] as const).map((l) => (
+                <button key={l} onClick={() => setLang(l)} style={{ padding: "4px 10px", fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: lang === l ? "var(--accent)" : "transparent", color: lang === l ? "#fff" : "var(--muted)" }}>{l.toUpperCase()}</button>
+              ))}
+            </span>
+          </div>
           <button className="cs-nav-item" style={mx.menuItem} onClick={toggleTheme}>
             {light ? <Moon size={16} color="var(--muted)" /> : <Sun size={16} color="var(--muted)" />}
-            {light ? "Dark mode" : "Light mode"}
+            {light ? t("Dark mode") : t("Light mode")}
           </button>
           <div style={{ height: 1, background: "var(--line)", margin: "6px 0" }} />
           <button style={{ ...mx.menuItem, color: "var(--danger)" }} onClick={onSignOut}>
-            <LogOut size={16} color="var(--danger)" /> Sign out
+            <LogOut size={16} color="var(--danger)" /> {t("Sign out")}
           </button>
         </div>
       )}
@@ -557,6 +570,7 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 
   return (
     <DataContext.Provider value={data}>
+      <I18nProvider>
       <div style={sx.layout} className="cs-layout">
         {navOpen && <div className="cs-backdrop" onClick={() => setNavOpen(false)} style={sx.backdrop} />}
         <Sidebar active={effectiveActive} onNav={navTo} onSignOut={onSignOut} open={navOpen} onClose={() => setNavOpen(false)} />
@@ -578,6 +592,7 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
         <ExportModal />
         <ToastHost />
       </div>
+      </I18nProvider>
     </DataContext.Provider>
   );
 }
