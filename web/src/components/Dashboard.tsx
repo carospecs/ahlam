@@ -428,6 +428,7 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
   const [accountType, setAccountType] = useState<"shop" | "individual" | null>(null);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
+  const [zip, setZip] = useState("");
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
@@ -465,7 +466,7 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
     if (!name.trim()) { setError(isIndiv ? "Your name is required" : "Shop name is required"); return; }
     setBusy(true); setError("");
     try {
-      const r = await fetch("/api/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, location, phone, accountType }) });
+      const r = await fetch("/api/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, location, zip, phone, accountType }) });
       const d = await r.json();
       if (!r.ok) { setError(d.error || "Could not create account"); setBusy(false); return; }
       onDone();
@@ -516,7 +517,11 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
             </p>
             <form onSubmit={create} style={{ display: "grid", gap: 14, marginTop: 22 }}>
               <Gfield label={isIndiv ? "Your name" : "Shop name"}><input value={name} onChange={(e) => setName(e.target.value)} placeholder={isIndiv ? "Alex Johnson" : "Westside Auto Salvage"} style={gInp} autoFocus /></Gfield>
-              <Gfield label="Location (optional)"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Long Beach, CA" style={gInp} /></Gfield>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12 }}>
+                <Gfield label="Location (optional)"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Long Beach, CA" style={gInp} /></Gfield>
+                <Gfield label="ZIP code"><input value={zip} onChange={(e) => setZip(e.target.value.replace(/[^0-9]/g, ""))} placeholder="90805" maxLength={5} inputMode="numeric" style={gInp} /></Gfield>
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: -6 }}>Your ZIP lets buyers see your area and find your listings by nearest.</div>
               <Gfield label={isIndiv ? "Contact phone (optional)" : "Business phone (optional)"}><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(562) 555-0148" style={gInp} /></Gfield>
               {error && <div style={{ fontSize: 13, color: "var(--danger)" }}>{error}</div>}
               <button type="submit" disabled={busy} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, border: "none", borderRadius: 12, background: "var(--accent)", color: "#fff", fontSize: 15, fontWeight: 600, padding: "13px 0", opacity: busy ? 0.65 : 1 }}>
