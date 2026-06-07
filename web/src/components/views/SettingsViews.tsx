@@ -38,6 +38,7 @@ export function ShopProfile(_: ViewProps) {
       setLogoUrl(s.logo_url || null);
       setForm({
         name: s.name || "", location: s.location || "", business_phone: s.business_phone || "",
+        zip_code: s.zip_code || "",
         email: s.email || "", website: s.website || "", description: s.description || "", hours: s.hours || "",
       });
     });
@@ -104,6 +105,9 @@ export function ShopProfile(_: ViewProps) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <Field label="Shop name"><input value={form.name} onChange={(e) => set("name", e.target.value)} style={inp} disabled={!canEdit} /></Field>
           <Field label="Location"><input value={form.location} onChange={(e) => set("location", e.target.value)} placeholder="Long Beach, CA" style={inp} disabled={!canEdit} /></Field>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <Field label="ZIP code"><input value={form.zip_code} onChange={(e) => set("zip_code", e.target.value)} placeholder="90805" maxLength={5} style={inp} disabled={!canEdit} /><span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4, display: "block" }}>Used to show buyers your area and sort listings by nearest.</span></Field>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <Field label="Contact phone"><input value={form.business_phone} onChange={(e) => set("business_phone", e.target.value)} placeholder="(562) 555-0148" style={inp} disabled={!canEdit} /></Field>

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { geocode } from "@/lib/geocode";
 
-const EDITABLE = ["name", "location", "business_phone", "email", "website", "description", "hours", "logo_url", "cover_url"];
+export const runtime = "nodejs";
+
+const EDITABLE = ["name", "location", "business_phone", "email", "website", "description", "hours", "logo_url", "cover_url", "zip_code"];
 
 async function ctx() {
   const supabase = await supabaseServer();
@@ -38,6 +41,19 @@ export async function PATCH(req: NextRequest) {
   const patch: Record<string, any> = {};
   for (const k of EDITABLE) if (k in body) patch[k] = body[k];
   if (!Object.keys(patch).length) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+
+  // Geocode to lat/lng whenever the ZIP or location changes, so the marketplace
+  // can sort by distance. Failure is non-fatal — the save still goes through.
+  if ("zip_code" in patch || "location" in patch) {
+    try {
+      const cur = await db.from("shops").select("zip_code, location").eq("id", shopId).single();
+      const zip = "zip_code" in patch ? patch.zip_code : cur.data?.zip_code;
+      const location = "location" in patch ? patch.location : cur.data?.location;
+      const geo = await geocode({ zip, location });
+      if (geo) { patch.lat = geo.lat; patch.lng = geo.lng; }
+    } catch { /* keep saving without coords */ }
+  }
+
   const { data, error } = await db.from("shops").update(patch).eq("id", shopId).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ shop: data });
