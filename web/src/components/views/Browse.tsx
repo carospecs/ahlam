@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Camera, Car, Wrench, MapPin, Store, Search, MessageSquare, X, Send, LoaderCircle, Eye, SlidersHorizontal, ChevronDown, Plus, Phone } from "lucide-react";
-import { PhotoCell, ConditionBadge, SellModeBadge, conditionColorOf } from "../UI";
+import { PhotoCell, ConditionBadge, conditionColorOf } from "../UI";
 import { csToast } from "../Dashboard";
 
 interface MktPart {
@@ -145,15 +145,19 @@ export function Browse() {
 
   React.useEffect(() => {
     const params = new URLSearchParams();
-    if (sort === "distance") {
+    // "Recommended" = nearest: ask for the buyer's location and let the API sort
+    // both parts and vehicles by distance.
+    if (sort === "recommended" || sort === "distance") {
       params.set("sort", "distance");
-      navigator.geolocation.getCurrentPosition(
-        (pos) => { params.set("lat", String(pos.coords.latitude)); params.set("lng", String(pos.coords.longitude)); fetchMarket(params); },
-        () => fetchMarket(params),
-        { timeout: 5000, enableHighAccuracy: false }
-      );
+      if (typeof navigator !== "undefined" && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => { params.set("lat", String(pos.coords.latitude)); params.set("lng", String(pos.coords.longitude)); fetchMarket(params); },
+          () => fetchMarket(params),
+          { timeout: 5000, enableHighAccuracy: false }
+        );
+      } else fetchMarket(params);
     } else {
-      if (sort && sort !== "recommended") params.set("sort", sort);
+      params.set("sort", sort);
       fetchMarket(params);
     }
     function fetchMarket(p: URLSearchParams) {
@@ -172,11 +176,12 @@ export function Browse() {
 
   // Default feed order is newest-first (API sorts by created_at desc), so
   // "recommended" keeps that order; other modes re-sort a copy.
-  const bySort = <T,>(arr: T[], val: (x: T) => number): T[] => {
+  const bySort = <T extends { distance?: number | null },>(arr: T[], val: (x: T) => number): T[] => {
     if (sort === "price-asc") return [...arr].sort((a, b) => val(a) - val(b));
     if (sort === "price-desc") return [...arr].sort((a, b) => val(b) - val(a));
     if (sort === "views") return [...arr].sort((a, b) => val(b) - val(a));
-    return arr;
+    // Recommended = nearest first (items without a known distance sink to the end).
+    return [...arr].sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
   };
 
   const fParts = bySort(
@@ -263,7 +268,7 @@ export function Browse() {
           ) : (
             <Select label="Make" value={vehMake} onChange={setVehMake} options={vehMakes} />
           )}
-          <Select label="Sort" value={sort} onChange={setSort} options={[["recommended", "Recommended"], ["distance", "Nearest"], ["price-asc", "Price: low to high"], ["price-desc", "Price: high to low"], ["views", "Most viewed"]]} />
+          <Select label="Sort" value={sort} onChange={setSort} options={[["recommended", "Recommended"], ["price-asc", "Price: low to high"], ["price-desc", "Price: high to low"], ["views", "Most viewed"]]} />
           <span style={{ marginLeft: "auto", fontSize: 12.5, color: "var(--muted)" }}>
             {(tab === "parts" ? fParts.length : fVehicles.length)} result{(tab === "parts" ? fParts.length : fVehicles.length) === 1 ? "" : "s"}
           </span>
@@ -345,10 +350,9 @@ export function Browse() {
               <div key={v.id} style={{ ...card, cursor: "pointer" }} onClick={() => openVehicle(v)} className="cs-hover-card">
                 <div style={{ position: "relative" }}>
                   <PhotoCell icon="Car" url={v.photoUrl} style={{ height: 168, borderRadius: 0 }} iconSize={46} />
-                  <div style={{ position: "absolute", top: 10, left: 10 }}><SellModeBadge mode={v.sellMode} size="sm" /></div>
                 </div>
                 <div style={{ padding: 14, display: "grid", gap: 4 }}>
-                  {v.askingPrice ? <div className="tnum" style={{ fontSize: 20, fontWeight: 800 }}>${v.askingPrice.toLocaleString()}</div> : <div style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>Parting out</div>}
+                  {v.askingPrice ? <div className="tnum" style={{ fontSize: 20, fontWeight: 800 }}>${v.askingPrice.toLocaleString()}</div> : <div style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>Contact for price</div>}
                   <div style={{ fontSize: 14, fontWeight: 600 }}>{v.year} {v.make} {v.model} {v.trim}</div>
                   <div style={{ fontSize: 12.5, color: "var(--muted)", display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <span>{v.mileage}</span><span>·</span><span>{v.body}</span><span>·</span><span>{v.color}</span>
@@ -438,16 +442,15 @@ function VehicleDetailModal({ vehicle: v, onClose, onContact }: { vehicle: MktVe
     <DetailShell onClose={onClose}>
       <div style={{ position: "relative" }}>
         <PhotoCell icon="Car" url={v.photoUrl} style={{ height: 240, borderRadius: 0 }} iconSize={60} />
-        <div style={{ position: "absolute", top: 12, left: 12 }}><SellModeBadge mode={v.sellMode} /></div>
       </div>
       <div style={{ padding: 18, display: "grid", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
           <div style={{ fontSize: 17, fontWeight: 700 }}>{v.year} {v.make} {v.model} {v.trim}</div>
-          {v.askingPrice ? <div className="tnum" style={{ fontSize: 22, fontWeight: 800 }}>${v.askingPrice.toLocaleString()}</div> : <div style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>Parting out</div>}
+          {v.askingPrice ? <div className="tnum" style={{ fontSize: 22, fontWeight: 800 }}>${v.askingPrice.toLocaleString()}</div> : <div style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>Contact for price</div>}
         </div>
         <MetaRow icon={<Car size={14} />}>{[v.body, v.color].filter(Boolean).join(" · ") || "—"}</MetaRow>
         <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: "var(--foreground)" }}>
-          {v.sellMode === "both" ? "Selling whole or parting out — message for specific parts or the full vehicle." : "Whole-car sale. Message the seller for mileage, history, and condition details."}
+          Whole-car listing. Message the seller for mileage, history, and condition details.
         </p>
         <div style={{ height: 1, background: "var(--line)" }} />
         <MetaRow icon={<Store size={14} />}><ShopLink id={v.shopId} name={v.shopName} /></MetaRow>
