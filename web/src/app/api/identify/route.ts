@@ -98,10 +98,15 @@ PART CATALOG — only catalog parts from this list, using these exact names (add
 - Body: "Hood", "Front Bumper Cover", "Rear Bumper Cover", "Grille", "Front Fender", "Rear Quarter Panel", "Front Door", "Rear Door", "Trunk Lid", "Tailgate", "Liftgate", "Side Mirror", "Roof Panel"
 - Glass: "Windshield", "Back Glass", "Front Door Window", "Rear Door Window", "Quarter Glass"
 - Lighting: "Headlight Assembly", "Tail Light Assembly", "Fog Light"
-- Wheels: "Wheel" (single or "Wheel (set of 4)"), "Tire"
-- Mechanical (ONLY if clearly visible, e.g. an engine-bay or undercarriage photo): "Engine", "Transmission", "Radiator", "Alternator", "Starter", "Battery", "AC Compressor"
-- Interior (ONLY if clearly visible in an interior photo): "Front Seat", "Rear Seat", "Seat Belt", "Steering Wheel", "Center Console", "Dashboard", "Instrument Cluster", "Glove Box", "Airbag", "Door Panel", "Sun Visor", "Rear View Mirror", "Shifter"
+- Wheels: "Wheel / Rim" and "Tire" — these are ALWAYS two separate listings, never combined. A rim and the tire on it sell separately for more, so list each on its own line with its own price.
+- Mechanical: "Engine", "Transmission", "Radiator", "Alternator", "Starter", "Battery", "AC Compressor", "ABS Module", "Power Steering Pump", "Strut / Shock", "Control Arm", "Driveshaft", "Catalytic Converter", "Fuel Pump"
+- Interior: "Front Seat", "Rear Seat", "Seat Belt", "Steering Wheel", "Airbag", "Center Console", "Dashboard", "Instrument Cluster", "Glove Box", "Door Panel", "Sun Visor", "Rear View Mirror", "Shifter"
 - If you see a common, obviously-sellable part not on this list, you may include it, but prefer the catalog names.
+
+MECE — each part is ONE distinct, separately-sold unit (mutually exclusive, collectively exhaustive). NEVER bundle parts that sell separately:
+- "Airbag" is its OWN listing — NEVER include it with or inside "Steering Wheel". List them as two separate parts.
+- "Wheel / Rim" and "Tire" are two separate listings — never one combined "wheel and tire".
+- Don't merge an assembly with its sub-parts (e.g. don't fold the mirror glass into the door). When in doubt, split into the parts a yard actually sells individually.
 
 VEHICLE ESTIMATE ("vehicle"):
 - If you can identify the source vehicle, fill in make/model/year/bodyStyle from what you actually see.
@@ -110,10 +115,19 @@ VEHICLE ESTIMATE ("vehicle"):
 - Never invent a VIN. If you are unsure of any field, set it to null and lower "confidence".
 
 PRICING GUIDANCE (applies to both "suggestedWholeCarPriceUsd" and each part's "suggestedPriceUsd"):
-- Price like a real seller checking the market: base your number on what comparable items ACTUALLY sell for on Facebook Marketplace, Craigslist, OfferUp, eBay (sold listings), and Google Shopping for the same make/model/year and condition.
-- For the whole car: think used-car comps for that year/make/model/mileage and trim, adjusted down for salvage/parts-car condition.
-- For each part: think used-OEM-part comps for that specific fitment and grade — a "Good" part sells well below new/aftermarket; a "Poor" part sells as a core/repairable at a steep discount.
-- Use realistic round numbers a buyer would expect, not list/retail price. If you have no basis for a price, use null rather than guessing.
+- Price at the MIDDLE of the real used-market range — the AVERAGE of what comparable items actually sell for on Facebook Marketplace, Craigslist, OfferUp, eBay sold listings, and Google Shopping for the same make/model/year and condition. Aim for fair market value, NOT a quick-sale lowball.
+- DO NOT UNDERCUT. If a "Good" used part typically sells for $600–$1000, price it around the middle (~$800), never below the bottom of that range. Sellers can always lower it; starting too low leaves money on the table.
+- Use the part's full OEM fitment (make/model/year/trim) when judging comps — a popular late-model part holds strong value.
+- "Good" condition = mid-to-upper market range; "Poor" = priced as a core/repairable (clearly below range, but still realistic).
+- For the whole car: think used-car comps for that year/make/model/mileage and trim, at typical private-party value (only discount for genuine salvage/parts-car condition).
+- Use realistic round numbers. If you genuinely have no basis for a price, use null rather than guessing — but prefer a market-based estimate.
+
+INFERRED / HIDDEN PARTS:
+- When the photos show a whole or mostly-complete vehicle (not a single detached part), you MAY also list standard high-value mechanical/safety parts that a yard would pull but that aren't directly visible in the photos — e.g. "Engine", "Transmission", "Alternator", "Starter", "ABS Module", "Strut / Shock", "AC Compressor". Mark these with "confidence": "low" and a conditionNotes like "Typically present on this vehicle — confirm before listing". This helps sellers who can't photograph under the car. NEVER infer body/cosmetic parts you can't see — only standard mechanicals for the identified vehicle.
+
+OUTPUT ORDER — return "parts" in a logical, scannable order so the seller never hunts for a part:
+1. Group by area in this order: Front exterior → Doors/sides → Rear exterior → Glass → Lighting → Wheels/Tires → Mechanical → Interior.
+2. Keep Left/Right pairs ADJACENT (e.g. Left Headlight immediately next to Right Headlight). Never scatter complementary parts.
 
 LEFT / RIGHT SIDES — READ CAREFULLY (this is where mistakes happen):
 1. "vehicleFront" — where is the FRONT of the car relative to the photo?

@@ -72,6 +72,49 @@ const ES: Record<string, string> = {
   // Empty states / misc
   "Scanning your car…": "Escaneando tu auto…", "Connected": "Conectado",
   "person has viewed this": "persona ha visto esto", "people have viewed this": "personas han visto esto",
+  // Common actions / buttons
+  "Add vehicle": "Añadir vehículo", "Add a part": "Añadir una pieza", "View all": "Ver todo",
+  "Run AI analysis": "Ejecutar análisis IA", "Re-run / edit photos": "Reejecutar / editar fotos",
+  "Edit photos": "Editar fotos", "Upload photos": "Subir fotos", "Take photo": "Tomar foto",
+  "Save & post parts": "Guardar y publicar piezas", "Save & post vehicle": "Guardar y publicar vehículo",
+  "Save & post car + parts": "Guardar y publicar auto + piezas", "Post car": "Publicar auto", "Post part": "Publicar pieza",
+  "Decode": "Decodificar", "Connect eBay": "Conectar eBay", "List on eBay": "Publicar en eBay",
+  "Reconnect": "Reconectar", "Copy": "Copiar", "Download": "Descargar", "Send": "Enviar",
+  "Search": "Buscar", "Apply": "Aplicar", "Clear": "Limpiar", "Cancel": "Cancelar", "Delete": "Eliminar",
+  "Remove": "Quitar", "Edit": "Editar", "Close": "Cerrar", "Back": "Atrás", "Next": "Siguiente",
+  "Continue": "Continuar", "Confirm": "Confirmar", "Add photos": "Añadir fotos",
+  "Write with AI": "Redactar con IA", "Scan photo to fill": "Escanear foto para rellenar",
+  "Save as draft": "Guardar como borrador", "Save changes": "Guardar cambios", "Message seller": "Mensaje al vendedor",
+  "Back to options": "Volver a las opciones",
+  // Overview
+  "Recent vehicles": "Vehículos recientes", "Activity": "Actividad", "Quick actions": "Acciones rápidas",
+  "Add your first vehicle": "Añade tu primer vehículo", "Total listings": "Publicaciones totales",
+  "Active listings": "Publicaciones activas", "Total value": "Valor total", "parts": "piezas",
+  "photos": "fotos", "added": "añadido", "live": "en vivo", "Ready to post": "Listo para publicar",
+  // Filters / sorting (more)
+  "Sort": "Orden", "Recommended": "Recomendado", "Nearest": "Más cercano",
+  "Price: low to high": "Precio: de menor a mayor", "Price: high to low": "Precio: de mayor a menor",
+  "Most viewed": "Más visto", "All": "Todos", "Min": "Mín", "Max": "Máx",
+  // Add flow steps / labels
+  "Photos": "Fotos", "AI analysis": "Análisis IA", "Review & save": "Revisar y guardar",
+  "Suggested parts value": "Valor sugerido de piezas", "Parts value · suggested": "Valor de piezas · sugerido",
+  "Whole-car asking price": "Precio del auto completo", "Price all": "Precio para todas",
+  "VIN / plate": "VIN / placa", "Stock #": "N.º de inventario", "Part name": "Nombre de la pieza",
+  "Identified by AI — confirm before posting.": "Identificado por IA — confirma antes de publicar.",
+  // Export
+  "Other marketplaces": "Otros mercados", "Your listings": "Tus publicaciones",
+  "Advanced — bulk file export": "Avanzado — exportación masiva de archivos",
+  "List on eBay automatically": "Publicar en eBay automáticamente",
+  "Export CSV": "Exportar CSV", "Export JSON": "Exportar JSON", "Copy all text": "Copiar todo el texto",
+  // Messages
+  "No messages yet": "Aún no hay mensajes", "Type a message": "Escribe un mensaje",
+  "Buyer inquiries from your listings": "Consultas de compradores de tus anuncios",
+  // Settings
+  "Shop name": "Nombre del taller", "Location": "Ubicación", "ZIP code": "Código postal",
+  "Contact phone": "Teléfono de contacto", "Business phone": "Teléfono del negocio",
+  "Website": "Sitio web", "Hours": "Horario", "Shop profile saved": "Perfil del taller guardado",
+  "Revenue": "Ingresos", "Revenue (sold)": "Ingresos (vendido)", "Revenue estimate": "Estimación de ingresos",
+  "Total listing views": "Vistas totales de anuncios",
 };
 
 // Inverse for reverting ES → EN.

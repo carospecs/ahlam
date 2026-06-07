@@ -83,6 +83,38 @@ function deriveVehicle(parts: AIPart[]): { label: string; sub: string } | null {
   return { label: `${best.make} ${best.model}`, sub: [years, `matched on ${best.n} part${best.n > 1 ? "s" : ""}`].filter(Boolean).join(" · ") };
 }
 
+// Group parts logically and keep Left/Right pairs adjacent so the review list is
+// scannable (front → sides → rear → glass → lighting → wheels → mechanical → interior).
+const AREA_ORDER: RegExp[] = [
+  /hood|grille|front bumper/i,
+  /\bfender\b/i,
+  /door panel/i,
+  /\bdoor\b|mirror|rocker/i,
+  /quarter|rear bumper|trunk|tailgate|liftgate/i,
+  /windshield|back glass|window|glass/i,
+  /headlight|head light|tail ?light|fog|lamp|light/i,
+  /wheel|rim|tire|tyre/i,
+  /engine|transmission|radiator|alternator|starter|battery|compressor|abs|strut|shock|control arm|driveshaft|catalytic|fuel pump|pump/i,
+  /seat|steering|airbag|console|dash|cluster|glove|visor|shifter/i,
+];
+function areaRank(name: string): number {
+  for (let i = 0; i < AREA_ORDER.length; i++) if (AREA_ORDER[i].test(name)) return i;
+  return AREA_ORDER.length;
+}
+function basePartName(name: string): string {
+  return name.replace(/\b(left|right)\b/gi, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+function sideRank(name: string): number {
+  return /\bleft\b/i.test(name) ? 0 : /\bright\b/i.test(name) ? 1 : 2;
+}
+function comparePartsForDisplay(a: AIPart, b: AIPart): number {
+  const ar = areaRank(a.partName), br = areaRank(b.partName);
+  if (ar !== br) return ar - br;
+  const an = basePartName(a.partName), bn = basePartName(b.partName);
+  if (an !== bn) return an < bn ? -1 : 1;
+  return sideRank(a.partName) - sideRank(b.partName);
+}
+
 export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
   const [phase, setPhase] = React.useState("upload");
   const [parts, setParts] = React.useState<AIPart[]>([]);
@@ -174,7 +206,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         const existing = byName.get(key);
         if (!existing || ((p.suggestedPriceUsd || 0) > (existing.suggestedPriceUsd || 0))) byName.set(key, p);
       }
-      const deduped = [...byName.values()].map((p) => ({ ...p, _id: newId(), _aiPrice: p.suggestedPriceUsd ?? null }));
+      const deduped = [...byName.values()]
+        .sort(comparePartsForDisplay)
+        .map((p) => ({ ...p, _id: newId(), _aiPrice: p.suggestedPriceUsd ?? null }));
 
       // Front shot for the main post image; fall back to the first uploaded photo.
       setMainPhoto(frontPhoto || photos[0]?.url || null);
@@ -324,7 +358,12 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               <ImageUp size={24} color="var(--accent)" />
             </div>
             <div style={{ fontSize: 15, fontWeight: 600 }}>{dragging ? "Drop your photos here" : "Drag & drop all your photos, or click to upload"}</div>
-            <div style={{ fontSize: 13, color: "var(--muted)", maxWidth: 460, textAlign: "center", lineHeight: 1.5 }}>Add up to {MAX_PHOTOS} photos — exterior, interior, engine, dashboard, VIN, close-ups. The AI figures out what each one is and pulls the vehicle, parts, and mileage from them.</div>
+            <div style={{ fontSize: 13, color: "var(--muted)", maxWidth: 480, textAlign: "center", lineHeight: 1.55 }}>Add up to {MAX_PHOTOS} photos. <strong style={{ color: "var(--foreground)" }}>More angles = more parts found and a truer market price.</strong> The AI reads each photo and pulls the vehicle, parts, and mileage.</div>
+            <ul style={{ margin: "2px 0 0", padding: 0, listStyle: "none", maxWidth: 480, fontSize: 12.5, color: "var(--muted)", lineHeight: 1.6, display: "grid", gap: 3 }}>
+              <li>📸 Clear, well-lit, slightly <strong style={{ color: "var(--foreground)" }}>angled</strong> shots of <strong style={{ color: "var(--foreground)" }}>every side</strong> — front, rear, both sides, engine bay, interior, dashboard.</li>
+              <li>⚠️ Only photographing one side? The AI prices just that side — show the <strong style={{ color: "var(--foreground)" }}>whole car</strong> for full value.</li>
+              <li>🔢 Include the <strong style={{ color: "var(--foreground)" }}>VIN plate</strong> if you can — it locks in exact fitment and better prices.</li>
+            </ul>
             <div style={{ display: "flex", gap: 10, marginTop: 2, flexWrap: "wrap", justifyContent: "center" }}>
               <button className="cs-raise" disabled={atPhotoLimit} onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 11, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600, opacity: atPhotoLimit ? 0.5 : 1, cursor: atPhotoLimit ? "not-allowed" : "pointer" }}><Upload size={16} /> Upload photos</button>
               <button className="cs-raise" disabled={atPhotoLimit} onClick={(e) => { e.stopPropagation(); setCamOpen(true); }} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 14, fontWeight: 600, opacity: atPhotoLimit ? 0.5 : 1, cursor: atPhotoLimit ? "not-allowed" : "pointer" }}><Camera size={16} /> Take photo</button>

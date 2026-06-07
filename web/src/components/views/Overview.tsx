@@ -5,7 +5,7 @@ import { TrendingUp, ArrowRight, Car, Wrench, Tag, DollarSign, ScanLine, Triangl
 import { Card, PhotoCell } from "../UI";
 import { useData } from "../Dashboard";
 
-export function Overview({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
+export function Overview({ go, onVehicle }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
   const { vehicles, listings, activity, user, shop } = useData();
   const partsIdentified = listings.length;
   const activeListings = listings.filter((l: any) => l.status === "Posted" || l.status === "active").length;
@@ -82,7 +82,7 @@ export function Overview({ go }: { go: (id: string) => void; onVehicle?: (v: any
               </div>
             )}
             {vehicles.slice(0, 4).map((v: any, i: number) => (
-              <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 13, padding: "13px 18px", borderBottom: i < 3 ? "1px solid var(--line)" : "none" }}>
+              <div key={v.id} onClick={() => onVehicle?.(v)} className="cs-hover-row" style={{ display: "flex", alignItems: "center", gap: 13, padding: "13px 18px", cursor: "pointer", borderBottom: i < 3 ? "1px solid var(--line)" : "none" }}>
                 <PhotoCell icon="Car" url={v.image} style={{ width: 52, height: 40, flexShrink: 0 }} iconSize={20} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600 }}>{v.year} {v.make} {v.model} <span style={{ color: "var(--muted)", fontWeight: 500 }}>{v.trim}</span></div>
