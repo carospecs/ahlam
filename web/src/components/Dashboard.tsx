@@ -27,6 +27,7 @@ import { DashboardSkeleton } from "./UI";
 import { BrandChip } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
 import { I18nProvider, useI18n, useT } from "@/lib/i18n";
+import { AddressAutocomplete } from "./AddressAutocomplete";
 
 export const DataContext = createContext<any>({ user: {}, shop: {}, vehicles: [], listings: [], threads: [], activity: [] });
 export function useData() { return useContext(DataContext); }
@@ -525,7 +526,7 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
             <form onSubmit={create} style={{ display: "grid", gap: 14, marginTop: 22 }}>
               <Gfield label={isIndiv ? "Your name" : "Shop name"}><input value={name} onChange={(e) => setName(e.target.value)} placeholder={isIndiv ? "Alex Johnson" : "Westside Auto Salvage"} style={gInp} autoFocus /></Gfield>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12 }}>
-                <Gfield label="Location (optional)"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Long Beach, CA" style={gInp} /></Gfield>
+                <Gfield label="Location (optional)"><AddressAutocomplete value={location} onChange={setLocation} onSelect={(p) => { if (p.zip) setZip(p.zip); }} placeholder="Start typing your city…" style={gInp} /></Gfield>
                 <Gfield label="ZIP code"><input value={zip} onChange={(e) => setZip(e.target.value.replace(/[^0-9]/g, ""))} placeholder="90805" maxLength={5} inputMode="numeric" style={gInp} /></Gfield>
               </div>
               <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: -6 }}>Your ZIP lets buyers see your area and find your listings by nearest.</div>

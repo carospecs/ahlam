@@ -1,185 +1,160 @@
 "use client";
-// EN/ES UI translation.
+// EN/ES UI language layer.
 //
-// Strategy: the app is authored in English. When the user picks Spanish we
-// auto-translate the rendered UI by swapping any text/placeholder/label whose
-// value EXACTLY matches an entry in the dictionary below. Because seller content
-// and AI output are never dictionary entries, they stay English automatically —
-// which is exactly the rule: the site shows in Spanish, but everything posted
-// stays in English. Switching back to English reverts via the inverse map.
+// The app is authored in English and EVERYTHING is stored/posted in English.
+// Spanish is a pure DISPLAY layer: when the user picks ES we translate every
+// visible string on the fly via /api/translate (Groq), cache the result in
+// localStorage, and keep watching the DOM so new/dynamic content translates too.
+// A curated dictionary seeds the cache for instant, high-quality common strings.
 import React from "react";
 
 export type Lang = "en" | "es";
 
-// English → Spanish for the app's UI chrome. Add phrases here to extend coverage.
-const ES: Record<string, string> = {
-  // Sidebar / nav
+// Curated seeds — instant + high quality. The rest is filled by the API.
+const SEED: Record<string, string> = {
   "Marketplace": "Mercado", "My shop": "Mi taller", "Assist": "Asistencia",
   "Overview": "Resumen", "Browse market": "Explorar mercado", "Vehicles posted": "Vehículos publicados",
   "Parts posted": "Piezas publicadas", "Add vehicle / parts": "Añadir vehículo / piezas",
   "Interchange": "Intercambio", "Analytics": "Analíticas", "AI assistant": "Asistente IA",
   "Export & posting": "Exportar y publicar", "Messages": "Mensajes", "Sign out": "Cerrar sesión",
-  "Owner": "Propietario", "members": "miembros", "Language": "Idioma",
-  "Dark mode": "Modo oscuro", "Light mode": "Modo claro",
-  "Account settings": "Configuración de cuenta", "Shop profile": "Perfil del taller",
-  "Team & roles": "Equipo y roles", "Billing": "Facturación", "Notifications": "Notificaciones",
-  // Page titles / subs
+  "Language": "Idioma", "Dark mode": "Modo oscuro", "Light mode": "Modo claro",
   "Your shop at a glance": "Tu taller de un vistazo",
-  "Cars and parts other shops have listed near you": "Autos y piezas que otros talleres publicaron cerca de ti",
-  "Your cars — drafts, parting out, whole, or both": "Tus autos — borradores, despiece, completo o ambos",
-  "Your parts — drafts, posted, and sold": "Tus piezas — borradores, publicadas y vendidas",
-  "Add a vehicle": "Añadir un vehículo",
-  "Snap or upload up to 8 photos + VIN — AI does the rest": "Toma o sube hasta 8 fotos + VIN — la IA hace el resto",
-  "Views, inquiries, and sales at a glance": "Vistas, consultas y ventas de un vistazo",
-  "Ask about pricing, fitment, and listings": "Pregunta sobre precios, compatibilidad y publicaciones",
-  "Cross-post your listings to Facebook, OfferUp, eBay & more": "Publica tus anuncios en Facebook, OfferUp, eBay y más",
-  "Buyer inquiries from your listings": "Consultas de compradores de tus anuncios",
-  "Parts interchange": "Intercambio de piezas",
-  "Hollander-style cross-reference — search by VIN or part name": "Referencia cruzada estilo Hollander — busca por VIN o nombre de pieza",
-  // Common buttons / actions
-  "Save changes": "Guardar cambios", "Save as draft": "Guardar como borrador",
-  "Message seller": "Mensaje al vendedor", "Add a part": "Añadir una pieza",
-  "Run AI analysis": "Ejecutar análisis IA", "Edit photos": "Editar fotos",
-  "Take photo": "Tomar foto", "Upload photos": "Subir fotos", "Add photos": "Añadir fotos",
-  "Scan photo to fill": "Escanear foto para rellenar", "Write with AI": "Redactar con IA",
-  "Post car": "Publicar auto", "Post part": "Publicar pieza", "Back": "Atrás",
-  "Back to options": "Volver a las opciones", "Decode": "Decodificar", "Reset": "Restablecer",
-  "Find interchange": "Buscar intercambio", "Connect eBay": "Conectar eBay",
-  "List on eBay": "Publicar en eBay", "Reconnect": "Reconectar", "Cancel": "Cancelar",
-  "Save": "Guardar", "Edit": "Editar", "Delete": "Eliminar", "Close": "Cerrar",
-  "Copy": "Copiar", "Download": "Descargar", "Send": "Enviar", "Search": "Buscar",
-  // Statuses / grades / modes
-  "Draft": "Borrador", "Posted": "Publicado", "Sold": "Vendido", "Active": "Activo",
-  "Good": "Bueno", "Poor": "Malo", "Parts only": "Solo piezas", "Whole car": "Auto completo",
-  "Both": "Ambos", "Parting out": "Despiece", "optional": "opcional", "Open": "Abierto",
-  // Filters / sorting
-  "Parts": "Piezas", "Vehicles": "Vehículos", "Grade": "Grado", "Category": "Categoría",
-  "Category: All": "Categoría: Todas", "Sort: Nearest": "Orden: Más cercano",
-  "results": "resultados", "matches": "coincidencias", "views": "vistas",
-  "Filter": "Filtro", "All parts": "Todas las piezas", "By car": "Por auto",
-  // How-to-add picker + manual
-  "How do you want to add this?": "¿Cómo quieres añadir esto?",
-  "Let AI do it from photos, or enter a car or part yourself.": "Deja que la IA lo haga desde fotos, o ingresa un auto o pieza tú mismo.",
-  "Scan with AI": "Escanear con IA", "List a car manually": "Publicar un auto manualmente",
-  "List a part manually": "Publicar una pieza manualmente", "FASTEST": "MÁS RÁPIDO",
-  "Listing details": "Detalles de la publicación", "Title": "Título", "Description": "Descripción",
-  "Price": "Precio", "Condition": "Condición", "Vehicle": "Vehículo", "Year": "Año",
-  "Make": "Marca", "Model": "Modelo", "Mileage": "Kilometraje", "Photos · optional": "Fotos · opcional",
-  // Interchange page
-  "Not in our shop right now — sorry about that.": "No está en nuestro taller ahora mismo — lo sentimos.",
-  "Fits these vehicles": "Compatible con estos vehículos", "OEM part numbers": "Números de pieza OEM",
-  "Aftermarket equivalents": "Equivalentes del mercado de repuestos", "Verify before swapping": "Verifica antes de cambiar",
-  // Empty states / misc
-  "Scanning your car…": "Escaneando tu auto…", "Connected": "Conectado",
-  "person has viewed this": "persona ha visto esto", "people have viewed this": "personas han visto esto",
-  // Common actions / buttons
-  "Add vehicle": "Añadir vehículo", "Add a part": "Añadir una pieza", "View all": "Ver todo",
-  "Run AI analysis": "Ejecutar análisis IA", "Re-run / edit photos": "Reejecutar / editar fotos",
-  "Edit photos": "Editar fotos", "Upload photos": "Subir fotos", "Take photo": "Tomar foto",
-  "Save & post parts": "Guardar y publicar piezas", "Save & post vehicle": "Guardar y publicar vehículo",
-  "Save & post car + parts": "Guardar y publicar auto + piezas", "Post car": "Publicar auto", "Post part": "Publicar pieza",
-  "Decode": "Decodificar", "Connect eBay": "Conectar eBay", "List on eBay": "Publicar en eBay",
-  "Reconnect": "Reconectar", "Copy": "Copiar", "Download": "Descargar", "Send": "Enviar",
-  "Search": "Buscar", "Apply": "Aplicar", "Clear": "Limpiar", "Cancel": "Cancelar", "Delete": "Eliminar",
-  "Remove": "Quitar", "Edit": "Editar", "Close": "Cerrar", "Back": "Atrás", "Next": "Siguiente",
-  "Continue": "Continuar", "Confirm": "Confirmar", "Add photos": "Añadir fotos",
-  "Write with AI": "Redactar con IA", "Scan photo to fill": "Escanear foto para rellenar",
-  "Save as draft": "Guardar como borrador", "Save changes": "Guardar cambios", "Message seller": "Mensaje al vendedor",
-  "Back to options": "Volver a las opciones",
-  // Overview
-  "Recent vehicles": "Vehículos recientes", "Activity": "Actividad", "Quick actions": "Acciones rápidas",
-  "Add your first vehicle": "Añade tu primer vehículo", "Total listings": "Publicaciones totales",
-  "Active listings": "Publicaciones activas", "Total value": "Valor total", "parts": "piezas",
-  "photos": "fotos", "added": "añadido", "live": "en vivo", "Ready to post": "Listo para publicar",
-  // Filters / sorting (more)
-  "Sort": "Orden", "Recommended": "Recomendado", "Nearest": "Más cercano",
-  "Price: low to high": "Precio: de menor a mayor", "Price: high to low": "Precio: de mayor a menor",
-  "Most viewed": "Más visto", "All": "Todos", "Min": "Mín", "Max": "Máx",
-  // Add flow steps / labels
-  "Photos": "Fotos", "AI analysis": "Análisis IA", "Review & save": "Revisar y guardar",
-  "Suggested parts value": "Valor sugerido de piezas", "Parts value · suggested": "Valor de piezas · sugerido",
-  "Whole-car asking price": "Precio del auto completo", "Price all": "Precio para todas",
-  "VIN / plate": "VIN / placa", "Stock #": "N.º de inventario", "Part name": "Nombre de la pieza",
-  "Identified by AI — confirm before posting.": "Identificado por IA — confirma antes de publicar.",
-  // Export
-  "Other marketplaces": "Otros mercados", "Your listings": "Tus publicaciones",
-  "Advanced — bulk file export": "Avanzado — exportación masiva de archivos",
-  "List on eBay automatically": "Publicar en eBay automáticamente",
-  "Export CSV": "Exportar CSV", "Export JSON": "Exportar JSON", "Copy all text": "Copiar todo el texto",
-  // Messages
-  "No messages yet": "Aún no hay mensajes", "Type a message": "Escribe un mensaje",
-  "Buyer inquiries from your listings": "Consultas de compradores de tus anuncios",
-  // Settings
-  "Shop name": "Nombre del taller", "Location": "Ubicación", "ZIP code": "Código postal",
-  "Contact phone": "Teléfono de contacto", "Business phone": "Teléfono del negocio",
-  "Website": "Sitio web", "Hours": "Horario", "Shop profile saved": "Perfil del taller guardado",
-  "Revenue": "Ingresos", "Revenue (sold)": "Ingresos (vendido)", "Revenue estimate": "Estimación de ingresos",
-  "Total listing views": "Vistas totales de anuncios",
+  "Good": "Bueno", "Poor": "Malo", "Draft": "Borrador", "Posted": "Publicado", "Sold": "Vendido",
 };
 
-// Inverse for reverting ES → EN.
-const ES_TO_EN: Record<string, string> = Object.fromEntries(Object.entries(ES).map(([en, es]) => [es, en]));
-
 const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "TEXTAREA", "NOSCRIPT", "CODE", "PRE"]);
+const CACHE_KEY = "cs-i18n-es";
+const MAX_CACHE = 6000;
 
-function swapText(map: Record<string, string>, root: Node) {
+// en → es. Seeded, grown by the API, persisted to localStorage.
+let cache: Record<string, string> = { ...SEED };
+let inverse: Record<string, string> = {};
+function rebuildInverse() { inverse = {}; for (const k in cache) inverse[cache[k]] = k; }
+rebuildInverse();
+
+function loadCache() {
+  try {
+    const raw = typeof localStorage !== "undefined" && localStorage.getItem(CACHE_KEY);
+    if (raw) { cache = { ...SEED, ...JSON.parse(raw) }; rebuildInverse(); }
+  } catch {}
+}
+function saveCache() {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch {}
+}
+
+// Worth translating? Has real letters, isn't an email/url/pure-number, and we
+// don't already know it (as a source or an existing translation).
+function translatable(s: string): boolean {
+  const t = s.trim();
+  if (t.length < 2 || t.length > 600) return false;
+  if (!/[a-zA-Z]{2,}/.test(t)) return false;
+  if (/^[\w.+-]+@[\w.-]+\.\w+$/.test(t)) return false;        // email
+  if (/^https?:\/\//.test(t) || /^www\./.test(t)) return false; // url
+  if (cache[t] || inverse[t]) return false;                    // known
+  return true;
+}
+
+const pending = new Set<string>();
+let flushTimer: any = null;
+let onApplied: (() => void) | null = null;
+
+function queue(s: string) {
+  const t = s.trim();
+  if (translatable(t)) pending.add(t);
+}
+
+async function flush() {
+  if (!pending.size) return;
+  const batch = Array.from(pending).slice(0, 60);
+  batch.forEach((s) => pending.delete(s));
+  try {
+    const res = await fetch("/api/translate", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texts: batch }),
+    });
+    const d = await res.json();
+    if (d.ok && Array.isArray(d.translations)) {
+      batch.forEach((en, i) => { const es = d.translations[i]; if (es && es !== en) cache[en] = es; });
+      if (Object.keys(cache).length < MAX_CACHE) saveCache();
+      rebuildInverse();
+      onApplied?.();
+    }
+  } catch {}
+  if (pending.size) scheduleFlush();
+}
+function scheduleFlush() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => { flushTimer = null; flush(); }, 250);
+}
+
+function swapText(map: Record<string, string>, root: Node, collect: boolean) {
   if (typeof document === "undefined") return;
-  const walker = document.createTreeWalker(root.nodeType === Node.TEXT_NODE ? root.parentNode || root : root, NodeFilter.SHOW_TEXT, {
+  const start = root.nodeType === Node.TEXT_NODE ? (root.parentNode || root) : root;
+  const walker = document.createTreeWalker(start, NodeFilter.SHOW_TEXT, {
     acceptNode(n) {
       const p = (n as Text).parentElement;
-      if (!p) return NodeFilter.FILTER_REJECT;
-      if (SKIP_TAGS.has(p.tagName) || p.isContentEditable) return NodeFilter.FILTER_REJECT;
-      if (p.closest("[data-no-i18n]")) return NodeFilter.FILTER_REJECT;
+      if (!p || SKIP_TAGS.has(p.tagName) || p.isContentEditable || p.closest("[data-no-i18n]")) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
   });
   const nodes: Text[] = [];
-  if ((root as Node).nodeType === Node.TEXT_NODE) {
+  if (root.nodeType === Node.TEXT_NODE) {
     const p = (root as Text).parentElement;
     if (p && !SKIP_TAGS.has(p.tagName) && !p.isContentEditable && !p.closest("[data-no-i18n]")) nodes.push(root as Text);
-  } else { let cur: Node | null; while ((cur = walker.nextNode())) nodes.push(cur as Text); }
+  } else { let c: Node | null; while ((c = walker.nextNode())) nodes.push(c as Text); }
   for (const t of nodes) {
-    const raw = t.nodeValue;
-    if (!raw) continue;
-    const key = raw.trim();
+    const raw = t.nodeValue; if (!raw) continue;
+    const key = raw.trim(); if (!key) continue;
     const hit = map[key];
     if (hit && hit !== key) t.nodeValue = raw.replace(key, hit);
+    else if (collect) queue(key);
   }
 }
 
-function swapAttrs(map: Record<string, string>, root: ParentNode) {
+function swapAttrs(map: Record<string, string>, root: ParentNode, collect: boolean) {
   if (typeof document === "undefined") return;
   const els = (root as Element).querySelectorAll?.("[placeholder],[aria-label],[title]") || [];
   els.forEach((el) => {
     for (const attr of ["placeholder", "aria-label", "title"]) {
-      const v = el.getAttribute(attr);
-      if (v && map[v.trim()]) el.setAttribute(attr, map[v.trim()]);
+      const v = el.getAttribute(attr); if (!v) continue;
+      const key = v.trim();
+      if (map[key]) el.setAttribute(attr, map[key]);
+      else if (collect) queue(key);
     }
   });
 }
 
 let observer: MutationObserver | null = null;
 
+function applyAll() {
+  swapText(cache, document.body, false);
+  swapAttrs(cache, document.body, false);
+}
+
 function startTranslating() {
   if (typeof document === "undefined") return;
-  swapText(ES, document.body);
-  swapAttrs(ES, document.body);
+  onApplied = applyAll;
+  swapText(cache, document.body, true);     // apply known + collect unknown
+  swapAttrs(cache, document.body, true);
+  scheduleFlush();
   if (observer) return;
   observer = new MutationObserver((muts) => {
     for (const m of muts) {
-      if (m.type === "characterData" && m.target.nodeType === Node.TEXT_NODE) swapText(ES, m.target);
+      if (m.type === "characterData" && m.target.nodeType === Node.TEXT_NODE) swapText(cache, m.target, true);
       else m.addedNodes.forEach((n) => {
-        if (n.nodeType === Node.TEXT_NODE) swapText(ES, n);
-        else if (n.nodeType === Node.ELEMENT_NODE) { swapText(ES, n); swapAttrs(ES, n as Element); }
+        if (n.nodeType === Node.TEXT_NODE) swapText(cache, n, true);
+        else if (n.nodeType === Node.ELEMENT_NODE) { swapText(cache, n, true); swapAttrs(cache, n as Element, true); }
       });
     }
+    scheduleFlush();
   });
   observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 }
 
 function stopTranslating() {
+  onApplied = null;
   if (observer) { observer.disconnect(); observer = null; }
-  if (typeof document !== "undefined") { swapText(ES_TO_EN, document.body); swapAttrs(ES_TO_EN, document.body); }
+  if (typeof document !== "undefined") { swapText(inverse, document.body, false); swapAttrs(inverse, document.body, false); }
 }
 
 interface I18nCtx { lang: Lang; setLang: (l: Lang) => void; t: (s: string) => string }
@@ -189,6 +164,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = React.useState<Lang>("en");
 
   React.useEffect(() => {
+    loadCache();
     const saved = (typeof localStorage !== "undefined" && localStorage.getItem("cs-lang")) as Lang | null;
     if (saved === "es") setLangState("es");
   }, []);
@@ -203,7 +179,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem("cs-lang", l); } catch {}
   }, []);
 
-  const t = React.useCallback((s: string) => (lang === "es" ? ES[s] ?? s : s), [lang]);
+  const t = React.useCallback((s: string) => (lang === "es" ? cache[s] ?? s : s), [lang]);
 
   return <Ctx.Provider value={{ lang, setLang, t }}>{children}</Ctx.Provider>;
 }
