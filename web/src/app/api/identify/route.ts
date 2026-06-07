@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { livePartPrice, livePricingEnabled } from "@/lib/pricing";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -296,6 +297,22 @@ export async function POST(req: Request): Promise<NextResponse<AIResult>> {
         lowConfidenceFields: Array.from(lowFields),
       };
     });
+
+    // Live market pricing: when eBay is configured and we know the vehicle,
+    // replace the model's guess with the median of real used comps (no undercut /
+    // no exaggeration). Non-fatal — falls back to the model estimate.
+    if (livePricingEnabled() && vehicle && (vehicle.make || vehicle.model)) {
+      await Promise.all(data.map(async (p) => {
+        try {
+          const q = [vehicle.year, vehicle.make, vehicle.model, p.partName].filter(Boolean).join(" ");
+          const live = await livePartPrice(q);
+          if (live && live > 0) {
+            p.suggestedPriceUsd = live;
+            p.pricingInsight = { suggestedPrice: live, priceRange: { min: live, max: live }, similarCount: 0 };
+          }
+        } catch { /* keep model estimate */ }
+      }));
+    }
 
     const db = supabaseAdmin();
 
