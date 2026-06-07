@@ -174,9 +174,18 @@ async function callGemini(key: string, base64: string, mime: string, userText: s
 }
 
 export async function POST(req: Request): Promise<NextResponse<AIResult>> {
-  // Require authentication to prevent anonymous credit-burning.
+  // Require authentication to prevent anonymous credit-burning. Accept either a
+  // web session cookie OR a Bearer token (the native mobile app sends the latter,
+  // since it has no cookies).
   const supabase = await (await import("@/lib/supabase-server")).supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
+  let { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    const auth = req.headers.get("authorization") || "";
+    if (auth.startsWith("Bearer ")) {
+      const { data } = await supabaseAdmin().auth.getUser(auth.slice(7));
+      user = data.user;
+    }
+  }
   if (!user) {
     return NextResponse.json({ ok: false, userMessage: "Sign in required", internalError: "no auth" }, { status: 401 });
   }
