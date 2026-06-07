@@ -97,7 +97,7 @@ export async function POST(req: Request) {
   // post still succeeds.
   for (let attempt = 0; vErr && attempt < 3; attempt++) {
     let dropped = false;
-    for (const col of ["photo_url", "title", "description"]) {
+    for (const col of ["photo_url", "title", "description", "stock_number"]) {
       if (col in vehRow && new RegExp(col, "i").test(vErr.message || "")) { delete (vehRow as any)[col]; dropped = true; }
     }
     if (!dropped) break;
