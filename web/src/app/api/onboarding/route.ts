@@ -1,35 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { geocode } from "@/lib/geocode";
 
-interface GeocodeResult {
-  lat: number;
-  lng: number;
-  zip: string;
-  displayName: string;
-}
-
-async function geocodeAddress(address: string): Promise<GeocodeResult | null> {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`,
-      { headers: { "User-Agent": "Ahlam/1.0" } }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data?.length) return null;
-    const r = data[0];
-    const addr = r.address || {};
-    return {
-      lat: parseFloat(r.lat),
-      lng: parseFloat(r.lon),
-      zip: addr.postcode || "",
-      displayName: r.display_name || "",
-    };
-  } catch {
-    return null;
-  }
-}
+export const runtime = "nodejs";
 
 // Creates a shop for the signed-in user (web onboarding), links it on their
 // profile, and makes them the owner. Also claims any pending team invites first
@@ -67,26 +41,20 @@ export async function POST(req: NextRequest) {
   }
 
   // 3. Otherwise create a new shop (individuals get the same workspace, named after themselves).
-  const { name, location, phone, accountType, address } = await req.json().catch(() => ({}));
+  const { name, location, phone, accountType, address, zip: zipIn } = await req.json().catch(() => ({}));
   if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
-  // 4. Geocode the address to get lat/lng/zip for distance sorting.
+  // 4. Geocode the shop's ZIP (preferred) or location to lat/lng for distance sorting.
   let lat: number | null = null;
   let lng: number | null = null;
-  let zip: string | null = null;
-  let displayName: string | null = null;
-  if (address?.trim()) {
-    const geo = await geocodeAddress(address.trim());
-    if (geo) {
-      lat = geo.lat;
-      lng = geo.lng;
-      zip = geo.zip;
-      displayName = geo.displayName;
-    }
+  const zip: string | null = (zipIn || "").trim() || null;
+  if (zip || address?.trim() || location?.trim()) {
+    const geo = await geocode({ zip, location: address || location });
+    if (geo) { lat = geo.lat; lng = geo.lng; }
   }
 
   const type = accountType === "individual" ? "individual" : "shop";
-  const shopLocation = displayName || location || null;
+  const shopLocation = location || address || null;
 
   // Try to persist account_type; if the column doesn't exist yet, fall back gracefully.
   let { data: shop, error: shopErr } = await db
