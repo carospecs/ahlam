@@ -4,6 +4,7 @@ import React from "react";
 import { CreditCard, Mail, Trash2, LoaderCircle, Check, Plus, Shield, Crown, Eye, PencilLine, ImagePlus, Info } from "lucide-react";
 import { Card } from "../UI";
 import { useData, csToast } from "../Dashboard";
+import { AddressAutocomplete } from "../AddressAutocomplete";
 
 function reloadData() { (window as any).csReloadData?.(); }
 
@@ -104,7 +105,7 @@ export function ShopProfile(_: ViewProps) {
         </Field>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <Field label="Shop name"><input value={form.name} onChange={(e) => set("name", e.target.value)} style={inp} disabled={!canEdit} /></Field>
-          <Field label="Location"><input value={form.location} onChange={(e) => set("location", e.target.value)} placeholder="Long Beach, CA" style={inp} disabled={!canEdit} /></Field>
+          <Field label="Location"><AddressAutocomplete value={form.location} onChange={(v) => set("location", v)} onSelect={(p) => { if (p.zip) set("zip_code", p.zip); }} placeholder="Start typing your city…" style={inp} disabled={!canEdit} /></Field>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <Field label="ZIP code"><input value={form.zip_code} onChange={(e) => set("zip_code", e.target.value)} placeholder="90805" maxLength={5} style={inp} disabled={!canEdit} /><span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4, display: "block" }}>Used to show buyers your area and sort listings by nearest.</span></Field>
