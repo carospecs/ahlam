@@ -4,7 +4,7 @@ import React from "react";
 import { CreditCard, Mail, Trash2, LoaderCircle, Check, Plus, Shield, Crown, Eye, PencilLine, ImagePlus, Info } from "lucide-react";
 import { Card } from "../UI";
 import { useData, csToast } from "../Dashboard";
-import { AddressAutocomplete } from "../AddressAutocomplete";
+import { AddressAutocomplete, ZipField } from "../AddressAutocomplete";
 
 function reloadData() { (window as any).csReloadData?.(); }
 
@@ -108,7 +108,7 @@ export function ShopProfile(_: ViewProps) {
           <Field label="Location"><AddressAutocomplete value={form.location} onChange={(v) => set("location", v)} onSelect={(p) => { if (p.zip) set("zip_code", p.zip); }} placeholder="Start typing your city…" style={inp} disabled={!canEdit} /></Field>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label="ZIP code"><input value={form.zip_code} onChange={(e) => set("zip_code", e.target.value)} placeholder="90805" maxLength={5} style={inp} disabled={!canEdit} /><span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4, display: "block" }}>Used to show buyers your area and sort listings by nearest.</span></Field>
+          <Field label="ZIP code"><ZipField value={form.zip_code} onChange={(v) => set("zip_code", v)} onResolve={(r) => { set("zip_code", r.zip); if (!form.location?.trim()) set("location", r.location); }} placeholder="90805" style={inp} disabled={!canEdit} /><span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4, display: "block" }}>Used to show buyers your area and sort listings by nearest.</span></Field>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <Field label="Contact phone"><input value={form.business_phone} onChange={(e) => set("business_phone", e.target.value)} placeholder="(562) 555-0148" style={inp} disabled={!canEdit} /></Field>

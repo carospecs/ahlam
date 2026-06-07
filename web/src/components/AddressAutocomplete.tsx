@@ -6,6 +6,69 @@ import React from "react";
 
 interface Picked { label: string; zip: string; lat: string; lng: string }
 
+// Smart ZIP field: type a 5-digit US ZIP and it resolves the real city/state
+// (Zippopotam), shows it for confirmation, and registers the location + coords.
+export function ZipField({ value, onChange, onResolve, placeholder, style, disabled }: {
+  value: string;
+  onChange: (v: string) => void;
+  onResolve?: (r: { zip: string; location: string }) => void;
+  placeholder?: string;
+  style?: React.CSSProperties;
+  disabled?: boolean;
+}) {
+  const [zip, setZip] = React.useState(value || "");
+  const [place, setPlace] = React.useState<string | null>(null);
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => { setZip(value || ""); }, [value]);
+  React.useEffect(() => {
+    function onDoc(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+  React.useEffect(() => {
+    const z = zip.trim();
+    if (!/^\d{5}$/.test(z)) { setPlace(null); return; }
+    const id = setTimeout(async () => {
+      try {
+        const r = await fetch(`https://api.zippopotam.us/us/${z}`);
+        if (!r.ok) { setPlace(null); return; }
+        const d = await r.json();
+        const p = d.places?.[0];
+        if (p) { setPlace(`${p["place name"]}, ${p["state abbreviation"]}`); setOpen(true); }
+        else setPlace(null);
+      } catch { setPlace(null); }
+    }, 300);
+    return () => clearTimeout(id);
+  }, [zip]);
+  function confirm() {
+    if (place) onResolve?.({ zip: zip.trim(), location: place });
+    setOpen(false);
+  }
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <input
+        value={zip}
+        disabled={disabled}
+        placeholder={placeholder}
+        inputMode="numeric"
+        maxLength={5}
+        onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); setZip(v); onChange(v); setOpen(true); }}
+        onFocus={() => place && setOpen(true)}
+        style={style}
+        autoComplete="off"
+      />
+      {open && place && (
+        <div className="fade-up" style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, marginTop: 4, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, boxShadow: "0 18px 40px -16px rgba(0,0,0,0.35)", overflow: "hidden" }}>
+          <button type="button" className="cs-row" onClick={confirm} style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", border: "none", background: "transparent", color: "var(--foreground)", fontSize: 13.5, cursor: "pointer" }}>
+            <span style={{ fontWeight: 600 }}>{zip}</span> <span style={{ color: "var(--muted)" }}>· {place}</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AddressAutocomplete({ value, onChange, onSelect, placeholder, style, disabled }: {
   value: string;
   onChange: (v: string) => void;
