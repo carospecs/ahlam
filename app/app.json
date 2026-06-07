@@ -3,11 +3,13 @@
     "name": "Ahlam",
     "slug": "ahlam",
     "scheme": "ahlam",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "icon": "./assets/icon.png",
     "splash": {
+      "image": "./assets/splash-icon.png",
       "backgroundColor": "#0F172A",
       "resizeMode": "contain"
     },
@@ -15,17 +17,24 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "io.ahlam.app",
+      "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "Ahlam uses the camera to photograph auto parts for identification.",
-        "NSPhotoLibraryUsageDescription": "Ahlam lets you upload part photos from your library."
+        "NSPhotoLibraryUsageDescription": "Ahlam lets you upload part photos from your library.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "io.ahlam.app",
+      "versionCode": 1,
       "permissions": ["CAMERA"],
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F172A"
       }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-router",

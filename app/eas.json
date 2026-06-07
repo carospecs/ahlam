@@ -1,0 +1,33 @@
+{
+  "cli": {
+    "version": ">= 5.9.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "ios": { "simulator": true },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://wlwhvimdbthoaravnsmq.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indsd2h2aW1kYnRob2FyYXZuc21xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTIwOTcsImV4cCI6MjA5NjA4ODA5N30.5s1jAKUnK3Z3WeKz39RzfBHWStHMWuolyArAH-epGWI",
+        "EXPO_PUBLIC_API_BASE_URL": "https://ahlam.io"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://wlwhvimdbthoaravnsmq.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indsd2h2aW1kYnRob2FyYXZuc21xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTIwOTcsImV4cCI6MjA5NjA4ODA5N30.5s1jAKUnK3Z3WeKz39RzfBHWStHMWuolyArAH-epGWI",
+        "EXPO_PUBLIC_API_BASE_URL": "https://ahlam.io"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

@@ -1,5 +1,6 @@
 import type { AIResult } from "@ahlam/shared";
 import { config } from "@/lib/config";
+import { supabase } from "@/lib/supabase";
 
 /**
  * Send a part photo to the Ahlam backend for Gemini Vision identification.
@@ -13,9 +14,14 @@ export async function identifyPart(params: {
   provider?: "gpt" | "gemini";
 }): Promise<AIResult> {
   try {
+    // The app has no cookies — send the Supabase access token so the backend
+    // can authenticate the request.
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
     const res = await fetch(`${config.apiBaseUrl}/api/identify`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         imageBase64: params.imageBase64,
         vin: params.vin,

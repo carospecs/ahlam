@@ -188,7 +188,7 @@ export async function updateListing(params: {
     const merged: CorrectedFields = {
       partName: base?.partName ?? aiFallback?.partName ?? "",
       partCategory: base?.partCategory ?? aiFallback?.partCategory ?? "",
-      condition: base?.condition ?? aiFallback?.condition ?? "B",
+      condition: base?.condition ?? aiFallback?.condition ?? "Good",
       conditionNotes: base?.conditionNotes ?? aiFallback?.conditionNotes ?? "",
       description: params.description,
       fitment: base?.fitment ?? aiFallback?.fitment ?? [],
