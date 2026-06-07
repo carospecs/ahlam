@@ -526,13 +526,13 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                   const warn = p.confidence === "low";
                   const price = p.suggestedPriceUsd || 0;
                   return (
-                    <div key={p._id} style={{ display: "flex", alignItems: "center", gap: 14, padding: 14, borderRadius: "var(--radius-md)", background: warn ? "var(--signal-bg)" : "var(--surface)", border: `1px solid ${warn ? "color-mix(in srgb, var(--signal) 40%, transparent)" : "var(--line)"}` }}>
+                    <div key={p._id} style={{ display: "flex", alignItems: "center", gap: 14, padding: 14, borderRadius: "var(--radius-md)", flexWrap: "wrap", background: warn ? "var(--signal-bg)" : "var(--surface)", border: `1px solid ${warn ? "color-mix(in srgb, var(--signal) 40%, transparent)" : "var(--line)"}` }}>
                       <div style={{ display: "grid", gap: 1 }}>
                         <button onClick={() => movePart(p._id!, -1)} disabled={idx === 0} title="Move up" style={{ width: 24, height: 20, borderRadius: 6, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", opacity: idx === 0 ? 0.35 : 1 }}><ChevronUp size={13} color="var(--muted)" /></button>
                         <button onClick={() => movePart(p._id!, 1)} disabled={idx === parts.length - 1} title="Move down" style={{ width: 24, height: 20, borderRadius: 6, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", opacity: idx === parts.length - 1 ? 0.35 : 1 }}><ChevronDown size={13} color="var(--muted)" /></button>
                       </div>
                       <Thumb url={p.photoUrl} w={48} h={48} icon="Wrench" iconSize={18} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ flex: 1, minWidth: 150 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                           <input value={p.partName} placeholder="Part name" onChange={(e) => setPartName(p._id!, e.target.value)} style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", borderBottom: "1px solid transparent", padding: "1px 0" }} onFocus={(e) => (e.target.style.borderBottomColor = "var(--line)")} onBlur={(e) => (e.target.style.borderBottomColor = "transparent")} />
                           {warn && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 700, color: "var(--signal)", background: "var(--signal-bg)", borderRadius: 6, padding: "2px 7px", flexShrink: 0 }}><TriangleAlert size={11} /> Review</span>}
