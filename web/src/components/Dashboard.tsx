@@ -110,6 +110,7 @@ function Topbar({ meta, onMenu, onSignOut, onNav }: {
   onSignOut: () => void; onNav?: (id: string) => void;
 }) {
   const t = useT();
+  const { lang, setLang } = useI18n();
   return (
     <header style={sx.topbar} className="cs-topbar">
       <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
@@ -120,6 +121,11 @@ function Topbar({ meta, onMenu, onSignOut, onNav }: {
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <span title="Language" style={{ display: "inline-flex", border: "1px solid var(--line)", borderRadius: 9, overflow: "hidden" }}>
+          {(["en", "es"] as const).map((l) => (
+            <button key={l} onClick={() => setLang(l)} aria-label={l === "en" ? "English" : "Español"} style={{ padding: "6px 10px", fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: lang === l ? "var(--accent)" : "transparent", color: lang === l ? "#fff" : "var(--muted)" }}>{l.toUpperCase()}</button>
+          ))}
+        </span>
         <ThemeToggle />
         <ProfileMenu onSignOut={onSignOut} onNav={onNav} />
       </div>

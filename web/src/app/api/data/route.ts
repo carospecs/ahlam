@@ -79,9 +79,16 @@ export async function GET() {
         })),
       }));
 
-      activity = (actRes.data || []).map((a: any) => ({
-        icon: a.icon, text: a.text, time: a.time || timeAgo(a.created_at), tone: a.tone || "muted",
-      }));
+      activity = (actRes.data || []).map((a: any) => {
+        // No entity FK on activity_log, so route the click to the relevant section.
+        const txt = String(a.text || "").toLowerCase();
+        const link = a.icon === "MessageSquare" || txt.includes("message") || txt.includes("inquiry") ? "messages"
+          : txt.includes("part") ? "parts"
+          : txt.includes("vehicle") || txt.includes("car") ? "vehicles"
+          : txt.includes("export") || txt.includes("posted") || txt.includes("ebay") ? "parts"
+          : "overview";
+        return { icon: a.icon, text: a.text, time: a.time || timeAgo(a.created_at), tone: a.tone || "muted", link };
+      });
 
       const members = (membersRes.data || []).map((m: any) => ({
         userId: m.user_id, name: m.profiles?.display_name || "Unknown", role: m.role,
