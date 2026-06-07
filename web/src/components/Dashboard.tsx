@@ -464,6 +464,7 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
   async function create(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) { setError(isIndiv ? "Your name is required" : "Shop name is required"); return; }
+    if (!/^\d{5}$/.test(zip.trim())) { setError("Please enter your 5-digit ZIP code"); return; }
     setBusy(true); setError("");
     try {
       const r = await fetch("/api/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, location, zip, phone, accountType }) });
