@@ -14,7 +14,7 @@ export const runtime = "nodejs";
 // Set these in the environment (and the same values in the eBay dev portal):
 //   EBAY_VERIFICATION_TOKEN  — 32–80 chars [A-Za-z0-9_-]
 //   EBAY_DELETION_ENDPOINT   — the public URL of THIS route (must match exactly)
-const VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN || "ahlam-ebay-mktdel-7c2f9a1b4e6d8f0a3b5c7d9e1f2a4b6c";
+const VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN || "ahlamebaydeletion7c2f9a1b4e6d8f0a3b5c7d9e1f2a4b6c";
 const ENDPOINT = process.env.EBAY_DELETION_ENDPOINT || "https://ahlam.io/api/ebay/deletion";
 
 export async function GET(req: Request) {
