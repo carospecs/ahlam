@@ -47,6 +47,7 @@ export async function GET() {
         sellMode: v.sell_mode || "parts", askingPrice: v.asking_price, mileage: v.mileage || "",
         description: v.description || "", title: v.title || "", status: statusLabel(v.status),
         stock_number: v.stock_number || "",
+        ebayUrl: v.ebay_url || null, ebayLotUrl: v.ebay_lot_url || null,
       }));
 
       listings = (listRes.data || []).map((l: any) => {

@@ -46,7 +46,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
   const sellableCars = (vehicles || []).filter((v: any) => v.sellMode === "whole" || v.sellMode === "both");
 
   const [ebay, setEbay] = React.useState<{ configured: boolean; connected: boolean; account: string | null; env: string } | null>(null);
-  const [listing, setListing] = React.useState<string | null>(null); // listingId being pushed to eBay
+  const [busy, setBusy] = React.useState<string | null>(null); // "part:id" | "lot:id" | "car:id"
   const [advanced, setAdvanced] = React.useState(false);
 
   const loadEbay = React.useCallback(() => {
@@ -74,17 +74,18 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
     window.open(ch.url, "_blank", "noopener");
   }
 
-  async function listOnEbay(l: any) {
-    if (listing) return;
-    setListing(l.id);
+  // One publisher for parts, wholesale lots, and whole cars — body decides which.
+  async function ebayPublish(key: string, body: any, okMsg: string) {
+    if (busy) return;
+    setBusy(key);
     try {
-      const r = await fetch("/api/ebay/list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: l.id }) });
+      const r = await fetch("/api/ebay/list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const d = await r.json().catch(() => ({}));
-      if (r.ok && d.url) { csToast("Listed on eBay 🎉"); window.open(d.url, "_blank", "noopener"); (window as any).csReloadData?.(); }
+      if (r.ok && d.url) { csToast(okMsg); window.open(d.url, "_blank", "noopener"); (window as any).csReloadData?.(); }
       else if (d.notConnected) csToast("Connect your eBay account first");
       else csToast(d.error || "eBay listing failed");
     } catch { csToast("eBay listing failed — check your connection"); }
-    setListing(null);
+    setBusy(null);
   }
 
   function downloadBlob(content: string, filename: string, mime: string) {
@@ -177,6 +178,13 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
                   </div>
                 </div>
                 <SellModeBadge mode={v.sellMode} size="sm" />
+                {v.ebayUrl ? (
+                  <a href={v.ebayUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--success)", textDecoration: "none" }}><CircleCheck size={14} /> On eBay</a>
+                ) : ebay?.connected ? (
+                  <button onClick={() => ebayPublish(`car:${v.id}`, { mode: "vehicle", vehicleId: v.id }, "Car listed on eBay Motors 🎉")} disabled={!!busy} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", background: "var(--signal)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: busy && busy !== `car:${v.id}` ? 0.5 : 1 }}>
+                    {busy === `car:${v.id}` ? <LoaderCircle size={14} className="spin" /> : <Car size={14} />} List on eBay
+                  </button>
+                ) : null}
                 <PrepareMenu channels={PREPARE_CHANNELS} onPick={(ch) => prepareCar(ch, v)} />
               </div>
             ))}
@@ -193,12 +201,23 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
           </div>
         ) : (
           <div style={{ display: "grid", gap: 16 }}>
-            {groups.map((g) => (
+            {groups.map((g) => {
+              const gv = g.key === "__other" ? null : vById.get(g.key);
+              return (
               <div key={g.key}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, margin: "0 2px 8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, margin: "0 2px 8px", flexWrap: "wrap" }}>
                   <Car size={14} color="var(--muted)" />
                   <span style={{ fontSize: 13.5, fontWeight: 700 }}>{g.name}</span>
                   <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 500 }}>· {g.items.length} part{g.items.length === 1 ? "" : "s"}</span>
+                  {gv && g.items.length > 1 && (
+                    gv.ebayLotUrl ? (
+                      <a href={gv.ebayLotUrl} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--success)", textDecoration: "none" }}><CircleCheck size={13} /> Lot on eBay</a>
+                    ) : ebay?.connected ? (
+                      <button onClick={() => ebayPublish(`lot:${gv.id}`, { mode: "lot", vehicleId: gv.id }, "Parts lot listed on eBay 🎉")} disabled={!!busy} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent-tint)", color: "var(--accent)", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: busy && busy !== `lot:${gv.id}` ? 0.5 : 1 }}>
+                        {busy === `lot:${gv.id}` ? <LoaderCircle size={13} className="spin" /> : <ShoppingBag size={13} />} List all as one lot
+                      </button>
+                    ) : null
+                  )}
                 </div>
                 <Card pad={0}>
                   {g.items.map((l: any, i: number) => (
@@ -212,8 +231,8 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
                       {l.ebayUrl ? (
                         <a href={l.ebayUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--success)", textDecoration: "none" }}><CircleCheck size={14} /> On eBay</a>
                       ) : ebay?.connected ? (
-                        <button onClick={() => listOnEbay(l)} disabled={!!listing} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: listing && listing !== l.id ? 0.5 : 1 }}>
-                          {listing === l.id ? <LoaderCircle size={14} className="spin" /> : <ShoppingBag size={14} />} List on eBay
+                        <button onClick={() => ebayPublish(`part:${l.id}`, { listingId: l.id }, "Listed on eBay 🎉")} disabled={!!busy} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: busy && busy !== `part:${l.id}` ? 0.5 : 1 }}>
+                          {busy === `part:${l.id}` ? <LoaderCircle size={14} className="spin" /> : <ShoppingBag size={14} />} List on eBay
                         </button>
                       ) : null}
                       <PrepareMenu channels={PREPARE_CHANNELS} onPick={(ch) => prepareAndOpen(ch, l)} />
@@ -221,7 +240,8 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
                   ))}
                 </Card>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
