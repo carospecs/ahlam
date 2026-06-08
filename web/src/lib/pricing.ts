@@ -2,15 +2,19 @@
 // suggested prices come from real comps instead of the model's memory. Uses an
 // application token (client-credentials) — only needs EBAY_CLIENT_ID/SECRET, not
 // seller OAuth. No-ops cleanly (returns null) when eBay isn't configured.
-import { ebayConfigured } from "@/lib/ebay";
-
 const ENV = (process.env.EBAY_ENV || "production").toLowerCase() === "sandbox" ? "sandbox" : "production";
 const API = ENV === "sandbox" ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
+
+// Pricing only needs the app keys (Browse API uses a client-credentials token) —
+// NOT the seller-OAuth redirect URI that listing requires.
+function pricingConfigured(): boolean {
+  return !!(process.env.EBAY_CLIENT_ID && process.env.EBAY_CLIENT_SECRET);
+}
 
 let appToken: { token: string; exp: number } | null = null;
 
 async function getAppToken(): Promise<string | null> {
-  if (!ebayConfigured()) return null;
+  if (!pricingConfigured()) return null;
   if (appToken && appToken.exp > Date.now() + 60_000) return appToken.token;
   try {
     const basic = Buffer.from(`${process.env.EBAY_CLIENT_ID}:${process.env.EBAY_CLIENT_SECRET}`).toString("base64");
@@ -58,5 +62,5 @@ export async function livePartPrice(query: string): Promise<number | null> {
 }
 
 export function livePricingEnabled(): boolean {
-  return ebayConfigured();
+  return pricingConfigured();
 }
