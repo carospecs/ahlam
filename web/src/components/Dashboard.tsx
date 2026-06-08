@@ -7,7 +7,7 @@ import {
   Check, CircleCheck, Send, PencilLine, Tag, ShoppingBag,
   Globe, ChevronDown, User, Users, CreditCard, Download, Share2,
   CheckCheck, Info, Copy, ExternalLink, ChevronLeft, ChevronRight, LoaderCircle,
-  Sun, Moon, TrendingUp, BookOpen,
+  Sun, Moon, TrendingUp, BookOpen, FolderClosed,
 } from "lucide-react";
 import { buildListingText, buildVehicleText, partsForVehicle } from "./data";
 import { Overview } from "./views/Overview";
@@ -20,6 +20,7 @@ import { Interchange } from "./views/Interchange";
 import { ExportCenter } from "./views/ExportCenter";
 import { AddVehicle } from "./views/AddVehicle";
 import { Analytics } from "./views/Analytics";
+import { Files } from "./views/Files";
 import { VehicleProfile } from "./views/VehicleProfile";
 import { AccountSettings } from "./views/AccountSettings";
 import { ShopProfile, TeamRoles, Billing, Notifications } from "./views/SettingsViews";
@@ -42,6 +43,7 @@ const NAV = [
   { id: "add", label: "Add vehicle / parts", icon: CirclePlus },
   { id: "interchange", label: "Interchange", icon: BookOpen },
   { id: "analytics", label: "Analytics", icon: TrendingUp },
+  { id: "files", label: "Files", icon: FolderClosed, ownerOnly: true },
   { section: "Assist" },
   { id: "aichat", label: "AI assistant", icon: Sparkles },
   { id: "export", label: "Export & posting", icon: Send },
@@ -59,14 +61,16 @@ const META: Record<string, { title: string; sub: string }> = {
   export: { title: "Export & posting", sub: "Cross-post your listings to Facebook, OfferUp, eBay & more" },
   messages: { title: "Messages", sub: "Buyer inquiries from your listings" },
   interchange: { title: "Parts interchange", sub: "Hollander-style cross-reference — search by VIN or part name" },
+  files: { title: "Files", sub: "VIN reports & shop documents — owner only" },
 };
 
 function Sidebar({ active, onNav, onSignOut, open, onClose }: {
   active: string; onNav: (id: string) => void; onSignOut: () => void;
   open: boolean; onClose: () => void;
 }) {
-  const { shop } = useData();
+  const { shop, role } = useData();
   const t = useT();
+  const nav = NAV.filter((n: any) => !n.ownerOnly || role === "owner");
 
   return (
     <aside style={sx.sidebar} className={"cs-sidebar" + (open ? " open" : "")}>
@@ -76,7 +80,7 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
         <button className="cs-navclose" onClick={onClose} style={sx.navClose}><X size={18} color="var(--muted)" /></button>
       </div>
       <nav style={{ display: "grid", gap: 3, marginTop: 4, overflowY: "auto" }}>
-        {NAV.map((n, i) => {
+        {nav.map((n, i) => {
           if ("section" in n) {
             return <div key={"s" + i} style={sx.navSection}>{t(n.section!)}</div>;
           }
@@ -214,6 +218,7 @@ const VIEWS: Record<string, React.ComponentType<any>> = {
   overview: Overview, vehicles: Vehicles, browse: Browse, parts: Parts, export: ExportCenter, analytics: Analytics,
   messages: Messages, aichat: AIChat, add: AddVehicle, interchange: Interchange, vehicleProfile: VehicleProfile,
   settings: AccountSettings, shop: ShopProfile, team: TeamRoles, billing: Billing, notifications: Notifications,
+  files: Files,
 };
 
 let toastFn: (msg: string) => void = () => {};
