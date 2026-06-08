@@ -20,6 +20,9 @@ import {
   TriangleAlert,
   Info,
   Pencil,
+  Wrench,
+  Cpu,
+  TrendingUp,
 } from "lucide-react-native";
 import { colors, space, font, radius, conditionColorOf } from "@/theme";
 import { Button } from "@/components/Button";
@@ -43,6 +46,10 @@ export default function ListingDetail() {
   const [price, setPrice] = useState("");
   const [desc, setDesc] = useState("");
   const [status, setStatus] = useState<SavedListing["status"]>("active");
+  const [condition, setCondition] = useState<"Good" | "Poor">("Good");
+  const [category, setCategory] = useState("");
+  const [fitment, setFitment] = useState("");
+  const [conditionNotes, setConditionNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -115,9 +122,14 @@ export default function ListingDetail() {
 
   function beginEdit() {
     if (!listing) return;
+    const c = listing.corrected ?? listing.ai_output;
     setPrice(listing.price_usd != null ? String(listing.price_usd) : "");
-    setDesc(listing.corrected?.description ?? listing.ai_output.description ?? "");
+    setDesc(c.description ?? "");
     setStatus(listing.status);
+    setCondition(c.condition ?? "Good");
+    setCategory(c.partCategory ?? "");
+    setFitment(Array.isArray(c.fitment) ? c.fitment.map((f: any) => `${f.yearStart}–${f.yearEnd} ${f.make} ${f.model}`).join(", ") : typeof c.fitment === "string" ? c.fitment : "");
+    setConditionNotes(c.conditionNotes ?? "");
     setEditing(true);
   }
 
@@ -130,6 +142,10 @@ export default function ListingDetail() {
         priceUsd: price === "" ? null : Number(price),
         status,
         description: desc,
+        condition,
+        category,
+        fitment,
+        conditionNotes,
         current: listing,
       });
       setEditing(false);
@@ -220,11 +236,61 @@ export default function ListingDetail() {
           <Text style={styles.label}>Edit listing</Text>
           <View style={styles.editCard}>
             <Text style={styles.fieldLabel}>Price (USD)</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+              <TextInput
+                value={price}
+                onChangeText={setPrice}
+                keyboardType="number-pad"
+                placeholder="0"
+                placeholderTextColor={colors.muted}
+                style={[styles.input, { flex: 1 }]}
+              />
+              {listing.ai_output.suggestedPriceUsd != null && (
+                <Text style={{ color: colors.muted, fontSize: font.tiny }}>
+                  AI: ${listing.ai_output.suggestedPriceUsd}
+                </Text>
+              )}
+            </View>
+
+            <Text style={styles.fieldLabel}>Condition</Text>
+            <View style={styles.statusRow}>
+              {(["Good", "Poor"] as const).map((c) => {
+                const on = condition === c;
+                return (
+                  <Pressable
+                    key={c}
+                    onPress={() => setCondition(c)}
+                    style={[styles.statusChip, on && styles.statusChipOn]}
+                  >
+                    <Text style={[styles.statusChipText, on && styles.statusChipTextOn]}>{c}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={styles.fieldLabel}>Category</Text>
             <TextInput
-              value={price}
-              onChangeText={setPrice}
-              keyboardType="number-pad"
-              placeholder="0"
+              value={category}
+              onChangeText={setCategory}
+              placeholder="e.g. Engine / Mechanical"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+            />
+
+            <Text style={styles.fieldLabel}>Fitment</Text>
+            <TextInput
+              value={fitment}
+              onChangeText={setFitment}
+              placeholder="e.g. 2013–2017 Honda Accord"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+            />
+
+            <Text style={styles.fieldLabel}>Condition notes</Text>
+            <TextInput
+              value={conditionNotes}
+              onChangeText={setConditionNotes}
+              placeholder="e.g. Minor scuffs, no cracks"
               placeholderTextColor={colors.muted}
               style={styles.input}
             />

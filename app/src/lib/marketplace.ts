@@ -14,6 +14,7 @@ export interface MarketPart {
   shopId: string;
   shopName: string;
   location: string;
+  phone: string | null;
 }
 
 export interface MarketVehicle {
@@ -31,6 +32,7 @@ export interface MarketVehicle {
   shopId: string;
   shopName: string;
   location: string;
+  phone: string | null;
 }
 
 /** Fitment may be a VehicleFit[] (camelCase) or a string. Normalize to text. */
@@ -64,12 +66,12 @@ export async function fetchMarketplace(
   const [{ data: listingRows }, { data: vehicleRows }] = await Promise.all([
     supabase
       .from("listings")
-      .select("*, shops(name, location)")
+      .select("*, shops(name, location, business_phone)")
       .eq("status", "active")
       .order("created_at", { ascending: false }),
     supabase
       .from("vehicles")
-      .select("*, shops(name, location)")
+      .select("*, shops(name, location, business_phone)")
       .in("sell_mode", ["whole", "both"])
       .eq("status", "active")
       .order("created_at", { ascending: false }),
@@ -93,6 +95,7 @@ export async function fetchMarketplace(
         shopId: l.shop_id,
         shopName: l.shops?.name || "Independent seller",
         location: l.shops?.location || "",
+        phone: l.shops?.business_phone || null,
       };
     });
 
@@ -113,6 +116,7 @@ export async function fetchMarketplace(
       shopId: v.shop_id,
       shopName: v.shops?.name || "Independent seller",
       location: v.shops?.location || "",
+      phone: v.shops?.business_phone || null,
     }));
 
   return { parts, vehicles };

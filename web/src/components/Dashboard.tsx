@@ -7,7 +7,7 @@ import {
   Check, CircleCheck, Send, PencilLine, Tag, ShoppingBag,
   Globe, ChevronDown, User, Users, CreditCard, Download, Share2,
   CheckCheck, Info, Copy, ExternalLink, ChevronLeft, ChevronRight, LoaderCircle,
-  Sun, Moon, TrendingUp, BookOpen, FolderClosed,
+  Sun, Moon, TrendingUp, BookOpen, FolderClosed, MapPin,
 } from "lucide-react";
 import { buildListingText, buildVehicleText, partsForVehicle } from "./data";
 import { Overview } from "./views/Overview";
@@ -22,6 +22,7 @@ import { AddVehicle } from "./views/AddVehicle";
 import { Analytics } from "./views/Analytics";
 import { Files } from "./views/Files";
 import { VehicleProfile } from "./views/VehicleProfile";
+import { YardManagement } from "./views/YardManagement";
 import { AccountSettings } from "./views/AccountSettings";
 import { ShopProfile, TeamRoles, Billing, Notifications } from "./views/SettingsViews";
 import { DashboardSkeleton } from "./UI";
@@ -42,6 +43,7 @@ const NAV = [
   { id: "parts", label: "Parts posted", icon: Wrench },
   { id: "add", label: "Add vehicle / parts", icon: CirclePlus },
   { id: "interchange", label: "Interchange", icon: BookOpen },
+  { id: "yard", label: "Yard", icon: MapPin },
   { id: "analytics", label: "Analytics", icon: TrendingUp },
   { id: "files", label: "Files", icon: FolderClosed, ownerOnly: true },
   { section: "Assist" },
@@ -61,6 +63,7 @@ const META: Record<string, { title: string; sub: string }> = {
   export: { title: "Export & posting", sub: "Cross-post your listings to Facebook, OfferUp, eBay & more" },
   messages: { title: "Messages", sub: "Buyer inquiries from your listings" },
   interchange: { title: "Parts interchange", sub: "Hollander-style cross-reference — search by VIN or part name" },
+  yard: { title: "Yard management", sub: "Track part locations and barcodes across your lot" },
   files: { title: "Files", sub: "VIN reports & shop documents — owner only" },
 };
 
@@ -218,7 +221,7 @@ const VIEWS: Record<string, React.ComponentType<any>> = {
   overview: Overview, vehicles: Vehicles, browse: Browse, parts: Parts, export: ExportCenter, analytics: Analytics,
   messages: Messages, aichat: AIChat, add: AddVehicle, interchange: Interchange, vehicleProfile: VehicleProfile,
   settings: AccountSettings, shop: ShopProfile, team: TeamRoles, billing: Billing, notifications: Notifications,
-  files: Files,
+  files: Files, yard: YardManagement,
 };
 
 let toastFn: (msg: string) => void = () => {};

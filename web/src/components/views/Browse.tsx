@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Camera, Car, Wrench, MapPin, Store, Search, MessageSquare, X, Send, LoaderCircle, Eye, SlidersHorizontal, ChevronDown, Plus, Phone } from "lucide-react";
+import { Camera, Car, Wrench, MapPin, Store, Search, MessageSquare, X, Send, LoaderCircle, Eye, SlidersHorizontal, ChevronDown, Plus, Phone, MessageCircle } from "lucide-react";
 import { PhotoCell, ConditionBadge, conditionColorOf } from "../UI";
 import { csToast } from "../Dashboard";
 
@@ -30,7 +30,7 @@ export function Browse() {
   const [loading, setLoading] = React.useState(true);
   const [demo, setDemo] = React.useState(false);
   const [q, setQ] = React.useState("");
-  const [contact, setContact] = React.useState<{ listingId?: string; shopId?: string; subject?: string; title: string } | null>(null);
+  const [contact, setContact] = React.useState<{ listingId?: string; shopId?: string; subject?: string; title: string; phone?: string | null } | null>(null);
   const [detailPart, setDetailPart] = React.useState<MktPart | null>(null);
   const [detailVehicle, setDetailVehicle] = React.useState<MktVehicle | null>(null);
   const [sort, setSort] = React.useState("recommended");
@@ -302,7 +302,7 @@ export function Browse() {
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
                       <MapPin size={13} /> {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views} views
                     </div>
-                    <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}` }); }}>
+                    <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}`, phone: l.phone }); }}>
                       <MessageSquare size={14} /> Message seller
                     </button>
                   </div>
@@ -330,9 +330,9 @@ export function Browse() {
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
                     <MapPin size={13} /> {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views} views
                   </div>
-                  <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}` }); }}>
-                    <MessageSquare size={14} /> Message seller
-                  </button>
+                    <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}`, phone: l.phone }); }}>
+                      <MessageSquare size={14} /> Message seller
+                    </button>
                 </div>
               </div>
             ))}
@@ -360,7 +360,7 @@ export function Browse() {
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
                     <Store size={13} /> <ShopLink id={v.shopId} name={v.shopName} /> · <MapPin size={12} /> {v.location || "—"}{v.distance != null ? ` · ${v.distance} mi` : ""}{v.driveTime != null ? ` · ~${v.driveTime} min` : ""} · <Eye size={12} /> {v.views} views
                   </div>
-                  <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ shopId: v.shopId, subject: `${v.year} ${v.make} ${v.model}`, title: `${v.year} ${v.make} ${v.model} · ${v.shopName}` }); }}>
+                  <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ shopId: v.shopId, subject: `${v.year} ${v.make} ${v.model}`, title: `${v.year} ${v.make} ${v.model} · ${v.shopName}`, phone: v.phone }); }}>
                     <MessageSquare size={14} /> Message seller
                   </button>
                 </div>
@@ -376,14 +376,14 @@ export function Browse() {
         <PartDetailModal
           part={detailPart}
           onClose={() => setDetailPart(null)}
-          onContact={() => { setContact({ listingId: detailPart.id, title: `${detailPart.part} · ${detailPart.shopName}` }); setDetailPart(null); }}
+          onContact={() => { setContact({ listingId: detailPart.id, title: `${detailPart.part} · ${detailPart.shopName}`, phone: detailPart.phone }); setDetailPart(null); }}
         />
       )}
       {detailVehicle && (
         <VehicleDetailModal
           vehicle={detailVehicle}
           onClose={() => setDetailVehicle(null)}
-          onContact={() => { setContact({ shopId: detailVehicle.shopId, subject: `${detailVehicle.year} ${detailVehicle.make} ${detailVehicle.model}`, title: `${detailVehicle.year} ${detailVehicle.make} ${detailVehicle.model} · ${detailVehicle.shopName}` }); setDetailVehicle(null); }}
+          onContact={() => { setContact({ shopId: detailVehicle.shopId, subject: `${detailVehicle.year} ${detailVehicle.make} ${detailVehicle.model}`, title: `${detailVehicle.year} ${detailVehicle.make} ${detailVehicle.model} · ${detailVehicle.shopName}`, phone: detailVehicle.phone }); setDetailVehicle(null); }}
         />
       )}
       {contact && <ContactModal target={contact} onClose={() => setContact(null)} />}
@@ -463,7 +463,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onContact }: { vehicle: MktVe
   );
 }
 
-function ContactModal({ target, onClose }: { target: { listingId?: string; shopId?: string; subject?: string; title: string }; onClose: () => void }) {
+function ContactModal({ target, onClose }: { target: { listingId?: string; shopId?: string; subject?: string; title: string; phone?: string | null }; onClose: () => void }) {
   const [msg, setMsg] = React.useState("Hi — is this still available?");
   const [busy, setBusy] = React.useState(false);
 
@@ -485,6 +485,9 @@ function ContactModal({ target, onClose }: { target: { listingId?: string; shopI
     }
   }
 
+  const waNumber = target.phone?.replace(/[^0-9]/g, "");
+  const waHref = waNumber ? `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}` : null;
+
   return (
     <div style={ov} onMouseDown={onClose}>
       <div style={modal} className="fade-up" onMouseDown={(e) => e.stopPropagation()}>
@@ -494,9 +497,16 @@ function ContactModal({ target, onClose }: { target: { listingId?: string; shopI
         </div>
         <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{target.title}</div>
         <textarea value={msg} onChange={(e) => setMsg(e.target.value)} rows={4} style={{ width: "100%", padding: "11px 14px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 14, outline: "none", resize: "vertical", fontFamily: "inherit", marginTop: 4 }} />
-        <button onClick={send} disabled={busy} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 18px", borderRadius: 11, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600, opacity: busy ? 0.6 : 1 }}>
-          {busy ? <LoaderCircle size={16} style={{ animation: "spin 0.8s linear infinite" }} /> : <Send size={15} />} {busy ? "Sending…" : "Send message"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={send} disabled={busy} style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 18px", borderRadius: 11, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600, opacity: busy ? 0.6 : 1 }}>
+            {busy ? <LoaderCircle size={16} style={{ animation: "spin 0.8s linear infinite" }} /> : <Send size={15} />} {busy ? "Sending…" : "Send message"}
+          </button>
+          {waHref && (
+            <a href={waHref} target="_blank" rel="noopener noreferrer" onClick={onClose} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 18px", borderRadius: 11, border: "none", background: "#25D366", color: "#fff", fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
+              <MessageCircle size={15} /> WhatsApp
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );
