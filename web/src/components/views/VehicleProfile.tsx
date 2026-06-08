@@ -5,6 +5,7 @@ import { Car, Wrench, ChevronLeft, Copy, Send, Sparkles, ScanLine, Check, CheckC
 import { Card, PhotoCell, ConditionBadge, SellModeBadge, StatusBadge } from "../UI";
 import { buildVehicleText, partsForVehicle, SELL_MODE } from "../data";
 import { csToast, useData } from "../Dashboard";
+import { PricingToggle } from "../PricingToggle";
 
 export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; go: (id: string) => void }) {
   const { listings } = useData();
@@ -27,6 +28,8 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
   const [partDescs, setPartDescs] = React.useState<Record<string, string>>({});
   // Per-part saving indicator.
   const [savingParts, setSavingParts] = React.useState<Set<string>>(new Set());
+  // Active pricing source per part (asking / ebay / ai).
+  const [priceSource, setPriceSource] = React.useState<Record<string, string>>({});
 
   // Whole-car editable fields (title, description, the fill-in suggestion
   // fields, and status) — saved together via "Save changes".
@@ -46,6 +49,8 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
   const selectedCount = parts.filter((p: any) => selected.has(p.id)).length;
 
   const toggleSel = (id: string) => setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selectAll = () => setSelected((prev) => prev.size === parts.length ? new Set() : new Set(parts.map((p: any) => p.id)));
+  const allSelected = selected.size === parts.length;
 
   // Apply the pending sell-mode change (explicit Submit, not on every click).
   async function submitMode() {
@@ -85,6 +90,19 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
     setSavingMode(false);
   }
 
+  // Bulk-update status for all selected parts.
+  async function bulkStatus(status: string) {
+    if (savingMode || !selectedCount) return;
+    setSavingMode(true);
+    const ids = parts.filter((p: any) => selected.has(p.id)).map((p: any) => p.id);
+    try {
+      const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingIds: ids, status }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't update"); }
+      else { csToast(`Marked ${ids.length} part${ids.length === 1 ? "" : "s"} as ${status}`); (window as any).csReloadData?.(); }
+    } catch { csToast("Couldn't update — check your connection"); }
+    setSavingMode(false);
+  }
+
   // Toggle the inline edit panel for a part.
   const toggleExpand = (id: string) => setExpanded((prev) => {
     const n = new Set(prev);
@@ -93,13 +111,16 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
     return n;
   });
 
-  // Local form state for each open part panel (title + price + desc + status).
-  const [editForm, setEditForm] = React.useState<Record<string, { name: string; price: string; desc: string; status: string }>>({});
-  const formOf = (p: any) => editForm[p.id] || { name: p.part || "", price: String(priceOf(p)), desc: p.desc || p.description || "", status: p.status || "Draft" };
-  const setField = (id: string, p: any, patch: Partial<{ name: string; price: string; desc: string; status: string }>) =>
+  // Local form state for each open part panel.
+  const [editForm, setEditForm] = React.useState<Record<string, { name: string; price: string; desc: string; status: string; condition: string; category: string; conditionNotes: string; fitment: string }>>({});
+  const formOf = (p: any) => editForm[p.id] || {
+    name: p.part || "", price: String(priceOf(p)), desc: p.desc || p.description || "", status: p.status || "Draft",
+    condition: p.grade === "Poor" ? "Poor" : "Good", category: p.category || "", conditionNotes: p.note || "", fitment: p.fitment || "",
+  };
+  const setField = (id: string, p: any, patch: Partial<{ name: string; price: string; desc: string; status: string; condition: string; category: string; conditionNotes: string; fitment: string }>) =>
     setEditForm((ef) => ({ ...ef, [id]: { ...(ef[id] || formOf(p)), ...patch } }));
 
-  // Persist title + price + description + status for a single part listing.
+  // Persist all editable fields for a single part listing.
   async function savePart(id: string, p: any) {
     if (savingParts.has(id)) return;
     const f = editForm[id] || formOf(p);
@@ -109,6 +130,10 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
     if (f.name?.trim()) body.partName = f.name.trim();
     if (Number.isFinite(num) && num >= 0) { body.priceUsd = num; setPrices((pr) => ({ ...pr, [id]: num })); }
     if (f.desc != null) { body.description = f.desc; setPartDescs((pd) => ({ ...pd, [id]: f.desc })); }
+    if (f.condition) body.condition = f.condition;
+    if (f.category) body.category = f.category;
+    if (f.conditionNotes != null) body.conditionNotes = f.conditionNotes;
+    if (f.fitment != null) body.fitment = f.fitment;
     try {
       const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't save"); }
@@ -303,9 +328,25 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
 
       {showParts && (
         <Card pad={0}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 18px", borderBottom: "1px solid var(--line)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", borderBottom: "1px solid var(--line)" }}>
             <span style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Wrench size={16} color="var(--accent)" /> Parts from this car <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {parts.length}</span></span>
-            <button style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, opacity: selectedCount ? 1 : 0.6 }} disabled={!selectedCount || savingMode} onClick={postSelected}><Sparkles size={14} /> Post {selectedCount} selected</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <BulkAction
+                label={selectedCount > 0 ? `${selectedCount} selected` : "Bulk actions"}
+                disabled={!selectedCount}
+                actions={[
+                  { label: "Post", action: postSelected },
+                  { label: "Mark as Draft", action: () => bulkStatus("Draft") },
+                  { label: "Mark as Sold", action: () => bulkStatus("Sold") },
+                ]}
+              />
+              {selectedCount > 0 && (
+                <button onClick={() => setSelected(new Set())} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", fontSize: 12, fontWeight: 600 }}>
+                  Clear
+                </button>
+              )}
+              <button style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 600, opacity: selectedCount ? 1 : 0.5 }} disabled={!selectedCount || savingMode} onClick={postSelected}><Sparkles size={13} /> Post</button>
+            </div>
           </div>
           {parts.map((l: any, i: number) => {
             const on = selected.has(l.id);
@@ -322,7 +363,14 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
                     <div style={{ fontSize: 12, color: "var(--muted)" }}>{l.category}</div>
                   </div>
                   <ConditionBadge grade={l.grade} size="sm" />
-                  <div className="tnum" style={{ fontSize: 14, fontWeight: 700, color: "var(--foreground)", whiteSpace: "nowrap" }}>${priceOf(l).toLocaleString()}</div>
+                  <PricingToggle
+                    askingPrice={priceOf(l)}
+                    aiPrice={l.aiPrice ? Number(l.aiPrice) : null}
+                    partName={l.part}
+                    vehicleText={`${v.year} ${v.make} ${v.model}`}
+                    source={(priceSource[l.id] as any) || "asking"}
+                    onChange={(s) => setPriceSource((ps) => ({ ...ps, [l.id]: s }))}
+                  />
                   <StatusBadge status={l.status} />
                   <button onClick={() => toggleExpand(l.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "1px solid var(--line)", background: isOpen ? "var(--surface2)" : "transparent", color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, flexShrink: 0 }}><Pencil size={13} /> {isOpen ? "Close" : "Edit"}</button>
                 </div>
@@ -341,6 +389,29 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
                         <div style={fieldLabel}>Status</div>
                         <StatusPicker value={f.status} onChange={(s) => setField(l.id, l, { status: s })} />
                       </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 10 }}>
+                      <div>
+                        <div style={fieldLabel}>Condition</div>
+                        <ConditionPicker value={f.condition} onChange={(s) => setField(l.id, l, { condition: s })} />
+                      </div>
+                      <div>
+                        <div style={fieldLabel}>Category</div>
+                        <select value={f.category} onChange={(e) => setField(l.id, l, { category: e.target.value })} style={{ ...fieldInput, appearance: "auto", cursor: "pointer" }}>
+                          <option value="">Uncategorized</option>
+                          {CATEGORIES.map((cat) => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={fieldLabel}>Fitment (compatible vehicles)</div>
+                      <input value={f.fitment} onChange={(e) => setField(l.id, l, { fitment: e.target.value })} placeholder="e.g. 2013–2017 Honda Accord" style={fieldInput} />
+                    </div>
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={fieldLabel}>Condition notes</div>
+                      <input value={f.conditionNotes} onChange={(e) => setField(l.id, l, { conditionNotes: e.target.value })} placeholder="e.g. Minor scuffs, no cracks" style={fieldInput} />
                     </div>
                     <div style={{ marginBottom: 12 }}>
                       <div style={fieldLabel}>Description</div>
@@ -377,8 +448,37 @@ function VINField({ icon: Icon, label, value }: { icon: any; label: string; valu
 const fieldLabel: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 5 };
 const fieldInput: React.CSSProperties = { width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 13.5, outline: "none" };
 
+const CONDITION_OPTS = ["Good", "Poor"] as const;
+const CONDITION_COLORS: Record<string, string> = { Good: "var(--success)", Poor: "var(--danger)" };
+
+const CATEGORIES = [
+  "Body / Exterior", "Engine / Mechanical", "Transmission / Drivetrain",
+  "Electrical / Sensors", "Suspension / Steering", "Brakes",
+  "Interior", "Lighting", "Glass / Windows",
+  "Wheels / Tires", "HVAC", "Exhaust", "Fuel System",
+  "Truck Bed / Cargo", "Miscellaneous",
+];
+
 const STATUS_OPTS = ["Draft", "Posted", "Sold"] as const;
 const STATUS_COLOR: Record<string, string> = { Draft: "var(--muted)", Posted: "var(--success)", Sold: "var(--signal)" };
+
+// Segmented Good / Poor picker.
+function ConditionPicker({ value, onChange }: { value: string; onChange: (s: string) => void }) {
+  return (
+    <div style={{ display: "inline-flex", gap: 3, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 9, padding: 3 }}>
+      {CONDITION_OPTS.map((s) => {
+        const on = value === s;
+        const c = CONDITION_COLORS[s];
+        return (
+          <button key={s} type="button" onClick={() => onChange(s)}
+            style={{ padding: "6px 12px", borderRadius: 7, border: "none", background: on ? c : "transparent", color: on ? "#fff" : "var(--muted)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: on ? 1 : 0.7 }}>
+            {s}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // Segmented Draft / Posted / Sold picker.
 function StatusPicker({ value, onChange }: { value: string; onChange: (s: string) => void }) {
@@ -393,6 +493,30 @@ function StatusPicker({ value, onChange }: { value: string; onChange: (s: string
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// Dropdown button that reveals a list of bulk actions.
+function BulkAction({ label, actions, disabled }: { label: string; actions: { label: string; action: () => void }[]; disabled?: boolean }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => setOpen(!open)} disabled={disabled} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface2)", color: disabled ? "var(--muted)" : "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.5 : 1 }}>
+        <ChevronDown size={13} /> {label}
+      </button>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setOpen(false)} />
+          <div style={{ position: "absolute", top: "100%", right: 0, zIndex: 100, marginTop: 4, minWidth: 170, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, boxShadow: "0 8px 30px rgba(0,0,0,0.3)", padding: 4 }}>
+            {actions.map((a) => (
+              <button key={a.label} onClick={() => { a.action(); setOpen(false); }} style={{ display: "block", width: "100%", padding: "9px 12px", borderRadius: 7, border: "none", background: "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 500, cursor: "pointer", textAlign: "left" }}>
+                {a.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

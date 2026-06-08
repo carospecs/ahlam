@@ -130,6 +130,10 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const [suggestedCarPrice, setSuggestedCarPrice] = React.useState<number | null>(null);
   const [mileage, setMileage] = React.useState<string | null>(null);
   const [vin, setVin] = React.useState("");
+  const [vehicleTrim, setVehicleTrim] = React.useState("");
+  const [vehicleColor, setVehicleColor] = React.useState("");
+  const [vehicleTitle, setVehicleTitle] = React.useState("");
+  const [vehicleDesc, setVehicleDesc] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [camOpen, setCamOpen] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
@@ -300,7 +304,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         draft,
         images,
         heroIndex,
-        vehicle: { make: vehicle?.make, model: vehicle?.model, year: vehicle?.year, body: vehicle?.body, vin: vin.trim() || undefined, stockNumber: stockNumber.trim() || undefined, photos: photos.length },
+        vehicle: { make: vehicle?.make, model: vehicle?.model, year: vehicle?.year, body: vehicle?.body, trim: vehicleTrim.trim() || undefined, color: vehicleColor.trim() || undefined, vin: vin.trim() || undefined, stockNumber: stockNumber.trim() || undefined, title: vehicleTitle.trim() || undefined, description: vehicleDesc.trim() || undefined, photos: photos.length },
         // Strip client-only fields (blob URL + local ids); keep a photoIndex so
         // each part links to the photo it was scanned from.
         parts: parts
@@ -464,12 +468,20 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                 <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 3 }}>{vehicle.sub}</div>
                 <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>Identified by AI — confirm before posting.</div>
               </div>
-              <div style={{ display: "grid", gap: 5, minWidth: 220 }}>
+              <div style={{ display: "grid", gap: 5, minWidth: 240 }}>
                 <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><ScanLine size={13} color="var(--accent)" /> VIN / plate <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, opacity: 0.8 }}>· optional</span></label>
                 <input value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} placeholder="Read from your photos — confirm or add" maxLength={17} style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, letterSpacing: "0.04em", fontFamily: "var(--font-sans)" }} />
                 <span style={{ fontSize: 11, color: "var(--muted)" }}>Kept private — never shown on public listings.</span>
                 <label style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><Tag size={13} color="var(--accent)" /> Stock # <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, opacity: 0.8 }}>· optional</span></label>
                 <input value={stockNumber} onChange={(e) => setStockNumber(e.target.value)} placeholder="Your yard inventory code" style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, fontFamily: "var(--font-sans)" }} />
+                {vehicle && (
+                  <>
+                    <label style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Trim</label>
+                    <input value={vehicleTrim} onChange={(e) => setVehicleTrim(e.target.value)} placeholder="e.g. LX, Sport, Limited" style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, fontFamily: "var(--font-sans)" }} />
+                    <label style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Color</label>
+                    <input value={vehicleColor} onChange={(e) => setVehicleColor(e.target.value)} placeholder="e.g. Silver, Black, Red" style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, fontFamily: "var(--font-sans)" }} />
+                  </>
+                )}
               </div>
             </Card>
           )}

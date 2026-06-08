@@ -159,17 +159,23 @@ export async function PATCH(req: Request) {
 
     const update: Record<string, any> = {};
     if (body.priceUsd != null && body.priceUsd !== "") update.price_usd = Number(body.priceUsd);
+    if (typeof body.stockLocation === "string") update.stock_location = body.stockLocation;
+    if (typeof body.barcode === "string") update.barcode = body.barcode;
     if (typeof body.status === "string") {
       const enumStatus = STATUS_TO_ENUM[body.status] || (["draft", "active", "sold", "removed"].includes(body.status) ? body.status : null);
       if (!enumStatus) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
       update.status = enumStatus;
     }
-    // Editable part title (name) + description merge into the corrected JSON so
-    // we don't clobber other reviewed fields.
-    if (typeof body.description === "string" || typeof body.partName === "string") {
+    // Editable part fields merge into the corrected JSON so we don't clobber
+    // other reviewed fields.
+    if (typeof body.description === "string" || typeof body.partName === "string" || typeof body.condition === "string" || typeof body.category === "string" || typeof body.fitment !== "undefined" || typeof body.conditionNotes === "string") {
       const corrected = { ...(row.corrected || row.ai_output || {}) };
       if (typeof body.description === "string") corrected.description = body.description;
       if (typeof body.partName === "string" && body.partName.trim()) corrected.partName = body.partName.trim();
+      if (typeof body.condition === "string" && ["Good","Poor"].includes(body.condition)) corrected.condition = body.condition;
+      if (typeof body.category === "string") corrected.partCategory = body.category;
+      if (typeof body.conditionNotes === "string") corrected.conditionNotes = body.conditionNotes;
+      if (body.fitment !== undefined) corrected.fitment = body.fitment;
       update.corrected = corrected;
     }
     if (Object.keys(update).length === 0) return NextResponse.json({ ok: true });

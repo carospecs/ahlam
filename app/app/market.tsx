@@ -24,11 +24,13 @@ import {
   MapPin,
   PackageOpen,
   Camera,
+  MessageCircle,
 } from "lucide-react-native";
 import { colors, space, font, radius, conditionColorOf } from "@/theme";
 import { Button } from "@/components/Button";
 import { useSession } from "@/lib/auth";
 import * as ImagePicker from "expo-image-picker";
+import * as Linking from "expo-linking";
 import {
   fetchMarketplace,
   contactSeller,
@@ -40,8 +42,8 @@ import {
 } from "@/lib/marketplace";
 
 type Target =
-  | { kind: "listing"; id: string; title: string }
-  | { kind: "shop"; shopId: string; subject: string; title: string };
+  | { kind: "listing"; id: string; title: string; phone?: string | null }
+  | { kind: "shop"; shopId: string; subject: string; title: string; phone?: string | null };
 
 type Detail =
   | { kind: "part"; data: MarketPart }
@@ -190,7 +192,7 @@ export default function Market() {
               </View>
               <Pressable
                 style={styles.msgBtn}
-                onPress={() => setTarget({ kind: "listing", id: item.id, title: `${item.part} · ${item.shopName}` })}
+                onPress={() => setTarget({ kind: "listing", id: item.id, title: `${item.part} · ${item.shopName}`, phone: item.phone })}
               >
                 <MessageSquare size={18} color={colors.white} />
               </Pressable>
@@ -224,7 +226,7 @@ export default function Market() {
               </View>
               <Pressable
                 style={styles.msgBtn}
-                onPress={() => setTarget({ kind: "shop", shopId: item.shopId, subject: `${item.year} ${item.make} ${item.model}`, title: `${item.year} ${item.make} ${item.model} · ${item.shopName}` })}
+                onPress={() => setTarget({ kind: "shop", shopId: item.shopId, subject: `${item.year} ${item.make} ${item.model}`, title: `${item.year} ${item.make} ${item.model} · ${item.shopName}`, phone: item.phone })}
               >
                 <MessageSquare size={18} color={colors.white} />
               </Pressable>
@@ -238,8 +240,8 @@ export default function Market() {
         onClose={() => setDetail(null)}
         onContact={() => {
           if (!detail) return;
-          if (detail.kind === "part") setTarget({ kind: "listing", id: detail.data.id, title: `${detail.data.part} · ${detail.data.shopName}` });
-          else setTarget({ kind: "shop", shopId: detail.data.shopId, subject: `${detail.data.year} ${detail.data.make} ${detail.data.model}`, title: `${detail.data.year} ${detail.data.make} ${detail.data.model} · ${detail.data.shopName}` });
+          if (detail.kind === "part") setTarget({ kind: "listing", id: detail.data.id, title: `${detail.data.part} · ${detail.data.shopName}`, phone: detail.data.phone });
+          else setTarget({ kind: "shop", shopId: detail.data.shopId, subject: `${detail.data.year} ${detail.data.make} ${detail.data.model}`, title: `${detail.data.year} ${detail.data.make} ${detail.data.model} · ${detail.data.shopName}`, phone: detail.data.phone });
           setDetail(null);
         }}
       />
@@ -344,6 +346,9 @@ function ContactModal({ target, onClose }: { target: Target | null; onClose: () 
     }
   }
 
+  const waNumber = target?.phone?.replace(/[^0-9]/g, "");
+  const waHref = waNumber ? `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}` : null;
+
   return (
     <Modal visible={!!target} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
@@ -361,7 +366,17 @@ function ContactModal({ target, onClose }: { target: Target | null; onClose: () 
             placeholder="Write a message…"
             placeholderTextColor={colors.muted}
           />
-          <Button label={busy ? "Sending…" : "Send message"} onPress={send} loading={busy} disabled={busy} />
+          <View style={{ flexDirection: "row", gap: space.sm }}>
+            <View style={{ flex: 1 }}>
+              <Button label={busy ? "Sending…" : "Send message"} onPress={send} loading={busy} disabled={busy} />
+            </View>
+            {waHref && (
+              <Pressable onPress={() => { Linking.openURL(waHref); onClose(); }} style={{ minHeight: 48, paddingHorizontal: space.md, borderRadius: radius.md, backgroundColor: "#25D366", alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 }}>
+                <MessageCircle size={18} color={colors.white} />
+                <Text style={{ color: colors.white, fontSize: font.body, fontWeight: "700" }}>WhatsApp</Text>
+              </Pressable>
+            )}
+          </View>
         </Pressable>
       </Pressable>
     </Modal>

@@ -47,6 +47,7 @@ export async function GET() {
         sellMode: v.sell_mode || "parts", askingPrice: v.asking_price, mileage: v.mileage || "",
         description: v.description || "", title: v.title || "", status: statusLabel(v.status),
         stock_number: v.stock_number || "",
+        ebayUrl: v.ebay_url || null, ebayLotUrl: v.ebay_lot_url || null,
       }));
 
       listings = (listRes.data || []).map((l: any) => {
@@ -60,6 +61,7 @@ export async function GET() {
           category: c.partCategory || c.part_category || "", confidence: c.confidence || "high",
           note: c.conditionNotes || c.condition_notes || "", desc: c.description || "",
           sellerId: l.seller_id, ebayUrl: l.ebay_url || null, image: l.photo_url || null,
+          stockLocation: l.stock_location || "", barcode: l.barcode || "",
         };
       });
 

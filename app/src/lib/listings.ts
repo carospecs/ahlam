@@ -177,21 +177,25 @@ export async function updateListing(params: {
   priceUsd?: number | null;
   status?: SavedListing["status"];
   description?: string;
+  condition?: string;
+  category?: string;
+  fitment?: string;
+  conditionNotes?: string;
   current?: SavedListing | null;
 }): Promise<void> {
   const update: Record<string, unknown> = {};
   if (params.priceUsd !== undefined) update.price_usd = params.priceUsd;
   if (params.status !== undefined) update.status = params.status;
-  if (params.description !== undefined) {
+  if (params.description !== undefined || params.condition !== undefined || params.category !== undefined || params.fitment !== undefined || params.conditionNotes !== undefined) {
     const base = params.current?.corrected ?? null;
     const aiFallback = params.current?.ai_output;
     const merged: CorrectedFields = {
       partName: base?.partName ?? aiFallback?.partName ?? "",
-      partCategory: base?.partCategory ?? aiFallback?.partCategory ?? "",
-      condition: base?.condition ?? aiFallback?.condition ?? "Good",
-      conditionNotes: base?.conditionNotes ?? aiFallback?.conditionNotes ?? "",
-      description: params.description,
-      fitment: base?.fitment ?? aiFallback?.fitment ?? [],
+      partCategory: params.category ?? base?.partCategory ?? aiFallback?.partCategory ?? "",
+      condition: (params.condition ?? base?.condition ?? aiFallback?.condition ?? "Good") as "Good" | "Poor",
+      conditionNotes: params.conditionNotes ?? base?.conditionNotes ?? aiFallback?.conditionNotes ?? "",
+      description: params.description ?? base?.description ?? aiFallback?.description ?? "",
+      fitment: params.fitment ? parseFitment(params.fitment) : (base?.fitment ?? aiFallback?.fitment ?? []),
       priceUsd: base?.priceUsd ?? params.current?.price_usd ?? 0,
     };
     update.corrected = merged;

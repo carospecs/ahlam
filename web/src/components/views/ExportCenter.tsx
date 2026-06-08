@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import { Send, Copy, Download, FileDown, ExternalLink, Info, CircleCheck, Share2, Tag, ShoppingBag, Globe, LoaderCircle, Link2, RefreshCw, ChevronDown } from "lucide-react";
-import { Card, PhotoCell, ConditionBadge, StatusBadge } from "../UI";
-import { buildListingText } from "../data";
+import { Send, Copy, Download, FileDown, ExternalLink, Info, CircleCheck, Share2, Tag, ShoppingBag, Globe, LoaderCircle, Link2, RefreshCw, ChevronDown, Car } from "lucide-react";
+import { Card, PhotoCell, ConditionBadge, SellModeBadge } from "../UI";
+import { buildListingText, buildVehicleText } from "../data";
 import { useData, csToast } from "../Dashboard";
 
 // Platforms with no listing API — we prepare the text + photos and open the
@@ -15,11 +15,38 @@ const PREPARE_CHANNELS = [
 ];
 
 export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
-  const { listings, shop } = useData();
+  const { listings, vehicles, shop } = useData();
   const ready = listings.filter((l: any) => l.status === "Draft" || l.status === "Posted");
 
+  // Resolve a listing's car from its vehicleId (live data has no inline name).
+  const vById = React.useMemo(
+    () => new Map<string, any>((vehicles || []).map((v: any) => [v.id, v])),
+    [vehicles]
+  );
+  const vehLabel = (v: any) => `${v.year} ${v.make} ${v.model}${v.trim ? ` ${v.trim}` : ""}`.trim();
+  const listingVeh = (l: any) => {
+    const v = l.vehicleId ? vById.get(l.vehicleId) : null;
+    return v ? vehLabel(v) : (l.vehicle || l.fitment || "Other parts");
+  };
+
+  // Group the ready parts under their vehicle so the export reads car-by-car.
+  const groups = React.useMemo(() => {
+    const m = new Map<string, { key: string; name: string; items: any[] }>();
+    for (const l of ready) {
+      const v = l.vehicleId ? vById.get(l.vehicleId) : null;
+      const key = v ? v.id : "__other";
+      const name = v ? vehLabel(v) : "Other parts";
+      if (!m.has(key)) m.set(key, { key, name, items: [] });
+      m.get(key)!.items.push(l);
+    }
+    return [...m.values()].sort((a, b) => (a.key === "__other" ? 1 : b.key === "__other" ? -1 : a.name.localeCompare(b.name)));
+  }, [ready, vById]);
+
+  // Cars that are listed whole (or both) — postable as a single vehicle ad.
+  const sellableCars = (vehicles || []).filter((v: any) => v.sellMode === "whole" || v.sellMode === "both");
+
   const [ebay, setEbay] = React.useState<{ configured: boolean; connected: boolean; account: string | null; env: string } | null>(null);
-  const [listing, setListing] = React.useState<string | null>(null); // listingId being pushed to eBay
+  const [busy, setBusy] = React.useState<string | null>(null); // "part:id" | "lot:id" | "car:id"
   const [advanced, setAdvanced] = React.useState(false);
 
   const loadEbay = React.useCallback(() => {
@@ -41,17 +68,24 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
     window.open(ch.url, "_blank", "noopener");
   }
 
-  async function listOnEbay(l: any) {
-    if (listing) return;
-    setListing(l.id);
+  function prepareCar(ch: typeof PREPARE_CHANNELS[number], v: any) {
+    try { navigator.clipboard?.writeText(buildVehicleText(v, shop)); } catch {}
+    csToast(`Copied car ad — opening ${ch.name}`);
+    window.open(ch.url, "_blank", "noopener");
+  }
+
+  // One publisher for parts, wholesale lots, and whole cars — body decides which.
+  async function ebayPublish(key: string, body: any, okMsg: string) {
+    if (busy) return;
+    setBusy(key);
     try {
-      const r = await fetch("/api/ebay/list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: l.id }) });
+      const r = await fetch("/api/ebay/list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const d = await r.json().catch(() => ({}));
-      if (r.ok && d.url) { csToast("Listed on eBay 🎉"); window.open(d.url, "_blank", "noopener"); (window as any).csReloadData?.(); }
+      if (r.ok && d.url) { csToast(okMsg); window.open(d.url, "_blank", "noopener"); (window as any).csReloadData?.(); }
       else if (d.notConnected) csToast("Connect your eBay account first");
       else csToast(d.error || "eBay listing failed");
     } catch { csToast("eBay listing failed — check your connection"); }
-    setListing(null);
+    setBusy(null);
   }
 
   function downloadBlob(content: string, filename: string, mime: string) {
@@ -62,12 +96,12 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
   }
   function exportCSV() {
     const headers = ["Part", "Vehicle/Fitment", "Price", "Grade", "Status", "Description"];
-    const rows = ready.map((l: any) => [l.part, l.vehicle || l.fitment || "", l.price ?? "", l.grade ?? "", l.status, (l.description || "").replace(/"/g, '""')]);
+    const rows = ready.map((l: any) => [l.part, listingVeh(l), l.price ?? "", l.grade ?? "", l.status, (l.desc || l.description || "").replace(/"/g, '""')]);
     const csv = [headers.join(","), ...rows.map((r: string[]) => r.map((v: string) => `"${v}"`).join(","))].join("\n");
     downloadBlob(csv, "listings.csv", "text/csv");
   }
   function exportJSON() {
-    const data = ready.map((l: any) => ({ id: l.id, part: l.part, vehicle: l.vehicle, fitment: l.fitment, price: l.price, grade: l.grade, status: l.status, description: l.description }));
+    const data = ready.map((l: any) => ({ id: l.id, part: l.part, vehicle: listingVeh(l), fitment: l.fitment, price: l.price, grade: l.grade, status: l.status, description: l.desc || l.description }));
     downloadBlob(JSON.stringify(data, null, 2), "listings.json", "application/json");
   }
 
@@ -127,34 +161,88 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
         </div>
       </div>
 
-      {/* Listings */}
+      {/* Whole cars for sale */}
+      {sellableCars.length > 0 && (
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Whole cars for sale <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {sellableCars.length}</span></div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>List the complete vehicle as one ad. eBay Motors uses a separate vehicle flow — use <strong>Post elsewhere</strong> to copy a ready-to-paste car ad.</div>
+          <Card pad={0}>
+            {sellableCars.map((v: any, i: number) => (
+              <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 13, padding: "12px 16px", borderBottom: i < sellableCars.length - 1 ? "1px solid var(--line)" : "none", flexWrap: "wrap" }}>
+                <PhotoCell icon="Car" url={v.image} style={{ width: 44, height: 38, flexShrink: 0 }} iconSize={18} />
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{vehLabel(v)}</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                    {[v.body, v.mileage].filter(Boolean).join(" · ")}
+                    {v.askingPrice ? ` · $${Number(v.askingPrice).toLocaleString()}` : ""}
+                  </div>
+                </div>
+                <SellModeBadge mode={v.sellMode} size="sm" />
+                {v.ebayUrl ? (
+                  <a href={v.ebayUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--success)", textDecoration: "none" }}><CircleCheck size={14} /> On eBay</a>
+                ) : ebay?.connected ? (
+                  <button onClick={() => ebayPublish(`car:${v.id}`, { mode: "vehicle", vehicleId: v.id }, "Car listed on eBay Motors 🎉")} disabled={!!busy} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", background: "var(--signal)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: busy && busy !== `car:${v.id}` ? 0.5 : 1 }}>
+                    {busy === `car:${v.id}` ? <LoaderCircle size={14} className="spin" /> : <Car size={14} />} List on eBay
+                  </button>
+                ) : null}
+                <PrepareMenu channels={PREPARE_CHANNELS} onPick={(ch) => prepareCar(ch, v)} />
+              </div>
+            ))}
+          </Card>
+        </div>
+      )}
+
+      {/* Parts — grouped by vehicle */}
       <div>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Your listings <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {ready.length}</span></div>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Parts by vehicle <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {ready.length}</span></div>
         {ready.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: "var(--muted)", fontSize: 14, border: "1px dashed var(--line)", borderRadius: 14 }}>
             No listings yet. <button onClick={() => go("add")} style={{ color: "var(--accent)", background: "none", border: "none", fontWeight: 600, cursor: "pointer" }}>Add a vehicle</button> to create some.
           </div>
         ) : (
-          <Card pad={0}>
-            {ready.map((l: any, i: number) => (
-              <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 13, padding: "12px 16px", borderBottom: i < ready.length - 1 ? "1px solid var(--line)" : "none", flexWrap: "wrap" }}>
-                <PhotoCell icon="Wrench" url={l.image} style={{ width: 44, height: 38, flexShrink: 0 }} iconSize={16} />
-                <div style={{ flex: 1, minWidth: 140 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
-                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{l.vehicle || l.fitment} · ${l.price}</div>
+          <div style={{ display: "grid", gap: 16 }}>
+            {groups.map((g) => {
+              const gv = g.key === "__other" ? null : vById.get(g.key);
+              return (
+              <div key={g.key}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, margin: "0 2px 8px", flexWrap: "wrap" }}>
+                  <Car size={14} color="var(--muted)" />
+                  <span style={{ fontSize: 13.5, fontWeight: 700 }}>{g.name}</span>
+                  <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 500 }}>· {g.items.length} part{g.items.length === 1 ? "" : "s"}</span>
+                  {gv && g.items.length > 1 && (
+                    gv.ebayLotUrl ? (
+                      <a href={gv.ebayLotUrl} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--success)", textDecoration: "none" }}><CircleCheck size={13} /> Lot on eBay</a>
+                    ) : ebay?.connected ? (
+                      <button onClick={() => ebayPublish(`lot:${gv.id}`, { mode: "lot", vehicleId: gv.id }, "Parts lot listed on eBay 🎉")} disabled={!!busy} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent-tint)", color: "var(--accent)", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: busy && busy !== `lot:${gv.id}` ? 0.5 : 1 }}>
+                        {busy === `lot:${gv.id}` ? <LoaderCircle size={13} className="spin" /> : <ShoppingBag size={13} />} List all as one lot
+                      </button>
+                    ) : null
+                  )}
                 </div>
-                <ConditionBadge grade={l.grade} size="sm" />
-                {l.ebayUrl ? (
-                  <a href={l.ebayUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--success)", textDecoration: "none" }}><CircleCheck size={14} /> On eBay</a>
-                ) : ebay?.connected ? (
-                  <button onClick={() => listOnEbay(l)} disabled={!!listing} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: listing && listing !== l.id ? 0.5 : 1 }}>
-                    {listing === l.id ? <LoaderCircle size={14} className="spin" /> : <ShoppingBag size={14} />} List on eBay
-                  </button>
-                ) : null}
-                <PrepareMenu channels={PREPARE_CHANNELS} onPick={(ch) => prepareAndOpen(ch, l)} />
+                <Card pad={0}>
+                  {g.items.map((l: any, i: number) => (
+                    <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 13, padding: "12px 16px", borderBottom: i < g.items.length - 1 ? "1px solid var(--line)" : "none", flexWrap: "wrap" }}>
+                      <PhotoCell icon="Wrench" url={l.image} style={{ width: 44, height: 38, flexShrink: 0 }} iconSize={16} />
+                      <div style={{ flex: 1, minWidth: 140 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
+                        <div style={{ fontSize: 12, color: "var(--muted)" }}>{l.fitment || g.name} · ${l.price}</div>
+                      </div>
+                      <ConditionBadge grade={l.grade} size="sm" />
+                      {l.ebayUrl ? (
+                        <a href={l.ebayUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--success)", textDecoration: "none" }}><CircleCheck size={14} /> On eBay</a>
+                      ) : ebay?.connected ? (
+                        <button onClick={() => ebayPublish(`part:${l.id}`, { listingId: l.id }, "Listed on eBay 🎉")} disabled={!!busy} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: busy && busy !== `part:${l.id}` ? 0.5 : 1 }}>
+                          {busy === `part:${l.id}` ? <LoaderCircle size={14} className="spin" /> : <ShoppingBag size={14} />} List on eBay
+                        </button>
+                      ) : null}
+                      <PrepareMenu channels={PREPARE_CHANNELS} onPick={(ch) => prepareAndOpen(ch, l)} />
+                    </div>
+                  ))}
+                </Card>
               </div>
-            ))}
-          </Card>
+              );
+            })}
+          </div>
         )}
       </div>
 
