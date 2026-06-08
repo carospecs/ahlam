@@ -122,6 +122,12 @@ PRICING GUIDANCE (applies to both "suggestedWholeCarPriceUsd" and each part's "s
 - "Good" condition = mid-to-upper market range; "Poor" = priced as a core/repairable (clearly below range, but still realistic).
 - For the whole car: think used-car comps for that year/make/model/mileage and trim, at typical private-party value (only discount for genuine salvage/parts-car condition).
 - Use realistic round numbers. If you genuinely have no basis for a price, use null rather than guessing — but prefer a market-based estimate.
+- TYPICAL USED-OEM PRICE BANDS (a modern, popular vehicle in "Good" condition — anchor near the MIDDLE of these; a single mainstream-car part is rarely worth under ~$150):
+  - Door (shell): $500–$1,200 · Hood: $250–$700 · Fender: $200–$500 · Bumper cover: $200–$700 · Quarter panel: $400–$900
+  - Headlight assembly: $150–$500 (LED/HID higher) · Tail light: $80–$300 · Side mirror: $120–$350 (left & right are usually within ~20% of each other — don't price them wildly differently)
+  - Wheel/Rim: $120–$400 each · Tire: $40–$150 each · Windshield/glass: $150–$500
+  - Engine: $1,000–$4,000 · Transmission: $700–$2,500 · Alternator/Starter: $80–$250 · AC Compressor: $120–$350
+  These are ballparks for popular models — adjust up for luxury/low-supply, down only for genuine damage ("Poor"). NEVER undercut the bottom of the band for a "Good" part.
 
 INFERRED / HIDDEN PARTS:
 - When the photos show a whole or mostly-complete vehicle (not a single detached part), you MAY also list standard high-value mechanical/safety parts that a yard would pull but that aren't directly visible in the photos — e.g. "Engine", "Transmission", "Alternator", "Starter", "ABS Module", "Strut / Shock", "AC Compressor". Mark these with "confidence": "low" and a conditionNotes like "Typically present on this vehicle — confirm before listing". This helps sellers who can't photograph under the car. NEVER infer body/cosmetic parts you can't see — only standard mechanicals for the identified vehicle.
@@ -136,8 +142,9 @@ LEFT / RIGHT SIDES — READ CAREFULLY (this is where mistakes happen):
 2. "imageSide" (per part) — purely WHERE the part appears in the photo frame from your point of view: "left", "right", or "center".
 3. Put NO "left"/"right"/"driver"/"passenger" word in "partName" — the system adds the correct side itself from "imageSide". "front"/"rear" ARE allowed in the name (e.g. "Front Bumper Cover").
 4. CENTER PARTS HAVE NO LEFT/RIGHT. These parts exist as a single centered unit and MUST use "imageSide": "center" — never left/right: Hood, Grille, Front Bumper Cover, Rear Bumper Cover, Roof Panel, Windshield, Back Glass, Trunk Lid, Tailgate, Liftgate, Radiator, Engine, Transmission, Dashboard, Center Console, Instrument Cluster, Steering Wheel, Battery, exhaust/muffler. A "Right Grille" or "Left Bumper Cover" is WRONG.
-5. SIDE PARTS that genuinely come in a left and a right: Fender, Door, Quarter Panel, Side Mirror, Headlight Assembly, Tail Light Assembly, Fog Light, door Windows, Front Seat, wheels. Only these may carry a side.
-6. NEVER CONTRADICT YOURSELF: the side you report MUST match what you wrote in "description" and "conditionNotes". If your description mentions damage near the left headlight, the part is on the LEFT — do not report it as right. If you are not sure which side, set "imageSide": "center" and lower "confidence" rather than guessing.
+5. SIDE PARTS that genuinely come in a left and a right: Fender, Door, Quarter Panel, Side Mirror, Headlight Assembly, Tail Light Assembly, Fog Light, door Windows, Front Seat, wheels. These MUST carry a side — set "imageSide" to "left" or "right", NEVER "center". A door/mirror/fender/headlight always belongs to one side; pick the side you see. Result names must be specific like "Front Left Door", "Rear Right Door", "Left Side Mirror".
+6. NO DUPLICATES / NO GENERICS: never output a bare "Door"/"Front Door"/"Rear Door"/"Mirror" without its side, and never list the same physical part twice (e.g. don't return both "Rear Door" and "Rear Right Door" — that's one part, "Rear Right Door"). Each side part appears at most once per side.
+7. NEVER CONTRADICT YOURSELF: the side in the name MUST match what you wrote in "description"/"conditionNotes". If the description says "right (passenger side)", the side is RIGHT. If you truly can't tell the side of a side-part, still give your best single guess and set "confidence":"low" — do NOT fall back to a generic no-side name.
 
 CONDITION RUBRIC (grade each part as exactly "Good" or "Poor", based solely on visible condition — there are only these two grades):
 - Good: ${CONDITION_RUBRIC.Good.detail}
@@ -278,11 +285,17 @@ export async function POST(req: Request): Promise<NextResponse<AIResult>> {
       // side word the model added and never apply one. Side parts keep theirs.
       const center = isCenterPart(p.partName ?? "");
       const baseName = stripSide((p.partName ?? "Unknown part").trim());
-      const side = center ? null : lateralSide(vehicleFront, p.imageSide);
+      let side = center ? null : lateralSide(vehicleFront, p.imageSide);
+      // Side parts must stay sided even when vehicleFront is unknown — don't drop
+      // to a generic name (that's what created "Rear Door" + "Rear Right Door").
+      if (!center && !side && isLateralPart(baseName)) {
+        if (p.imageSide === "left" || p.imageSide === "right") side = p.imageSide === "left" ? "Left" : "Right";
+        else { const m = /\b(left|right)\b/i.exec(p.partName ?? ""); if (m) side = (m[1][0].toUpperCase() + m[1].slice(1).toLowerCase()) as "Left" | "Right"; }
+      }
       const partName = applySide(baseName, side);
 
       const lowFields = new Set<keyof AIPartOutput>(p.lowConfidenceFields ?? []);
-      const sideUnknown = !center && !side && isLateralPart(baseName) && vehicleFront === "unknown";
+      const sideUnknown = !center && !side && isLateralPart(baseName);
       if (sideUnknown) lowFields.add("partName");
 
       return {
