@@ -11,6 +11,27 @@ export default function Home() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [showLogin, setShowLogin] = useState(false);
 
+  // Show the login form AND mark it in the URL (?signin) so a refresh keeps the
+  // user on the auth screen instead of bouncing back to the marketing page.
+  const openLogin = () => {
+    setShowLogin(true);
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("signin")) {
+      url.searchParams.set("signin", "1");
+      window.history.replaceState({}, "", url);
+    }
+  };
+
+  // Leaving the auth screen (e.g. sign-out) clears the ?signin marker.
+  const closeLogin = () => {
+    setShowLogin(false);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("signin")) {
+      url.searchParams.delete("signin");
+      window.history.replaceState({}, "", url);
+    }
+  };
+
   useEffect(() => {
     // Jump straight to the auth form for sign-in intents (OAuth error, ?signin,
     // or a password-recovery link) rather than showing the marketing landing.
@@ -45,7 +66,7 @@ export default function Home() {
     );
   }
 
-  if (authed) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Dashboard onSignOut={() => { supabaseBrowser().auth.signOut(); setShowLogin(false); setAuthed(false); }} /></Suspense>;
+  if (authed) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Dashboard onSignOut={() => { supabaseBrowser().auth.signOut(); closeLogin(); setAuthed(false); }} /></Suspense>;
   if (showLogin) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Login onLogin={() => setAuthed(true)} /></Suspense>;
-  return <Landing onGetStarted={() => setShowLogin(true)} onSignIn={() => setShowLogin(true)} />;
+  return <Landing onGetStarted={openLogin} onSignIn={openLogin} />;
 }

@@ -89,6 +89,10 @@ export function Login({ onLogin }: { onLogin: () => void }) {
       setError("Google sign-in didn't complete. Please try again, or sign in with your email and password below.");
       window.history.replaceState({}, "", window.location.pathname);
     }
+    // If the user starts Google sign-in then hits "back", the page is restored
+    // from the bfcache with busy=true — clear it so they can use manual login.
+    const onPageShow = () => setBusy(false);
+    window.addEventListener("pageshow", onPageShow);
     // When a user returns from a password-reset email, Supabase fires PASSWORD_RECOVERY
     // with a temporary session — switch to the "set new password" form.
     const sb = supabaseBrowser();
@@ -98,7 +102,10 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         setNotice("Choose a new password to finish resetting your account.");
       }
     });
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      sub.subscription.unsubscribe();
+      window.removeEventListener("pageshow", onPageShow);
+    };
   }, []);
 
   // Lightweight password strength (signup only): 0–4
