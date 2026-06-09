@@ -1,5 +1,17 @@
 # Connecting eBay — step by step (and what it costs)
 
+> **🔑 Production env keys (ahlam.io)** — set these in `.env.local` (local) and
+> Vercel → Settings → Environment Variables (production). **Never commit the real
+> values** — this repo is public. Use the actual secrets from your eBay developer
+> account; placeholders shown here:
+> ```
+> EBAY_ENV=production
+> EBAY_CLIENT_ID=<your-app-id>
+> EBAY_CLIENT_SECRET=<your-cert-id>     # keep secret — rotate if ever exposed
+> EBAY_REDIRECT_URI=<your-runame>
+> NEXT_PUBLIC_SITE_URL=https://ahlam.io
+> ```
+
 This is the one-time setup that turns on the **Export → "List on eBay"** button.
 Until these keys are in place, the app stays healthy and just shows
 *"Not set up on the server yet."* Nothing else breaks.
