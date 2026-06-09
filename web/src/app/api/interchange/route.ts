@@ -240,6 +240,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, cached, result: { ...result, marketMatches } });
   } catch (err) {
+    // Surface the real cause (e.g. Gemini 429/quota) in the server logs — the
+    // user still gets a friendly message.
+    console.error("[interchange] lookup failed:", err instanceof Error ? err.message : err);
     return NextResponse.json({ ok: false, error: "Interchange lookup failed. Try again." }, { status: 500 });
   }
 }
