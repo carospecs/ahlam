@@ -303,7 +303,7 @@ export async function publishListing(shopId: string, input: EbayListingInput): P
   }
 
   // 2. Offer
-  const offer = await api(token, `/sell/inventory/v1/offer`, "POST", {
+  const offerBody = {
     sku: input.sku,
     marketplaceId: "EBAY_US",
     format: "FIXED_PRICE",
@@ -317,13 +317,18 @@ export async function publishListing(shopId: string, input: EbayListingInput): P
       paymentPolicyId: input.paymentPolicyId,
       returnPolicyId: input.returnPolicyId,
     },
-  });
+  };
+  const offer = await api(token, `/sell/inventory/v1/offer`, "POST", offerBody);
   let offerId = offer.json?.offerId;
   if (!offer.ok) {
-    // Offer may already exist for this SKU — fetch it.
+    // An offer already exists for this SKU (e.g. a prior attempt). Fetch it AND
+    // update it with the current location + policies — a stale offer created
+    // before provisioning has no location and would fail publish on Item.Country.
     const existing = await api(token, `/sell/inventory/v1/offer?sku=${encodeURIComponent(input.sku)}`, "GET");
     offerId = existing.json?.offers?.[0]?.offerId;
     if (!offerId) throw new Error(`offer: ${offer.text.slice(0, 300)}`);
+    const upd = await api(token, `/sell/inventory/v1/offer/${offerId}`, "PUT", offerBody);
+    if (!upd.ok) throw new Error(`offer_update: ${upd.text.slice(0, 300)}`);
   }
 
   // 3. Publish
