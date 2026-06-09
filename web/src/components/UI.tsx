@@ -73,12 +73,15 @@ export function conditionColorOf(grade: string): string {
 }
 
 export function ConditionBadge({ grade, size = "md" }: { grade: string; size?: "sm" | "md" }) {
-  const c = CONDITION_GRADE_MAP[grade]?.color || "var(--muted)";
+  const entry = CONDITION_GRADE_MAP[grade];
+  const c = entry?.color || "var(--muted)";
+  // Prefer the friendly "Grade A/B/C" label; fall back to the raw value.
+  const label = entry?.label || grade;
   const pad = size === "sm" ? "2px 8px" : "3px 10px";
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 7, padding: pad, fontSize: size === "sm" ? 11.5 : 12.5, fontWeight: 700, color: c, background: `color-mix(in srgb, ${c} 16%, transparent)` }}>
+    <span title={entry?.summary || ""} style={{ display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 7, padding: pad, fontSize: size === "sm" ? 11.5 : 12.5, fontWeight: 700, color: c, background: `color-mix(in srgb, ${c} 16%, transparent)` }}>
       <span style={{ width: 6, height: 6, borderRadius: 999, background: c }} />
-      {grade}
+      {label}
     </span>
   );
 }

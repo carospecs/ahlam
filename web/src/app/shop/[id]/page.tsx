@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import { BrandChip } from "@/components/BrandMark";
+import { normalizeGrade } from "@/lib/grade";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export default async function ShopStorefront({ params }: Params) {
     return {
       id: l.id,
       part: c.partName || c.part_name || "Used Part",
-      grade: c.condition || "Good",
+      grade: normalizeGrade(c.condition),
       price: l.price_usd ?? c.suggestedPriceUsd ?? 0,
       fitment: fmtFit(c.fitment),
       category: c.partCategory || c.part_category || "",

@@ -1,7 +1,8 @@
 // Core data model shared across web + app + database.
 // Keep this in sync with supabase/migrations.
 
-export type ConditionGrade = "Good" | "Poor";
+/** ARA-style parts grade: A (like-new), B (good/usable), C (rough/core). */
+export type ConditionGrade = "A" | "B" | "C";
 
 /** AI confidence bucket. "low" triggers the yellow "review carefully" UI. */
 export type Confidence = "high" | "medium" | "low";
@@ -31,6 +32,8 @@ export interface AIPartOutput {
   condition: ConditionGrade;
   /** One sentence explaining the condition grade. */
   conditionNotes: string;
+  /** ARA-style damage code, e.g. "DT-LF-2" (dent, left-front, ~2in) or "" if none. */
+  damageCode?: string;
   /** 2-sentence marketplace description. */
   description: string;
   /** AI's suggested price in USD, if it can estimate one. Employee can override. */

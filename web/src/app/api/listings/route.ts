@@ -172,9 +172,10 @@ export async function PATCH(req: Request) {
       const corrected = { ...(row.corrected || row.ai_output || {}) };
       if (typeof body.description === "string") corrected.description = body.description;
       if (typeof body.partName === "string" && body.partName.trim()) corrected.partName = body.partName.trim();
-      if (typeof body.condition === "string" && ["Good","Poor"].includes(body.condition)) corrected.condition = body.condition;
+      if (typeof body.condition === "string" && ["A","B","C"].includes(body.condition)) corrected.condition = body.condition;
       if (typeof body.category === "string") corrected.partCategory = body.category;
       if (typeof body.conditionNotes === "string") corrected.conditionNotes = body.conditionNotes;
+      if (typeof body.damageCode === "string") corrected.damageCode = body.damageCode.slice(0, 16);
       if (body.fitment !== undefined) corrected.fitment = body.fitment;
       update.corrected = corrected;
     }

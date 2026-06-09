@@ -248,7 +248,7 @@ export function Browse() {
             <>
               <Select label="Category" value={partCat} onChange={setPartCat} options={partCats} />
               <span style={{ fontSize: 12, color: "var(--muted)" }}>Grade:</span>
-              {["Good","Poor"].map((g) => {
+              {["A","B","C"].map((g) => {
                 const on = selectedConditions.has(g);
                 const color = conditionColorOf(g);
                 return (

@@ -113,12 +113,62 @@ export interface EbayListingInput {
   quantity?: number; conditionId?: string; imageUrls?: string[];
   categoryId?: string; merchantLocationKey?: string;
   fulfillmentPolicyId?: string; paymentPolicyId?: string; returnPolicyId?: string;
+  // Item specifics shown in the listing + used by eBay's filters (Brand, MPN, etc.).
+  aspects?: Record<string, string[]>;
+  // Vehicles this part fits. eBay shows a "check compatibility" widget and lets
+  // buyers filter parts by their car — the #1 thing that makes parts findable.
+  compatibility?: EbayCompatibleVehicle[];
+}
+
+export interface EbayCompatibleVehicle {
+  make?: string; model?: string; year?: string | number;
+  trim?: string; engine?: string; notes?: string;
+}
+
+// eBay parts compatibility uses one row per (year, make, model[, trim, engine]).
+// Expand a fitment year-range into individual rows and cap the total so a wide
+// "fits 20 years of 12 models" result doesn't balloon the request.
+function compatibilityRows(vehicles: EbayCompatibleVehicle[], cap = 60) {
+  const rows: Array<{ compatibilityProperties: Array<{ name: string; value: string }>; notes?: string }> = [];
+  for (const v of vehicles) {
+    if (!v.make) continue;
+    const props = (year?: string) => [
+      year ? { name: "Year", value: year } : null,
+      { name: "Make", value: String(v.make) },
+      v.model ? { name: "Model", value: String(v.model) } : null,
+      v.trim ? { name: "Trim", value: String(v.trim) } : null,
+      v.engine ? { name: "Engine", value: String(v.engine) } : null,
+    ].filter(Boolean) as Array<{ name: string; value: string }>;
+    const yr = String(v.year ?? "").trim();
+    const range = /^(\d{4})\s*[-–]\s*(\d{4})$/.exec(yr);
+    if (range) {
+      const [a, b] = [Number(range[1]), Number(range[2])].sort((x, y) => x - y);
+      for (let y = a; y <= b && rows.length < cap; y++) rows.push({ compatibilityProperties: props(String(y)), notes: v.notes });
+    } else {
+      rows.push({ compatibilityProperties: props(yr || undefined), notes: v.notes });
+    }
+    if (rows.length >= cap) break;
+  }
+  return rows;
+}
+
+// Attach vehicle compatibility to an inventory item. Best-effort: a category that
+// doesn't support parts compatibility shouldn't block the whole listing.
+async function setCompatibility(token: string, sku: string, vehicles: EbayCompatibleVehicle[]) {
+  const compatibleProducts = compatibilityRows(vehicles);
+  if (!compatibleProducts.length) return;
+  await api(token, `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}/product_compatibility`, "PUT", { compatibleProducts });
 }
 
 // Inventory-API publish flow: item → offer → publish. Returns { listingId, url }.
 export async function publishListing(shopId: string, input: EbayListingInput): Promise<{ listingId: string; url: string }> {
   const token = await validAccessToken(shopId);
   if (!token) throw new Error("eBay account not connected");
+
+  // Drop empty aspect values so we never send `{ "Brand": [] }`.
+  const aspects = input.aspects
+    ? Object.fromEntries(Object.entries(input.aspects).map(([k, v]) => [k, (v || []).filter(Boolean)]).filter(([, v]) => (v as string[]).length))
+    : undefined;
 
   // 1. Inventory item
   const item = await api(token, `/sell/inventory/v1/inventory_item/${encodeURIComponent(input.sku)}`, "PUT", {
@@ -128,9 +178,15 @@ export async function publishListing(shopId: string, input: EbayListingInput): P
       title: input.title.slice(0, 80),
       description: input.description || input.title,
       imageUrls: input.imageUrls?.length ? input.imageUrls : undefined,
+      aspects: aspects && Object.keys(aspects).length ? aspects : undefined,
     },
   });
   if (!item.ok) throw new Error(`inventory_item: ${item.text.slice(0, 300)}`);
+
+  // 1b. Vehicle fitment (best-effort — never blocks the listing).
+  if (input.compatibility?.length) {
+    try { await setCompatibility(token, input.sku, input.compatibility); } catch { /* category may not support compatibility */ }
+  }
 
   // 2. Offer
   const offer = await api(token, `/sell/inventory/v1/offer`, "POST", {

@@ -6,16 +6,53 @@ import { ebayConfigured, getConnection, publishListing, publishVehicleListing } 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Two-bucket grade → eBay condition. Legacy A–F still map via the extra keys.
+// ARA A/B/C grade → eBay condition. Legacy Good/Poor/D/F still map too.
 const CONDITION: Record<string, string> = {
+  A: "USED_EXCELLENT", B: "USED_GOOD", C: "USED_ACCEPTABLE",
   Good: "USED_GOOD", Poor: "USED_ACCEPTABLE",
-  A: "USED_EXCELLENT", B: "USED_VERY_GOOD", C: "USED_GOOD",
   D: "USED_ACCEPTABLE", F: "FOR_PARTS_OR_NOT_WORKING",
 };
 
 function fitLine(fitment: any): string {
   if (!Array.isArray(fitment)) return "";
   return fitment.map((f: any) => `${f.yearStart || ""}${f.yearEnd && f.yearEnd !== f.yearStart ? `-${f.yearEnd}` : ""} ${f.make || ""} ${f.model || ""}`.trim()).filter(Boolean).slice(0, 3).join("; ");
+}
+
+// Turn the AI fitment array into eBay compatibility rows (year-range string per
+// make/model). eBay expands these into per-year filter entries.
+function fitCompatibility(fitment: any): Array<{ make?: string; model?: string; year?: string; trim?: string; notes?: string }> {
+  if (!Array.isArray(fitment)) return [];
+  return fitment
+    .filter((f: any) => f && f.make)
+    .map((f: any) => ({
+      make: f.make,
+      model: f.model || undefined,
+      year: f.yearStart ? `${f.yearStart}${f.yearEnd && f.yearEnd !== f.yearStart ? `-${f.yearEnd}` : ""}` : undefined,
+      trim: f.trim || undefined,
+      notes: f.notes || undefined,
+    }));
+}
+
+// eBay's "Placement on Vehicle" item specific, from the part name + image side.
+function placement(partName = "", side = ""): string | undefined {
+  const n = partName.toLowerCase(), s = side.toLowerCase();
+  const fb = /\bfront\b/.test(n) ? "Front" : /\brear\b/.test(n) ? "Rear" : "";
+  const lr = /\bleft\b/.test(n) || s === "left" ? "Left" : /\bright\b/.test(n) || s === "right" ? "Right" : "";
+  return [fb, lr].filter(Boolean).join(" ") || undefined;
+}
+
+// Item specifics eBay surfaces in search filters. Used OEM parts pulled from a
+// donor car are genuine/OEM, so that's a safe default brand.
+function partAspects(c: any): Record<string, string[]> {
+  const a: Record<string, string[]> = {
+    Brand: ["OEM"],
+    Type: [c.partName || "Auto Part"],
+  };
+  const place = placement(c.partName, c.imageSide);
+  if (place) a["Placement on Vehicle"] = [place];
+  const mpn = c.oemNumber || (Array.isArray(c.oemNumbers) ? c.oemNumbers[0] : undefined);
+  if (mpn) a["Manufacturer Part Number"] = [String(mpn)];
+  return a;
 }
 
 const POLICIES = {
@@ -70,7 +107,10 @@ async function listPart(db: any, shopId: string, listingId: string) {
     title, description: c.description || title, price: Number(price),
     conditionId: CONDITION[c.condition] || "USED_GOOD",
     imageUrls: l.photo_url && /^https?:\/\//.test(l.photo_url) ? [l.photo_url] : undefined,
-    categoryId: process.env.EBAY_CATEGORY_ID || "6028", ...POLICIES,
+    categoryId: process.env.EBAY_CATEGORY_ID || "6028",
+    aspects: partAspects(c),
+    compatibility: fitCompatibility(c.fitment),
+    ...POLICIES,
   });
   await db.from("listings").update({ ebay_listing_id: result.listingId, ebay_url: result.url, status: "active" }).eq("id", l.id);
   return NextResponse.json({ ok: true, url: result.url, listingId: result.listingId });

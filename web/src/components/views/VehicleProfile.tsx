@@ -115,7 +115,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
   const [editForm, setEditForm] = React.useState<Record<string, { name: string; price: string; desc: string; status: string; condition: string; category: string; conditionNotes: string; fitment: string }>>({});
   const formOf = (p: any) => editForm[p.id] || {
     name: p.part || "", price: String(priceOf(p)), desc: p.desc || p.description || "", status: p.status || "Draft",
-    condition: p.grade === "Poor" ? "Poor" : "Good", category: p.category || "", conditionNotes: p.note || "", fitment: p.fitment || "",
+    condition: p.grade === "Poor" ? "C" : p.grade === "Good" ? "B" : (["A","B","C"].includes(p.grade) ? p.grade : "B"), category: p.category || "", conditionNotes: p.note || "", fitment: p.fitment || "",
   };
   const setField = (id: string, p: any, patch: Partial<{ name: string; price: string; desc: string; status: string; condition: string; category: string; conditionNotes: string; fitment: string }>) =>
     setEditForm((ef) => ({ ...ef, [id]: { ...(ef[id] || formOf(p)), ...patch } }));
@@ -448,8 +448,8 @@ function VINField({ icon: Icon, label, value }: { icon: any; label: string; valu
 const fieldLabel: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 5 };
 const fieldInput: React.CSSProperties = { width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 13.5, outline: "none" };
 
-const CONDITION_OPTS = ["Good", "Poor"] as const;
-const CONDITION_COLORS: Record<string, string> = { Good: "var(--success)", Poor: "var(--danger)" };
+const CONDITION_OPTS = ["A", "B", "C"] as const;
+const CONDITION_COLORS: Record<string, string> = { A: "#22C55E", B: "#F59E0B", C: "#EF4444" };
 
 const CATEGORIES = [
   "Body / Exterior", "Engine / Mechanical", "Transmission / Drivetrain",
@@ -462,15 +462,16 @@ const CATEGORIES = [
 const STATUS_OPTS = ["Draft", "Posted", "Sold"] as const;
 const STATUS_COLOR: Record<string, string> = { Draft: "var(--muted)", Posted: "var(--success)", Sold: "var(--signal)" };
 
-// Segmented Good / Poor picker.
+// Segmented A / B / C grade picker (ARA-style).
 function ConditionPicker({ value, onChange }: { value: string; onChange: (s: string) => void }) {
+  const norm = value === "Good" ? "B" : value === "Poor" ? "C" : value;
   return (
     <div style={{ display: "inline-flex", gap: 3, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 9, padding: 3 }}>
       {CONDITION_OPTS.map((s) => {
-        const on = value === s;
+        const on = norm === s;
         const c = CONDITION_COLORS[s];
         return (
-          <button key={s} type="button" onClick={() => onChange(s)}
+          <button key={s} type="button" onClick={() => onChange(s)} title={`Grade ${s}`}
             style={{ padding: "6px 12px", borderRadius: 7, border: "none", background: on ? c : "transparent", color: on ? "#fff" : "var(--muted)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: on ? 1 : 0.7 }}>
             {s}
           </button>
