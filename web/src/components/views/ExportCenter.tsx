@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Send, Copy, Download, FileDown, ExternalLink, Info, CircleCheck, Share2, Tag, ShoppingBag, Globe, LoaderCircle, Link2, RefreshCw, ChevronDown, Car } from "lucide-react";
+import { Send, Copy, Download, FileDown, ExternalLink, Info, CircleCheck, Share2, Tag, ShoppingBag, Globe, LoaderCircle, Link2, RefreshCw, ChevronDown, Car, X, AlertTriangle, Check, ImageDown } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge, SellModeBadge } from "../UI";
 import { buildListingText, buildVehicleText } from "../data";
 import { useData, csToast } from "../Dashboard";
@@ -49,6 +49,11 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
   const [busy, setBusy] = React.useState<string | null>(null); // "part:id" | "lot:id" | "car:id"
   const [advanced, setAdvanced] = React.useState(false);
 
+  // "Post elsewhere" prep sheet (text + photos, shown before opening the marketplace).
+  const [prepare, setPrepare] = React.useState<PrepareState | null>(null);
+  // Fix-it sheet shown when an eBay publish fails, with tailored next steps.
+  const [fix, setFix] = React.useState<{ raw: string; target: string; retry: () => void } | null>(null);
+
   const loadEbay = React.useCallback(() => {
     fetch("/api/ebay/status").then((r) => r.json()).then((d) => d.ok && setEbay(d)).catch(() => setEbay(null));
   }, []);
@@ -84,33 +89,35 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
 
   const slug = (s: string) => (s || "listing").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
 
-  async function prepareAndOpen(ch: typeof PREPARE_CHANNELS[number], l: any) {
-    try { navigator.clipboard?.writeText(buildListingText(l, shop)); } catch {}
-    csToast(`Copied — saving photos & opening ${ch.name}`);
-    window.open(ch.url, "_blank", "noopener");
-    const n = await savePhotos([l.image, ...(Array.isArray(l.images) ? l.images : [])], slug(l.part));
-    if (n) csToast(`${n} photo${n === 1 ? "" : "s"} saved — drag them into ${ch.name}`);
+  // Open the prep sheet (text + photos + steps) instead of dumping the seller on
+  // a blank marketplace form. They copy/save here, then open the marketplace.
+  function prepareAndOpen(ch: typeof PREPARE_CHANNELS[number], l: any) {
+    const text = buildListingText(l, shop);
+    try { navigator.clipboard?.writeText(text); } catch {}
+    setPrepare({ channel: ch, title: l.part || "Listing", text, photos: [l.image, ...(Array.isArray(l.images) ? l.images : [])].filter(Boolean), prefix: slug(l.part) });
   }
 
-  async function prepareCar(ch: typeof PREPARE_CHANNELS[number], v: any) {
-    try { navigator.clipboard?.writeText(buildVehicleText(v, shop)); } catch {}
-    csToast(`Copied car ad — saving photos & opening ${ch.name}`);
-    window.open(ch.url, "_blank", "noopener");
-    const n = await savePhotos([v.image, ...(Array.isArray(v.images) ? v.images : [])], slug(`${v.year}-${v.make}-${v.model}`));
-    if (n) csToast(`${n} photo${n === 1 ? "" : "s"} saved — drag them into ${ch.name}`);
+  function prepareCar(ch: typeof PREPARE_CHANNELS[number], v: any) {
+    const text = buildVehicleText(v, shop);
+    try { navigator.clipboard?.writeText(text); } catch {}
+    setPrepare({ channel: ch, title: vehLabel(v), text, photos: [v.image, ...(Array.isArray(v.images) ? v.images : [])].filter(Boolean), prefix: slug(`${v.year}-${v.make}-${v.model}`) });
   }
 
   // One publisher for parts, wholesale lots, and whole cars — body decides which.
+  // On success we open the live listing; on failure we surface a Fix-it sheet
+  // (with tailored steps + Retry) instead of a disappearing toast.
   async function ebayPublish(key: string, body: any, okMsg: string) {
     if (busy) return;
     setBusy(key);
+    const target = key.startsWith("car") ? "vehicles" : "parts";
     try {
       const r = await fetch("/api/ebay/list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const d = await r.json().catch(() => ({}));
       if (r.ok && d.url) { csToast(okMsg); window.open(d.url, "_blank", "noopener"); (window as any).csReloadData?.(); }
-      else if (d.notConnected) csToast("Connect your eBay account first");
-      else csToast(d.error || "eBay listing failed");
-    } catch { csToast("eBay listing failed — check your connection"); }
+      else setFix({ raw: d.error || (d.notConnected ? "Connect your eBay account first." : "eBay couldn't publish this listing."), target, retry: () => ebayPublish(key, body, okMsg) });
+    } catch {
+      setFix({ raw: "Couldn't reach eBay — check your connection and try again.", target, retry: () => ebayPublish(key, body, okMsg) });
+    }
     setBusy(null);
   }
 
@@ -316,6 +323,13 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
           </>
         )}
       </div>
+
+      {prepare && (
+        <PreparePanel data={prepare} onClose={() => setPrepare(null)} onSavePhotos={savePhotos} />
+      )}
+      {fix && (
+        <FixPanel raw={fix.raw} target={fix.target} connected={!!ebay?.connected} go={go} onRetry={() => { const r = fix.retry; setFix(null); r(); }} onClose={() => setFix(null)} />
+      )}
     </div>
   );
 }
@@ -345,5 +359,168 @@ function PrepareMenu({ channels, onPick }: { channels: typeof PREPARE_CHANNELS; 
         </div>
       )}
     </div>
+  );
+}
+
+type PrepareState = { channel: typeof PREPARE_CHANNELS[number]; title: string; text: string; photos: string[]; prefix: string };
+
+// Shared centered modal shell.
+function Sheet({ title, accent, onClose, children }: { title: React.ReactNode; accent?: string; onClose: () => void; children: React.ReactNode }) {
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="fade-up" style={{ width: "min(540px, 100%)", maxHeight: "88vh", overflowY: "auto", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16, boxShadow: "0 40px 80px -30px rgba(0,0,0,0.6)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 18px", borderBottom: "1px solid var(--line)", position: "sticky", top: 0, background: "var(--surface)", zIndex: 1 }}>
+          <div style={{ fontSize: 15.5, fontWeight: 700, flex: 1, color: accent || "var(--foreground)" }}>{title}</div>
+          <button onClick={onClose} aria-label="Close" style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}><X size={16} /></button>
+        </div>
+        <div style={{ padding: 18 }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function StepNum({ n }: { n: number }) {
+  return <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: 999, background: "var(--accent-tint)", color: "var(--accent)", fontSize: 12, fontWeight: 700, display: "grid", placeItems: "center" }}>{n}</span>;
+}
+
+// "Post elsewhere" prep sheet: copy text, save photos, then open the marketplace.
+function PreparePanel({ data, onClose, onSavePhotos }: { data: PrepareState; onClose: () => void; onSavePhotos: (urls: string[], prefix: string) => Promise<number> }) {
+  const { channel, title, text, photos, prefix } = data;
+  const valid = photos.filter((u) => u && /^https?:\/\//.test(u));
+  const [copied, setCopied] = React.useState(true); // copied on open
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(0);
+
+  async function copy() {
+    try { await navigator.clipboard?.writeText(text); setCopied(true); csToast("Listing text copied"); } catch { csToast("Press Ctrl/Cmd+C to copy"); }
+  }
+  async function save() {
+    setSaving(true);
+    const n = await onSavePhotos(valid, prefix);
+    setSaved(n); setSaving(false);
+    csToast(n ? `${n} photo${n === 1 ? "" : "s"} saved` : "No photos could be saved");
+  }
+  function openMarket() {
+    window.open(channel.url, "_blank", "noopener");
+    csToast(`Opened ${channel.name} — paste your text & drag the photos in`);
+  }
+
+  return (
+    <Sheet title={<span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}><channel.icon size={18} color={channel.color} /> Post to {channel.name}</span>} onClose={onClose}>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, marginBottom: 14 }}>
+        {channel.name} has no posting API, so we can&apos;t fill the form for you. We&apos;ve prepped everything — copy the text, save the photos, then paste &amp; drag them in. <strong style={{ color: "var(--foreground)" }}>{title}</strong>
+      </div>
+
+      {/* Step 1 — text */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
+        <StepNum n={1} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>Copy the listing text</div>
+          <textarea readOnly value={text} onFocus={(e) => e.currentTarget.select()} style={{ width: "100%", height: 120, resize: "vertical", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 12.5, lineHeight: 1.5, padding: "10px 12px", fontFamily: "inherit" }} />
+          <button onClick={copy} style={{ marginTop: 7, display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 13px", borderRadius: 9, border: "1px solid var(--line)", background: copied ? "var(--accent-tint)" : "transparent", color: copied ? "var(--accent)" : "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+            {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy text</>}
+          </button>
+        </div>
+      </div>
+
+      {/* Step 2 — photos */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
+        <StepNum n={2} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>Save the photos {valid.length > 0 && <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {valid.length}</span>}</div>
+          {valid.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No photos on this listing — add some for a stronger ad.</div>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 8 }}>
+                {valid.slice(0, 8).map((u, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={i} src={u} alt="" style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line)" }} />
+                ))}
+              </div>
+              <button onClick={save} disabled={saving} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 13px", borderRadius: 9, border: "1px solid var(--line)", background: saved ? "var(--accent-tint)" : "transparent", color: saved ? "var(--accent)" : "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+                {saving ? <><LoaderCircle size={14} className="spin" /> Saving…</> : saved ? <><Check size={14} /> {saved} saved</> : <><ImageDown size={14} /> Save {valid.length} photo{valid.length === 1 ? "" : "s"}</>}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Step 3 — open */}
+      <div style={{ display: "flex", gap: 10 }}>
+        <StepNum n={3} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>Open {channel.name} &amp; paste</div>
+          <button onClick={openMarket} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", borderRadius: 10, border: "none", background: channel.color, color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
+            <ExternalLink size={15} /> Open {channel.name}
+          </button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+// Classify an eBay publish error into a plain-language title + fix steps.
+function classifyEbayError(raw: string) {
+  const e = (raw || "").toLowerCase();
+  if (/connect your ebay|not connected|account not connected|notconnected/.test(e))
+    return { kind: "connect", title: "Connect your eBay account", blurb: "You need to link your eBay seller account before publishing.", steps: ["Click Connect eBay below and sign in to eBay.", "Approve the requested permissions.", "Come back and hit List again."], showRaw: false };
+  if (/set a price|set an asking price|set prices on the parts|price before|set prices/.test(e))
+    return { kind: "price", title: "Add a price first", blurb: "eBay won't accept a listing without a price.", steps: ["Open the part or vehicle.", "Enter a price (or accept the AI-suggested one).", "Return here and List again."], showRaw: false };
+  if (/polic|location|merchantlocation|fulfillment|payment profile|return profile|shipping profile|business polic/.test(e))
+    return { kind: "policies", title: "Finish your eBay business setup", blurb: "eBay requires payment, shipping and return policies plus an inventory location before it will publish for you.", steps: ["In eBay: Account → Business policies — create a Payment, a Shipping and a Return policy.", "Add an inventory location (Account → Shipping / Locations).", "Click Reconnect below so we pick them up, then List again."], showRaw: true };
+  if (/no parts to bundle|no listings|nothing to|not found/.test(e))
+    return { kind: "empty", title: "Nothing to list yet", blurb: "There aren't any priced, unsold items here to publish.", steps: ["Add parts to this vehicle (or set their prices).", "Then try again."], showRaw: false };
+  if (/motors/.test(e))
+    return { kind: "motors", title: "eBay Motors couldn't accept this car", blurb: "Whole-vehicle listings run through eBay Motors, which has extra requirements and fees.", steps: ["Make sure year, make, model and a VIN are all set on the car.", "Confirm your eBay account is approved to sell vehicles.", "Try again, or use Post elsewhere to list it manually."], showRaw: true };
+  return { kind: "generic", title: "eBay couldn't publish this", blurb: "eBay returned an error. The exact message is below — it usually points to what to fix.", steps: [], showRaw: true };
+}
+
+// Fix-it sheet for a failed eBay publish.
+function FixPanel({ raw, target, connected, go, onRetry, onClose }: { raw: string; target: string; connected: boolean; go: (id: string) => void; onRetry: () => void; onClose: () => void }) {
+  const info = classifyEbayError(raw);
+  return (
+    <Sheet title={<span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}><AlertTriangle size={18} color="var(--danger)" /> {info.title}</span>} accent="var(--foreground)" onClose={onClose}>
+      <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5, marginBottom: info.steps.length ? 14 : 10 }}>{info.blurb}</div>
+
+      {info.steps.length > 0 && (
+        <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+          {info.steps.map((s, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <StepNum n={i + 1} />
+              <div style={{ fontSize: 13, lineHeight: 1.45, paddingTop: 2 }}>{s}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {info.showRaw && (
+        <div style={{ display: "flex", gap: 8, fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5, background: "var(--surface2)", borderRadius: 10, padding: "10px 12px", marginBottom: 14, fontFamily: "ui-monospace, monospace", wordBreak: "break-word" }}>
+          <Info size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>{raw}</span>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {(info.kind === "connect" || info.kind === "policies") && (
+          <a href="/api/ebay/connect" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 700, textDecoration: "none" }}>
+            {connected ? <><RefreshCw size={15} /> Reconnect eBay</> : <><Link2 size={15} /> Connect eBay</>}
+          </a>
+        )}
+        {(info.kind === "price" || info.kind === "empty") && (
+          <button onClick={() => { onClose(); go(target); }} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
+            <ExternalLink size={15} /> Open {target === "vehicles" ? "vehicles" : "parts"}
+          </button>
+        )}
+        <button onClick={onRetry} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px", borderRadius: 10, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>
+          <RefreshCw size={15} /> Try again
+        </button>
+      </div>
+    </Sheet>
   );
 }
