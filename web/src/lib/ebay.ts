@@ -208,7 +208,11 @@ async function api(token: string, path: string, method: string, body?: unknown) 
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
+      // eBay's Inventory API validates BOTH of these locale headers and rejects
+      // the call (errorId 25709) if Accept-Language is missing/non-locale, so we
+      // pin them explicitly rather than relying on the runtime's default.
       "Content-Language": "en-US",
+      "Accept-Language": "en-US",
     },
     body: body ? JSON.stringify(body) : undefined,
   });
