@@ -474,7 +474,7 @@ function classifyEbayError(raw: string) {
     return { kind: "price", title: "Add a price first", blurb: "eBay won't accept a listing without a price.", steps: ["Open the part or vehicle.", "Enter a price (or accept the AI-suggested one).", "Return here and List again."], showRaw: false };
   if (/polic|location|merchantlocation|fulfillment|payment profile|return profile|shipping profile|business polic/.test(e))
     return { kind: "policies", title: "Finish your eBay business setup", blurb: "eBay requires payment, shipping and return policies plus an inventory location before it will publish for you.", steps: ["In eBay: Account → Business policies — create a Payment, a Shipping and a Return policy.", "Add an inventory location (Account → Shipping / Locations).", "Click Reconnect below so we pick them up, then List again."], showRaw: true };
-  if (/no parts to bundle|no listings|nothing to|not found/.test(e))
+  if (/no parts to bundle|no listings to|nothing to bundle/.test(e))
     return { kind: "empty", title: "Nothing to list yet", blurb: "There aren't any priced, unsold items here to publish.", steps: ["Add parts to this vehicle (or set their prices).", "Then try again."], showRaw: false };
   if (/motors/.test(e))
     return { kind: "motors", title: "eBay Motors couldn't accept this car", blurb: "Whole-vehicle listings run through eBay Motors, which has extra requirements and fees.", steps: ["Make sure year, make, model and a VIN are all set on the car.", "Confirm your eBay account is approved to sell vehicles.", "Try again, or use Post elsewhere to list it manually."], showRaw: true };

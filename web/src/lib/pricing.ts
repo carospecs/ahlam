@@ -64,3 +64,27 @@ export async function livePartPrice(query: string): Promise<number | null> {
 export function livePricingEnabled(): boolean {
   return pricingConfigured();
 }
+
+// Resolve the eBay LEAF category a part should be listed in by reading the
+// categories that real comps for `query` are listed under. The Inventory API
+// requires a leaf category, and eBay Motors parts categories aren't exposed by
+// the Taxonomy API — so we infer it from live listings (categories[0] is the
+// most specific / leaf category). Returns null if it can't determine one.
+export async function suggestLeafCategory(query: string): Promise<string | null> {
+  const token = await getAppToken();
+  if (!token) return null;
+  try {
+    const url = `${API}/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=40`;
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const counts = new Map<string, number>();
+    for (const it of (j.itemSummaries || [])) {
+      const leaf = it.categories?.[0]?.categoryId; // first entry = most specific leaf
+      if (leaf) counts.set(leaf, (counts.get(leaf) || 0) + 1);
+    }
+    let best: string | null = null, max = 0;
+    for (const [id, n] of counts) if (n > max) { max = n; best = id; }
+    return best;
+  } catch { return null; }
+}

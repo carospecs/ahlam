@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { ebayConfigured, getConnection, getShopPolicies, publishListing, publishVehicleListing, type ShopPolicies } from "@/lib/ebay";
+import { suggestLeafCategory } from "@/lib/pricing";
+
+// eBay rejects category 6028 (now a parent) and any non-leaf. When we can't infer
+// a leaf from comps, fall back to 9886 "Other Car & Truck Parts & Accessories"
+// (a verified catch-all leaf) so the publish still works.
+const FALLBACK_CATEGORY = process.env.EBAY_CATEGORY_ID || "9886";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -44,8 +50,10 @@ function placement(partName = "", side = ""): string | undefined {
 // Item specifics eBay surfaces in search filters. Used OEM parts pulled from a
 // donor car are genuine/OEM, so that's a safe default brand.
 function partAspects(c: any): Record<string, string[]> {
+  // eBay rejects "OEM" as a Brand value; "Unbranded" is always accepted for
+  // used salvage pulls (the OEM-ness is conveyed by the genuine-OEM description).
   const a: Record<string, string[]> = {
-    Brand: ["OEM"],
+    Brand: ["Unbranded"],
     Type: [c.partName || "Auto Part"],
   };
   const place = placement(c.partName, c.imageSide);
@@ -99,12 +107,16 @@ async function listPart(db: any, shopId: string, listingId: string, policies: Sh
   const price = l.price_usd ?? c.suggestedPriceUsd ?? c.priceUsd ?? 0;
   if (!price || price <= 0) return NextResponse.json({ error: "Set a price before listing on eBay." }, { status: 400 });
 
+  // Pick the leaf category from live comps for this exact part (falls back to a
+  // broad "Other parts" leaf) — the Inventory API requires a leaf category.
+  const categoryId = (await suggestLeafCategory([c.partName, fitLine(c.fitment)].filter(Boolean).join(" ")).catch(() => null)) || FALLBACK_CATEGORY;
+
   const result = await publishListing(shopId, {
     sku: `ahlam-${String(l.id).slice(0, 30)}`,
     title, description: c.description || title, price: Number(price),
     conditionId: CONDITION[c.condition] || "USED_GOOD",
     imageUrls: l.photo_url && /^https?:\/\//.test(l.photo_url) ? [l.photo_url] : undefined,
-    categoryId: process.env.EBAY_CATEGORY_ID || "6028",
+    categoryId,
     aspects: partAspects(c),
     compatibility: fitCompatibility(c.fitment),
     ...policies,
@@ -142,12 +154,13 @@ async function listLot(db: any, shopId: string, vehicleId: string, lotPrice: num
   ].join("\n");
   const images = [v.photo_url, ...rows.map((r: any) => r.photo)].filter((u: any) => u && /^https?:\/\//.test(u)).slice(0, 12);
 
+  const categoryId = (await suggestLeafCategory(`${carName} parts`).catch(() => null)) || FALLBACK_CATEGORY;
   const result = await publishListing(shopId, {
     sku: `ahlam-lot-${String(vehicleId).slice(0, 26)}`,
     title, description: desc, price, quantity: 1,
     conditionId: "USED_GOOD",
     imageUrls: images.length ? images : undefined,
-    categoryId: process.env.EBAY_CATEGORY_ID || "6028", ...policies,
+    categoryId, ...policies,
   });
   await db.from("vehicles").update({ ebay_lot_id: result.listingId, ebay_lot_url: result.url }).eq("id", vehicleId);
   return NextResponse.json({ ok: true, url: result.url, listingId: result.listingId, parts: rows.length });
