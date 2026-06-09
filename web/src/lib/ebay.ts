@@ -123,13 +123,25 @@ async function ensureReturn(token: string): Promise<string | undefined> {
 async function ensureFulfillment(token: string): Promise<string | undefined> {
   const existing = await existingPolicy(token, "fulfillment_policy", "fulfillmentPolicies", "fulfillmentPolicyId").catch(() => undefined);
   if (existing) return existing;
-  // Local-pickup-only: no shipping option = zero risk of mis-priced shipping on
-  // heavy salvage parts. Sellers add shipping later in their eBay account.
+  // eBay rejects a pickup-only policy (LOCAL_PICKUP_ONLY_ERROR), so we publish
+  // with a free standard-shipping option — the listing text says "Local pickup
+  // preferred — message for shipping," and sellers can edit this Ahlam policy in
+  // their eBay account to add real shipping costs. ShippingMethodStandard is the
+  // generic flat-rate service eBay accepts everywhere.
   const r = await api(token, `/sell/account/v1/fulfillment_policy`, "POST", {
-    name: "Ahlam Local Pickup", marketplaceId: ACCT_MKT,
+    name: "Ahlam Standard Shipping", marketplaceId: ACCT_MKT,
     categoryTypes: [{ name: ACCT_CAT }],
     handlingTime: { value: 3, unit: "DAY" },
-    pickupDropOff: true, localPickup: true, shippingOptions: [],
+    shippingOptions: [{
+      optionType: "DOMESTIC",
+      costType: "FLAT_RATE",
+      shippingServices: [{
+        sortOrder: 1,
+        shippingServiceCode: "ShippingMethodStandard",
+        shippingCost: { value: "0.0", currency: "USD" },
+        freeShipping: true,
+      }],
+    }],
   });
   return r.json?.fulfillmentPolicyId;
 }
