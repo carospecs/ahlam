@@ -429,3 +429,83 @@ export async function publishVehicleListing(shopId: string, input: EbayVehicleIn
   const url = ENV === "sandbox" ? `https://www.sandbox.ebay.com/itm/${itemId}` : `https://www.ebay.com/itm/${itemId}`;
   return { listingId: itemId, url };
 }
+
+// --- Parts (eBay Motors Parts & Accessories) --------------------------------
+// The Sell Inventory API cannot publish eBay Motors parts categories (errorId
+// 25005 "category is not valid"); those categories are only listable via the
+// Trading API on SiteID 100 (eBay Motors). So parts go through AddFixedPriceItem
+// here, same as whole vehicles, with part item specifics + a numeric ConditionID
+// + the seller's business-policy IDs. eBay requires at least one photo.
+export interface EbayPartInput {
+  title: string; description: string; price: number; quantity?: number;
+  categoryId: string;            // a LISTABLE Motors leaf category (site 100)
+  conditionId?: number;          // Trading API: 3000 Used, 1000 New, 7000 For parts
+  brand?: string; partType?: string; mpn?: string; placement?: string;
+  imageUrls?: string[];          // ≥1 required by eBay
+  location?: string; postalCode?: string;
+  fulfillmentPolicyId?: string; paymentPolicyId?: string; returnPolicyId?: string;
+}
+
+export async function publishPartListing(shopId: string, input: EbayPartInput): Promise<{ listingId: string; url: string }> {
+  const token = await validAccessToken(shopId);
+  if (!token) throw new Error("eBay account not connected");
+
+  const specifics: Array<[string, string | undefined]> = [
+    ["Brand", input.brand || "Unbranded"],
+    ["Type", input.partType],
+    ["Manufacturer Part Number", input.mpn || "Does Not Apply"],
+    ["Placement on Vehicle", input.placement],
+  ];
+  const specXml = specifics
+    .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "")
+    .map(([n, v]) => `<NameValueList><Name>${xmlEscape(n)}</Name><Value>${xmlEscape(String(v))}</Value></NameValueList>`)
+    .join("");
+  const picsXml = (input.imageUrls || []).filter((u) => /^https?:\/\//.test(u))
+    .map((u) => `<PictureURL>${xmlEscape(u)}</PictureURL>`).join("");
+  const profilesXml = (input.fulfillmentPolicyId || input.paymentPolicyId || input.returnPolicyId)
+    ? `<SellerProfiles>${input.paymentPolicyId ? `<SellerPaymentProfile><PaymentProfileID>${xmlEscape(input.paymentPolicyId)}</PaymentProfileID></SellerPaymentProfile>` : ""}${input.returnPolicyId ? `<SellerReturnProfile><ReturnProfileID>${xmlEscape(input.returnPolicyId)}</ReturnProfileID></SellerReturnProfile>` : ""}${input.fulfillmentPolicyId ? `<SellerShippingProfile><ShippingProfileID>${xmlEscape(input.fulfillmentPolicyId)}</ShippingProfileID></SellerShippingProfile>` : ""}</SellerProfiles>`
+    : "";
+
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<AddFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Item>
+    <Title>${xmlEscape(input.title.slice(0, 80))}</Title>
+    <Description>${xmlEscape(input.description || input.title)}</Description>
+    <PrimaryCategory><CategoryID>${xmlEscape(input.categoryId)}</CategoryID></PrimaryCategory>
+    <StartPrice>${Number(input.price).toFixed(2)}</StartPrice>
+    <Country>US</Country>
+    <Currency>USD</Currency>
+    <Location>${xmlEscape(input.location || "United States")}</Location>
+    ${input.postalCode ? `<PostalCode>${xmlEscape(input.postalCode)}</PostalCode>` : ""}
+    <ListingDuration>GTC</ListingDuration>
+    <ListingType>FixedPriceItem</ListingType>
+    <Quantity>${input.quantity ?? 1}</Quantity>
+    <ConditionID>${input.conditionId || 3000}</ConditionID>
+    <ItemSpecifics>${specXml}</ItemSpecifics>
+    ${picsXml ? `<PictureDetails>${picsXml}</PictureDetails>` : ""}
+    ${profilesXml}
+  </Item>
+</AddFixedPriceItemRequest>`;
+
+  const r = await fetch(tradingHost(), {
+    method: "POST",
+    headers: {
+      "X-EBAY-API-SITEID": "100", // eBay Motors — required for Parts & Accessories categories
+      "X-EBAY-API-COMPATIBILITY-LEVEL": "1193",
+      "X-EBAY-API-CALL-NAME": "AddFixedPriceItem",
+      "X-EBAY-API-IAF-TOKEN": token,
+      "Content-Type": "text/xml",
+    },
+    body,
+  });
+  const text = await r.text();
+  const ack = /<Ack>(\w+)<\/Ack>/.exec(text)?.[1];
+  const itemId = /<ItemID>(\d+)<\/ItemID>/.exec(text)?.[1];
+  if ((ack !== "Success" && ack !== "Warning") || !itemId) {
+    // Skip eBay's generic funds-hold warning; surface the first real error.
+    const msgs = [...text.matchAll(/<LongMessage>([^<]+)<\/LongMessage>/g)].map((m) => m[1]).filter((m) => !/Funds from your sales/i.test(m));
+    throw new Error(`eBay: ${msgs[0] || text.slice(0, 300)}`);
+  }
+  const url = ENV === "sandbox" ? `https://www.sandbox.ebay.com/itm/${itemId}` : `https://www.ebay.com/itm/${itemId}`;
+  return { listingId: itemId, url };
+}

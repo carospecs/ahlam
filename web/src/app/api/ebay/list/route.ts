@@ -1,42 +1,25 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { ebayConfigured, getConnection, getShopPolicies, publishListing, publishVehicleListing, type ShopPolicies } from "@/lib/ebay";
+import { ebayConfigured, getConnection, getShopPolicies, publishPartListing, publishVehicleListing, type ShopPolicies } from "@/lib/ebay";
 import { suggestLeafCategory } from "@/lib/pricing";
 
-// eBay rejects category 6028 (now a parent) and any non-leaf. When we can't infer
-// a leaf from comps, fall back to 9886 "Other Car & Truck Parts & Accessories"
-// (a verified catch-all leaf) so the publish still works.
+// eBay Motors parts must list under a leaf category. When we can't infer one from
+// live comps, fall back to 9886 "Other Car & Truck Parts & Accessories".
 const FALLBACK_CATEGORY = process.env.EBAY_CATEGORY_ID || "9886";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// ARA A/B/C grade → eBay condition. Legacy Good/Poor/D/F still map too.
-const CONDITION: Record<string, string> = {
-  A: "USED_EXCELLENT", B: "USED_GOOD", C: "USED_ACCEPTABLE",
-  Good: "USED_GOOD", Poor: "USED_ACCEPTABLE",
-  D: "USED_ACCEPTABLE", F: "FOR_PARTS_OR_NOT_WORKING",
-};
+// ARA A/B/C grade → Trading API numeric ConditionID. Used parts are 3000; only
+// non-working/F maps to 7000 (For parts or not working).
+function conditionId(grade?: string): number {
+  return grade === "F" || grade === "Poor" ? 7000 : 3000;
+}
 
 function fitLine(fitment: any): string {
   if (!Array.isArray(fitment)) return "";
   return fitment.map((f: any) => `${f.yearStart || ""}${f.yearEnd && f.yearEnd !== f.yearStart ? `-${f.yearEnd}` : ""} ${f.make || ""} ${f.model || ""}`.trim()).filter(Boolean).slice(0, 3).join("; ");
-}
-
-// Turn the AI fitment array into eBay compatibility rows (year-range string per
-// make/model). eBay expands these into per-year filter entries.
-function fitCompatibility(fitment: any): Array<{ make?: string; model?: string; year?: string; trim?: string; notes?: string }> {
-  if (!Array.isArray(fitment)) return [];
-  return fitment
-    .filter((f: any) => f && f.make)
-    .map((f: any) => ({
-      make: f.make,
-      model: f.model || undefined,
-      year: f.yearStart ? `${f.yearStart}${f.yearEnd && f.yearEnd !== f.yearStart ? `-${f.yearEnd}` : ""}` : undefined,
-      trim: f.trim || undefined,
-      notes: f.notes || undefined,
-    }));
 }
 
 // eBay's "Placement on Vehicle" item specific, from the part name + image side.
@@ -47,20 +30,13 @@ function placement(partName = "", side = ""): string | undefined {
   return [fb, lr].filter(Boolean).join(" ") || undefined;
 }
 
-// Item specifics eBay surfaces in search filters. Used OEM parts pulled from a
-// donor car are genuine/OEM, so that's a safe default brand.
-function partAspects(c: any): Record<string, string[]> {
-  // eBay rejects "OEM" as a Brand value; "Unbranded" is always accepted for
-  // used salvage pulls (the OEM-ness is conveyed by the genuine-OEM description).
-  const a: Record<string, string[]> = {
-    Brand: ["Unbranded"],
-    Type: [c.partName || "Auto Part"],
-  };
-  const place = placement(c.partName, c.imageSide);
-  if (place) a["Placement on Vehicle"] = [place];
-  const mpn = c.oemNumber || (Array.isArray(c.oemNumbers) ? c.oemNumbers[0] : undefined);
-  if (mpn) a["Manufacturer Part Number"] = [String(mpn)];
-  return a;
+// The seller's item location for the Trading API (city text + ZIP). eBay needs a
+// PostalCode; we pull it from the shop's saved location, defaulting safely.
+async function shopLocation(db: any, shopId: string): Promise<{ location: string; postalCode: string }> {
+  const { data } = await db.from("shops").select("location").eq("id", shopId).maybeSingle();
+  const loc = (data?.location || "").trim();
+  const postalCode = /\b\d{5}\b/.exec(loc)?.[0] || "90001";
+  return { location: loc || "United States", postalCode };
 }
 
 
@@ -107,19 +83,24 @@ async function listPart(db: any, shopId: string, listingId: string, policies: Sh
   const price = l.price_usd ?? c.suggestedPriceUsd ?? c.priceUsd ?? 0;
   if (!price || price <= 0) return NextResponse.json({ error: "Set a price before listing on eBay." }, { status: 400 });
 
-  // Pick the leaf category from live comps for this exact part (falls back to a
-  // broad "Other parts" leaf) — the Inventory API requires a leaf category.
-  const categoryId = (await suggestLeafCategory([c.partName, fitLine(c.fitment)].filter(Boolean).join(" ")).catch(() => null)) || FALLBACK_CATEGORY;
+  // eBay requires at least one photo on a listing.
+  const images = (l.photo_url && /^https?:\/\//.test(l.photo_url) ? [l.photo_url] : []);
+  if (!images.length) return NextResponse.json({ error: "eBay requires at least one photo — add a photo to this part, then list it." }, { status: 400 });
 
-  const result = await publishListing(shopId, {
-    sku: `ahlam-${String(l.id).slice(0, 30)}`,
-    title, description: c.description || title, price: Number(price),
-    conditionId: CONDITION[c.condition] || "USED_GOOD",
-    imageUrls: l.photo_url && /^https?:\/\//.test(l.photo_url) ? [l.photo_url] : undefined,
+  // Pick the listable Motors leaf category from live comps for this exact part.
+  const categoryId = (await suggestLeafCategory([c.partName, fitLine(c.fitment)].filter(Boolean).join(" ")).catch(() => null)) || FALLBACK_CATEGORY;
+  const loc = await shopLocation(db, shopId);
+
+  const result = await publishPartListing(shopId, {
+    title, description: c.description || title, price: Number(price), quantity: 1,
     categoryId,
-    aspects: partAspects(c),
-    compatibility: fitCompatibility(c.fitment),
-    ...policies,
+    conditionId: conditionId(c.condition),
+    brand: "Unbranded", partType: c.partName || "Auto Part",
+    mpn: c.oemNumber || (Array.isArray(c.oemNumbers) ? c.oemNumbers[0] : undefined),
+    placement: placement(c.partName, c.imageSide),
+    imageUrls: images,
+    location: loc.location, postalCode: loc.postalCode,
+    fulfillmentPolicyId: policies.fulfillmentPolicyId, paymentPolicyId: policies.paymentPolicyId, returnPolicyId: policies.returnPolicyId,
   });
   await db.from("listings").update({ ebay_listing_id: result.listingId, ebay_url: result.url, status: "active" }).eq("id", l.id);
   return NextResponse.json({ ok: true, url: result.url, listingId: result.listingId });
@@ -153,14 +134,17 @@ async function listLot(db: any, shopId: string, vehicleId: string, lotPrice: num
     "Local pickup preferred — message for shipping options on individual pieces.",
   ].join("\n");
   const images = [v.photo_url, ...rows.map((r: any) => r.photo)].filter((u: any) => u && /^https?:\/\//.test(u)).slice(0, 12);
+  if (!images.length) return NextResponse.json({ error: "eBay requires at least one photo — add a photo to the car or one of its parts first." }, { status: 400 });
 
   const categoryId = (await suggestLeafCategory(`${carName} parts`).catch(() => null)) || FALLBACK_CATEGORY;
-  const result = await publishListing(shopId, {
-    sku: `ahlam-lot-${String(vehicleId).slice(0, 26)}`,
+  const loc = await shopLocation(db, shopId);
+  const result = await publishPartListing(shopId, {
     title, description: desc, price, quantity: 1,
-    conditionId: "USED_GOOD",
-    imageUrls: images.length ? images : undefined,
-    categoryId, ...policies,
+    categoryId, conditionId: 3000,
+    brand: "Unbranded", partType: "Parts Lot",
+    imageUrls: images,
+    location: loc.location, postalCode: loc.postalCode,
+    fulfillmentPolicyId: policies.fulfillmentPolicyId, paymentPolicyId: policies.paymentPolicyId, returnPolicyId: policies.returnPolicyId,
   });
   await db.from("vehicles").update({ ebay_lot_id: result.listingId, ebay_lot_url: result.url }).eq("id", vehicleId);
   return NextResponse.json({ ok: true, url: result.url, listingId: result.listingId, parts: rows.length });
