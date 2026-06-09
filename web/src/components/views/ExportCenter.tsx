@@ -89,18 +89,15 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
 
   const slug = (s: string) => (s || "listing").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
 
-  // Open the prep sheet (text + photos + steps) instead of dumping the seller on
-  // a blank marketplace form. They copy/save here, then open the marketplace.
+  // Open the prep sheet — an editable card of the post — instead of dumping the
+  // seller on a blank marketplace form. They review/fix the fields (and save the
+  // fix back to the listing), then open the marketplace to paste.
   function prepareAndOpen(ch: typeof PREPARE_CHANNELS[number], l: any) {
-    const text = buildListingText(l, shop);
-    try { navigator.clipboard?.writeText(text); } catch {}
-    setPrepare({ channel: ch, title: l.part || "Listing", text, photos: [l.image, ...(Array.isArray(l.images) ? l.images : [])].filter(Boolean), prefix: slug(l.part) });
+    setPrepare({ channel: ch, kind: "part", entity: l, photos: [l.image, ...(Array.isArray(l.images) ? l.images : [])].filter(Boolean), prefix: slug(l.part) });
   }
 
   function prepareCar(ch: typeof PREPARE_CHANNELS[number], v: any) {
-    const text = buildVehicleText(v, shop);
-    try { navigator.clipboard?.writeText(text); } catch {}
-    setPrepare({ channel: ch, title: vehLabel(v), text, photos: [v.image, ...(Array.isArray(v.images) ? v.images : [])].filter(Boolean), prefix: slug(`${v.year}-${v.make}-${v.model}`) });
+    setPrepare({ channel: ch, kind: "car", entity: v, photos: [v.image, ...(Array.isArray(v.images) ? v.images : [])].filter(Boolean), prefix: slug(`${v.year}-${v.make}-${v.model}`) });
   }
 
   // One publisher for parts, wholesale lots, and whole cars — body decides which.
@@ -325,7 +322,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
       </div>
 
       {prepare && (
-        <PreparePanel data={prepare} onClose={() => setPrepare(null)} onSavePhotos={savePhotos} />
+        <PreparePanel data={prepare} shop={shop} onClose={() => setPrepare(null)} onSavePhotos={savePhotos} />
       )}
       {fix && (
         <FixPanel raw={fix.raw} target={fix.target} connected={!!ebay?.connected} go={go} onRetry={() => { const r = fix.retry; setFix(null); r(); }} onClose={() => setFix(null)} />
@@ -362,7 +359,28 @@ function PrepareMenu({ channels, onPick }: { channels: typeof PREPARE_CHANNELS; 
   );
 }
 
-type PrepareState = { channel: typeof PREPARE_CHANNELS[number]; title: string; text: string; photos: string[]; prefix: string };
+type PrepareState = { channel: typeof PREPARE_CHANNELS[number]; kind: "part" | "car"; entity: any; photos: string[]; prefix: string };
+
+// Labelled input row for the editable post card. Flags empty values so the
+// seller can see what's missing before posting.
+function CardField({ label, value, onChange, placeholder, missing, area, suffix }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; missing?: boolean; area?: boolean; suffix?: string }) {
+  const base: React.CSSProperties = { width: "100%", border: `1px solid ${missing ? "var(--signal)" : "var(--line)"}`, borderRadius: 9, background: "var(--surface2)", color: "var(--foreground)", fontSize: 13, padding: "9px 11px", fontFamily: "inherit", outline: "none" };
+  return (
+    <label style={{ display: "grid", gap: 5 }}>
+      <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)", display: "flex", gap: 6, alignItems: "center" }}>
+        {label}{missing && <span style={{ color: "var(--signal)", fontWeight: 700 }}>· add this</span>}
+      </span>
+      {area ? (
+        <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={3} style={{ ...base, resize: "vertical", lineHeight: 1.5 }} />
+      ) : (
+        <span style={{ position: "relative", display: "flex", alignItems: "center" }}>
+          {suffix && <span style={{ position: "absolute", left: 11, color: "var(--muted)", fontSize: 13 }}>{suffix}</span>}
+          <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={{ ...base, paddingLeft: suffix ? 24 : 11 }} />
+        </span>
+      )}
+    </label>
+  );
+}
 
 // Shared centered modal shell.
 function Sheet({ title, accent, onClose, children }: { title: React.ReactNode; accent?: string; onClose: () => void; children: React.ReactNode }) {
@@ -388,53 +406,125 @@ function StepNum({ n }: { n: number }) {
   return <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: 999, background: "var(--accent-tint)", color: "var(--accent)", fontSize: 12, fontWeight: 700, display: "grid", placeItems: "center" }}>{n}</span>;
 }
 
-// "Post elsewhere" prep sheet: copy text, save photos, then open the marketplace.
-function PreparePanel({ data, onClose, onSavePhotos }: { data: PrepareState; onClose: () => void; onSavePhotos: (urls: string[], prefix: string) => Promise<number> }) {
-  const { channel, title, text, photos, prefix } = data;
+// "Post elsewhere" prep sheet — an editable card of the post. The seller reviews
+// the fields, fills in anything missing (saved back to the listing), saves the
+// photos, then opens the marketplace and pastes the prepared text.
+function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareState; shop: any; onClose: () => void; onSavePhotos: (urls: string[], prefix: string) => Promise<number> }) {
+  const { channel, kind, entity, photos, prefix } = data;
+  const isCar = kind === "car";
   const valid = photos.filter((u) => u && /^https?:\/\//.test(u));
-  const [copied, setCopied] = React.useState(true); // copied on open
-  const [saving, setSaving] = React.useState(false);
-  const [saved, setSaved] = React.useState(0);
 
-  async function copy() {
-    try { await navigator.clipboard?.writeText(text); setCopied(true); csToast("Listing text copied"); } catch { csToast("Press Ctrl/Cmd+C to copy"); }
-  }
-  async function save() {
+  // Editable copy of the post fields, seeded from the listing/vehicle.
+  const [f, setF] = React.useState<Record<string, string>>(() => isCar ? {
+    title: entity.title || `${entity.year || ""} ${entity.make || ""} ${entity.model || ""}${entity.trim ? ` ${entity.trim}` : ""}`.trim(),
+    price: entity.askingPrice ? String(entity.askingPrice) : "",
+    mileage: entity.mileage || "",
+    description: entity.description || "",
+  } : {
+    part: entity.part || "",
+    fitment: entity.fitment || "",
+    grade: (["A", "B", "C"].includes(entity.grade) ? entity.grade : "B"),
+    price: entity.price ? String(entity.price) : "",
+    note: entity.note || "",
+    description: entity.desc || entity.description || "",
+  });
+  const [dirty, setDirty] = React.useState(false);
+  const set = (k: string) => (v: string) => { setF((p) => ({ ...p, [k]: v })); setDirty(true); };
+  const [saving, setSaving] = React.useState(false);
+  const [savedPhotos, setSavedPhotos] = React.useState(0);
+  const [savingPhotos, setSavingPhotos] = React.useState(false);
+
+  // Live post text rebuilt from the edited fields (what gets pasted).
+  const text = isCar
+    ? buildVehicleText({ ...entity, description: f.description, askingPrice: Number(f.price) || 0, mileage: f.mileage, title: f.title } as any, shop)
+    : buildListingText({ ...entity, part: f.part, fitment: f.fitment, grade: f.grade, note: f.note, desc: f.description, price: Number(f.price) || 0 } as any, shop);
+
+  async function saveFields() {
     setSaving(true);
+    const body = isCar
+      ? { vehicleId: entity.id, title: f.title, description: f.description, mileage: f.mileage, askingPrice: f.price === "" ? "" : Number(f.price) }
+      : { listingId: entity.id, partName: f.part, fitment: f.fitment, condition: f.grade, priceUsd: f.price, description: f.description, conditionNotes: f.note };
+    try {
+      const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (r.ok) { setDirty(false); csToast("Saved to your listing"); (window as any).csReloadData?.(); }
+      else { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't save changes"); }
+    } catch { csToast("Couldn't save changes"); }
+    setSaving(false);
+  }
+  async function savePhotos() {
+    setSavingPhotos(true);
     const n = await onSavePhotos(valid, prefix);
-    setSaved(n); setSaving(false);
+    setSavedPhotos(n); setSavingPhotos(false);
     csToast(n ? `${n} photo${n === 1 ? "" : "s"} saved` : "No photos could be saved");
   }
   function openMarket() {
+    try { navigator.clipboard?.writeText(text); } catch {}
     window.open(channel.url, "_blank", "noopener");
-    csToast(`Opened ${channel.name} — paste your text & drag the photos in`);
+    csToast(`Copied & opened ${channel.name} — paste, then drag your photos in`);
   }
+
+  const priceMissing = !f.price || Number(f.price) <= 0;
+  const descMissing = !f.description?.trim();
 
   return (
     <Sheet title={<span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}><channel.icon size={18} color={channel.color} /> Post to {channel.name}</span>} onClose={onClose}>
       <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, marginBottom: 14 }}>
-        {channel.name} has no posting API, so we can&apos;t fill the form for you. We&apos;ve prepped everything — copy the text, save the photos, then paste &amp; drag them in. <strong style={{ color: "var(--foreground)" }}>{title}</strong>
+        Review your post below and fix anything missing — your changes save back to the listing. {channel.name} has no posting API, so we prep the text &amp; photos for you to paste.
       </div>
 
-      {/* Step 1 — text */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
+      {/* Step 1 — the editable post card */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         <StepNum n={1} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>Copy the listing text</div>
-          <textarea readOnly value={text} onFocus={(e) => e.currentTarget.select()} style={{ width: "100%", height: 120, resize: "vertical", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 12.5, lineHeight: 1.5, padding: "10px 12px", fontFamily: "inherit" }} />
-          <button onClick={copy} style={{ marginTop: 7, display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 13px", borderRadius: 9, border: "1px solid var(--line)", background: copied ? "var(--accent-tint)" : "transparent", color: copied ? "var(--accent)" : "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
-            {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy text</>}
-          </button>
+          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>Review &amp; fix the post</div>
+          <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--background)", padding: 13, display: "grid", gap: 11 }}>
+            {isCar ? (
+              <>
+                <CardField label="Title" value={f.title} onChange={set("title")} placeholder="2015 Honda Accord EX" />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <CardField label="Asking price" value={f.price} onChange={set("price")} placeholder="0" suffix="$" missing={priceMissing} />
+                  <CardField label="Mileage" value={f.mileage} onChange={set("mileage")} placeholder="120,000 mi" />
+                </div>
+                <CardField label="Description" value={f.description} onChange={set("description")} placeholder="Condition, what's included, why you're selling…" area missing={descMissing} />
+              </>
+            ) : (
+              <>
+                <CardField label="Part" value={f.part} onChange={set("part")} placeholder="Alternator" missing={!f.part?.trim()} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <CardField label="Fits (vehicle)" value={f.fitment} onChange={set("fitment")} placeholder="2015 Honda Accord" missing={!f.fitment?.trim()} />
+                  <CardField label="Price" value={f.price} onChange={set("price")} placeholder="0" suffix="$" missing={priceMissing} />
+                </div>
+                <div>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)" }}>Condition</span>
+                  <div style={{ display: "flex", gap: 6, marginTop: 5 }}>
+                    {["A", "B", "C"].map((g) => (
+                      <button key={g} onClick={() => set("grade")(g)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1px solid ${f.grade === g ? "var(--accent)" : "var(--line)"}`, background: f.grade === g ? "var(--accent-tint)" : "transparent", color: f.grade === g ? "var(--accent)" : "var(--muted)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{g}</button>
+                    ))}
+                  </div>
+                </div>
+                <CardField label="Description" value={f.description} onChange={set("description")} placeholder="Condition notes, what's included, pickup details…" area missing={descMissing} />
+              </>
+            )}
+            {dirty && (
+              <button onClick={saveFields} disabled={saving} style={{ justifySelf: "start", display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+                {saving ? <><LoaderCircle size={14} className="spin" /> Saving…</> : <><Check size={14} /> Save changes</>}
+              </button>
+            )}
+          </div>
+          <details style={{ marginTop: 8 }}>
+            <summary style={{ fontSize: 12, color: "var(--muted)", cursor: "pointer" }}>Preview the text you&apos;ll paste</summary>
+            <textarea readOnly value={text} onFocus={(e) => e.currentTarget.select()} style={{ marginTop: 7, width: "100%", height: 110, resize: "vertical", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 12, lineHeight: 1.5, padding: "10px 12px", fontFamily: "inherit" }} />
+          </details>
         </div>
       </div>
 
       {/* Step 2 — photos */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         <StepNum n={2} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>Save the photos {valid.length > 0 && <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {valid.length}</span>}</div>
           {valid.length === 0 ? (
-            <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No photos on this listing — add some for a stronger ad.</div>
+            <div style={{ fontSize: 12.5, color: "var(--signal)" }}>No photos on this listing — add some for a stronger ad.</div>
           ) : (
             <>
               <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 8 }}>
@@ -443,8 +533,8 @@ function PreparePanel({ data, onClose, onSavePhotos }: { data: PrepareState; onC
                   <img key={i} src={u} alt="" style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line)" }} />
                 ))}
               </div>
-              <button onClick={save} disabled={saving} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 13px", borderRadius: 9, border: "1px solid var(--line)", background: saved ? "var(--accent-tint)" : "transparent", color: saved ? "var(--accent)" : "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
-                {saving ? <><LoaderCircle size={14} className="spin" /> Saving…</> : saved ? <><Check size={14} /> {saved} saved</> : <><ImageDown size={14} /> Save {valid.length} photo{valid.length === 1 ? "" : "s"}</>}
+              <button onClick={savePhotos} disabled={savingPhotos} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 13px", borderRadius: 9, border: "1px solid var(--line)", background: savedPhotos ? "var(--accent-tint)" : "transparent", color: savedPhotos ? "var(--accent)" : "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+                {savingPhotos ? <><LoaderCircle size={14} className="spin" /> Saving…</> : savedPhotos ? <><Check size={14} /> {savedPhotos} saved</> : <><ImageDown size={14} /> Save {valid.length} photo{valid.length === 1 ? "" : "s"}</>}
               </button>
             </>
           )}
@@ -456,8 +546,9 @@ function PreparePanel({ data, onClose, onSavePhotos }: { data: PrepareState; onC
         <StepNum n={3} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>Open {channel.name} &amp; paste</div>
+          {dirty && <div style={{ fontSize: 12, color: "var(--signal)", marginBottom: 7 }}>You have unsaved edits — they&apos;re still included in the copied text.</div>}
           <button onClick={openMarket} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", borderRadius: 10, border: "none", background: channel.color, color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
-            <ExternalLink size={15} /> Open {channel.name}
+            <ExternalLink size={15} /> Copy &amp; open {channel.name}
           </button>
         </div>
       </div>
