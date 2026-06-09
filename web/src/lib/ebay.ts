@@ -80,6 +80,116 @@ export async function getConnection(shopId: string) {
   return data || null;
 }
 
+// --- Per-seller business policies (multi-tenant) --------------------------
+// Each connected shop posts to ITS OWN eBay account, which has its own policies.
+// On connect we reuse the seller's existing policies, or create safe defaults,
+// and store the IDs on the shop so publishing uses them (not global env vars).
+const ACCT_MKT = "EBAY_US";
+const ACCT_CAT = "ALL_EXCLUDING_MOTORS_VEHICLES";
+
+export interface ShopPolicies {
+  fulfillmentPolicyId?: string;
+  paymentPolicyId?: string;
+  returnPolicyId?: string;
+  merchantLocationKey?: string;
+}
+
+async function existingPolicy(token: string, kind: string, listField: string, idField: string): Promise<string | undefined> {
+  const r = await api(token, `/sell/account/v1/${kind}?marketplace_id=${ACCT_MKT}`, "GET");
+  return r.ok ? r.json?.[listField]?.[0]?.[idField] : undefined;
+}
+
+async function ensurePayment(token: string): Promise<string | undefined> {
+  const existing = await existingPolicy(token, "payment_policy", "paymentPolicies", "paymentPolicyId").catch(() => undefined);
+  if (existing) return existing;
+  const r = await api(token, `/sell/account/v1/payment_policy`, "POST", {
+    name: "Ahlam Default Payment", marketplaceId: ACCT_MKT,
+    categoryTypes: [{ name: ACCT_CAT }], immediatePay: true,
+  });
+  return r.json?.paymentPolicyId;
+}
+
+async function ensureReturn(token: string): Promise<string | undefined> {
+  const existing = await existingPolicy(token, "return_policy", "returnPolicies", "returnPolicyId").catch(() => undefined);
+  if (existing) return existing;
+  // Used salvage parts sold as-is → no returns by default. Sellers can change it.
+  const r = await api(token, `/sell/account/v1/return_policy`, "POST", {
+    name: "Ahlam Default Returns", marketplaceId: ACCT_MKT,
+    categoryTypes: [{ name: ACCT_CAT }], returnsAccepted: false,
+  });
+  return r.json?.returnPolicyId;
+}
+
+async function ensureFulfillment(token: string): Promise<string | undefined> {
+  const existing = await existingPolicy(token, "fulfillment_policy", "fulfillmentPolicies", "fulfillmentPolicyId").catch(() => undefined);
+  if (existing) return existing;
+  // Local-pickup-only: no shipping option = zero risk of mis-priced shipping on
+  // heavy salvage parts. Sellers add shipping later in their eBay account.
+  const r = await api(token, `/sell/account/v1/fulfillment_policy`, "POST", {
+    name: "Ahlam Local Pickup", marketplaceId: ACCT_MKT,
+    categoryTypes: [{ name: ACCT_CAT }],
+    handlingTime: { value: 3, unit: "DAY" },
+    pickupDropOff: true, localPickup: true, shippingOptions: [],
+  });
+  return r.json?.fulfillmentPolicyId;
+}
+
+async function ensureLocation(token: string, shop?: { name?: string; location?: string } | null): Promise<string | undefined> {
+  const list = await api(token, `/sell/inventory/v1/location?limit=1`, "GET").catch(() => ({ ok: false, json: null } as any));
+  const existing = list.json?.locations?.[0]?.merchantLocationKey;
+  if (existing) return existing;
+  const key = "ahlam-loc-1";
+  const postalCode = (shop?.location && /\d{5}/.exec(shop.location)?.[0]) || "90001";
+  const r = await api(token, `/sell/inventory/v1/location/${key}`, "POST", {
+    location: { address: { country: "US", postalCode } },
+    name: shop?.name || "Ahlam Yard",
+    merchantLocationStatus: "ENABLED",
+    locationTypes: ["WAREHOUSE"],
+  });
+  // 204 (created) or 409 (already exists) both mean the key is usable.
+  return r.ok || r.status === 409 ? key : undefined;
+}
+
+// Discover/create the shop's eBay policies + location and persist them. Best-effort
+// per piece — a failure on one doesn't block the others.
+export async function provisionShopPolicies(shopId: string): Promise<ShopPolicies> {
+  const token = await validAccessToken(shopId);
+  if (!token) return {};
+  // Opt into business-policy management (no-op if already opted in).
+  await api(token, `/sell/account/v1/program/opt_in`, "POST", { programType: "SELLING_POLICY_MANAGEMENT" }).catch(() => {});
+
+  const db = supabaseAdmin();
+  const { data: shop } = await db.from("shops").select("name, location").eq("id", shopId).maybeSingle();
+
+  const [fulfillmentPolicyId, paymentPolicyId, returnPolicyId, merchantLocationKey] = await Promise.all([
+    ensureFulfillment(token).catch(() => undefined),
+    ensurePayment(token).catch(() => undefined),
+    ensureReturn(token).catch(() => undefined),
+    ensureLocation(token, shop).catch(() => undefined),
+  ]);
+
+  const policies: ShopPolicies = { fulfillmentPolicyId, paymentPolicyId, returnPolicyId, merchantLocationKey };
+  await db.from("shop_integrations").update({
+    fulfillment_policy_id: fulfillmentPolicyId || null,
+    payment_policy_id: paymentPolicyId || null,
+    return_policy_id: returnPolicyId || null,
+    location_key: merchantLocationKey || null,
+  }).eq("shop_id", shopId).eq("provider", "ebay");
+  return policies;
+}
+
+// Load the shop's stored policies; fall back to global env vars if a shop hasn't
+// been provisioned yet (keeps older connections working).
+export async function getShopPolicies(shopId: string): Promise<ShopPolicies> {
+  const conn = await getConnection(shopId);
+  return {
+    fulfillmentPolicyId: conn?.fulfillment_policy_id || process.env.EBAY_FULFILLMENT_POLICY_ID,
+    paymentPolicyId: conn?.payment_policy_id || process.env.EBAY_PAYMENT_POLICY_ID,
+    returnPolicyId: conn?.return_policy_id || process.env.EBAY_RETURN_POLICY_ID,
+    merchantLocationKey: conn?.location_key || process.env.EBAY_LOCATION_KEY,
+  };
+}
+
 // Returns a valid access token for the shop, refreshing if expired. null = not connected.
 export async function validAccessToken(shopId: string): Promise<string | null> {
   const conn = await getConnection(shopId);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { ebayConfigured, exchangeCode, saveTokens } from "@/lib/ebay";
+import { ebayConfigured, exchangeCode, saveTokens, provisionShopPolicies } from "@/lib/ebay";
 
 export const runtime = "nodejs";
 
@@ -26,6 +26,10 @@ export async function GET(req: Request) {
   try {
     const tokens = await exchangeCode(code);
     await saveTokens(profile.shop_id, tokens);
+    // Reuse/create this seller's own policies + location so one-click posting
+    // works immediately. Best-effort — never block the connect on it.
+    try { await provisionShopPolicies(profile.shop_id); }
+    catch (e) { console.error("[ebay] policy provisioning failed:", e instanceof Error ? e.message : e); }
     return NextResponse.redirect(new URL("/?ebay=connected", site));
   } catch {
     return NextResponse.redirect(new URL("/?ebay=error", site));

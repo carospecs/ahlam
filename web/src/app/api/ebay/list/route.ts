@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { ebayConfigured, getConnection, publishListing, publishVehicleListing } from "@/lib/ebay";
+import { ebayConfigured, getConnection, getShopPolicies, publishListing, publishVehicleListing, type ShopPolicies } from "@/lib/ebay";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -55,12 +55,6 @@ function partAspects(c: any): Record<string, string[]> {
   return a;
 }
 
-const POLICIES = {
-  merchantLocationKey: process.env.EBAY_LOCATION_KEY,
-  fulfillmentPolicyId: process.env.EBAY_FULFILLMENT_POLICY_ID,
-  paymentPolicyId: process.env.EBAY_PAYMENT_POLICY_ID,
-  returnPolicyId: process.env.EBAY_RETURN_POLICY_ID,
-};
 
 // POST body:
 //   { listingId }                 → publish one part
@@ -82,17 +76,20 @@ export async function POST(req: Request) {
 
   const { listingId, mode, vehicleId, lotPrice } = await req.json().catch(() => ({}));
 
+  // This seller's own policies/location (falls back to env for legacy connections).
+  const policies = await getShopPolicies(shopId);
+
   try {
-    if (mode === "lot") return await listLot(db, shopId, vehicleId, lotPrice);
-    if (mode === "vehicle") return await listVehicle(db, shopId, vehicleId);
-    return await listPart(db, shopId, listingId);
+    if (mode === "lot") return await listLot(db, shopId, vehicleId, lotPrice, policies);
+    if (mode === "vehicle") return await listVehicle(db, shopId, vehicleId, policies);
+    return await listPart(db, shopId, listingId, policies);
   } catch (e: any) {
     // Surface eBay's message so the seller can fix policies/location.
     return NextResponse.json({ error: `eBay rejected the listing: ${String(e?.message || e).slice(0, 400)}` }, { status: 502 });
   }
 }
 
-async function listPart(db: any, shopId: string, listingId: string) {
+async function listPart(db: any, shopId: string, listingId: string, policies: ShopPolicies) {
   if (!listingId) return NextResponse.json({ error: "listingId required" }, { status: 400 });
   const { data: l } = await db.from("listings").select("*").eq("id", listingId).eq("shop_id", shopId).single();
   if (!l) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
@@ -110,14 +107,14 @@ async function listPart(db: any, shopId: string, listingId: string) {
     categoryId: process.env.EBAY_CATEGORY_ID || "6028",
     aspects: partAspects(c),
     compatibility: fitCompatibility(c.fitment),
-    ...POLICIES,
+    ...policies,
   });
   await db.from("listings").update({ ebay_listing_id: result.listingId, ebay_url: result.url, status: "active" }).eq("id", l.id);
   return NextResponse.json({ ok: true, url: result.url, listingId: result.listingId });
 }
 
 // Bundle every (unsold) part of one vehicle into a single "parts lot" listing.
-async function listLot(db: any, shopId: string, vehicleId: string, lotPrice?: number) {
+async function listLot(db: any, shopId: string, vehicleId: string, lotPrice: number | undefined, policies: ShopPolicies) {
   if (!vehicleId) return NextResponse.json({ error: "vehicleId required" }, { status: 400 });
   const { data: v } = await db.from("vehicles").select("*").eq("id", vehicleId).eq("shop_id", shopId).single();
   if (!v) return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
@@ -150,14 +147,14 @@ async function listLot(db: any, shopId: string, vehicleId: string, lotPrice?: nu
     title, description: desc, price, quantity: 1,
     conditionId: "USED_GOOD",
     imageUrls: images.length ? images : undefined,
-    categoryId: process.env.EBAY_CATEGORY_ID || "6028", ...POLICIES,
+    categoryId: process.env.EBAY_CATEGORY_ID || "6028", ...policies,
   });
   await db.from("vehicles").update({ ebay_lot_id: result.listingId, ebay_lot_url: result.url }).eq("id", vehicleId);
   return NextResponse.json({ ok: true, url: result.url, listingId: result.listingId, parts: rows.length });
 }
 
 // Publish the whole car to eBay Motors (Trading API).
-async function listVehicle(db: any, shopId: string, vehicleId: string) {
+async function listVehicle(db: any, shopId: string, vehicleId: string, policies: ShopPolicies) {
   if (!vehicleId) return NextResponse.json({ error: "vehicleId required" }, { status: 400 });
   const { data: v } = await db.from("vehicles").select("*").eq("id", vehicleId).eq("shop_id", shopId).single();
   if (!v) return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
@@ -173,7 +170,7 @@ async function listVehicle(db: any, shopId: string, vehicleId: string) {
     vin: v.vin && !v.vin.includes("•") ? v.vin : undefined, // skip masked VINs
     mileage: v.mileage, bodyType: v.body,
     imageUrls: v.photo_url && /^https?:\/\//.test(v.photo_url) ? [v.photo_url] : undefined,
-    fulfillmentPolicyId: POLICIES.fulfillmentPolicyId, paymentPolicyId: POLICIES.paymentPolicyId, returnPolicyId: POLICIES.returnPolicyId,
+    fulfillmentPolicyId: policies.fulfillmentPolicyId, paymentPolicyId: policies.paymentPolicyId, returnPolicyId: policies.returnPolicyId,
   });
   await db.from("vehicles").update({ ebay_listing_id: result.listingId, ebay_url: result.url }).eq("id", vehicleId);
   return NextResponse.json({ ok: true, url: result.url, listingId: result.listingId });
