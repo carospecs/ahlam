@@ -7,7 +7,7 @@ export const maxDuration = 60;
 
 // --- Inlined from @ahlam/shared (monorepo dep that Vercel can't resolve) ---
 
-export type ConditionGrade = "Good" | "Poor";
+export type ConditionGrade = "A" | "B" | "C";
 export type Confidence = "high" | "medium" | "low";
 
 export interface VehicleFit {
@@ -30,6 +30,7 @@ export interface AIPartOutput {
   fitment: VehicleFit[];
   condition: ConditionGrade;
   conditionNotes: string;
+  damageCode?: string;
   description: string;
   suggestedPriceUsd: number | null;
   confidence: Confidence;
@@ -53,8 +54,9 @@ export type AIResult =
   | { ok: false; userMessage: string; internalError: string };
 
 const CONDITION_RUBRIC: Record<string, { detail: string }> = {
-  Good: { detail: "The part is usable and sellable as-is. It may have normal wear, minor scuffs, light scratches, dirt, or surface rust, but it is structurally sound — no cracks, breaks, bends, or missing/broken mounting tabs — and works as intended. A buyer can install it without repair." },
-  Poor: { detail: "The part is damaged or compromised. Cracks, breaks, deep gouges, dents, bends, heavy corrosion, broken/missing mounting tabs, tears, leaks, shattered glass/lenses, or non-functional. It needs repair or only sells as a core/project piece." },
+  A: { detail: "GRADE A (like-new): minimal to no damage. Structurally perfect with no cracks, breaks, bends, or broken/missing mounting tabs; at most very light wear or a tiny scuff. Clean, low-mileage, or tested. A buyer installs it with zero work." },
+  B: { detail: "GRADE B (good, usable as-is): moderate normal wear but fully serviceable. Minor scuffs, light scratches, dirt, or surface rust; all mounting tabs intact and the part works as intended. Installable without repair." },
+  C: { detail: "GRADE C (rough / core): damaged or compromised. Cracks, breaks, deep gouges, dents, bends, heavy corrosion, broken/missing mounting tabs, tears, leaks, shattered glass/lenses, or non-functional. Needs repair or only sells as a core/project piece." },
 };
 
 const VISION_SYSTEM_PROMPT = `You are an expert automotive salvage parts identifier. You look at a photo taken at a salvage yard — often a whole vehicle or a large section of one — and you catalog EVERY distinct sellable part you can see.
@@ -80,8 +82,9 @@ You MUST return ONLY a JSON object, no prose, with this shape:
       "fitment": [
         { "make": string, "model": string, "yearStart": number, "yearEnd": number, "notes": string }
       ],
-      "condition": "Good" | "Poor",
+      "condition": "A" | "B" | "C",
       "conditionNotes": string,
+      "damageCode": string,
       "description": string,
       "suggestedPriceUsd": number | null,
       "confidence": "high" | "medium" | "low",
@@ -146,14 +149,21 @@ LEFT / RIGHT SIDES — READ CAREFULLY (this is where mistakes happen):
 6. NO DUPLICATES / NO GENERICS: never output a bare "Door"/"Front Door"/"Rear Door"/"Mirror" without its side, and never list the same physical part twice (e.g. don't return both "Rear Door" and "Rear Right Door" — that's one part, "Rear Right Door"). Each side part appears at most once per side.
 7. NEVER CONTRADICT YOURSELF: the side in the name MUST match what you wrote in "description"/"conditionNotes". If the description says "right (passenger side)", the side is RIGHT. If you truly can't tell the side of a side-part, still give your best single guess and set "confidence":"low" — do NOT fall back to a generic no-side name.
 
-CONDITION RUBRIC (grade each part as exactly "Good" or "Poor", based solely on visible condition — there are only these two grades):
-- Good: ${CONDITION_RUBRIC.Good.detail}
-- Poor: ${CONDITION_RUBRIC.Poor.detail}
-When uncertain between the two, look at whether a buyer could install it as-is (Good) or would need to repair it (Poor).
+CONDITION RUBRIC — grade each part as exactly "A", "B", or "C" (ARA-style), based solely on visible condition:
+- A: ${CONDITION_RUBRIC.A.detail}
+- B: ${CONDITION_RUBRIC.B.detail}
+- C: ${CONDITION_RUBRIC.C.detail}
+Pick the grade by visible damage: none/like-new → A; normal wear but installable as-is → B; cracked/broken/heavily worn/non-functional → C. When genuinely between two grades, choose the LOWER (more conservative) one.
+
+DAMAGE CODE ("damageCode"): a short ARA-style code summarizing the worst visible damage, as TYPE-LOCATION-SIZE.
+- TYPE: DT (dent), SC (scratch/scuff), CR (crack), BR (break/missing piece), RU (rust/corrosion), CH (chip), BN (bend), GL (glass damage), WR (general wear).
+- LOCATION: a 1–2 letter spot like LF (left-front), RF, LR, RR, CT (center), TP (top), BT (bottom), or "" if not applicable.
+- SIZE: approximate inches as a number, or "" if not measurable.
+- Examples: "DT-LR-2" (2-inch dent, left-rear), "CR-CT-4", "SC-RF-1", "RU-BT-". For a clean Grade-A part with no notable damage, use "" (empty string).
 
 CRITICAL RULES:
 1. NEVER invent precise fitment, sides, VIN, mileage, or details you cannot actually see. Omit or use null/"center" instead of guessing.
-2. Grade condition based ONLY on what is visible, and only as "Good" or "Poor".
+2. Grade condition based ONLY on what is visible, as "A", "B", or "C", and set "damageCode" to match the worst visible damage (or "" if none).
 3. Your "description" must describe ONLY what you can actually observe in this photo — no fabricated features, no contradictions with the part name.
 4. If not highly confident, set "confidence" to "low".
 5. Return ONLY the JSON object.`;
@@ -302,8 +312,9 @@ export async function POST(req: Request): Promise<NextResponse<AIResult>> {
         partName,
         partCategory: p.partCategory ?? "Uncategorized",
         fitment: Array.isArray(p.fitment) ? p.fitment : [],
-        condition: ["Good","Poor"].includes(p.condition ?? "") ? (p.condition as ConditionGrade) : "Good",
+        condition: ["A","B","C"].includes(p.condition ?? "") ? (p.condition as ConditionGrade) : "B",
         conditionNotes: p.conditionNotes ?? "",
+        damageCode: typeof p.damageCode === "string" ? p.damageCode.slice(0, 16) : "",
         description: p.description ?? "",
         suggestedPriceUsd: typeof p.suggestedPriceUsd === "number" ? p.suggestedPriceUsd : null,
         confidence: sideUnknown ? "low" : p.confidence ?? "low",

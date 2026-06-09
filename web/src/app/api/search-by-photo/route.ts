@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { normalizeGrade } from "@/lib/grade";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -76,7 +77,7 @@ export async function POST(req: Request) {
         return {
           id: l.id,
           partName: c.partName || c.part_name || "Used Part",
-          grade: c.condition || "Good",
+          grade: normalizeGrade(c.condition),
           price: l.price_usd ?? c.priceUsd ?? c.suggestedPriceUsd ?? 0,
           fitment: formatFit(c.fitment),
           category: c.partCategory || c.part_category || "",

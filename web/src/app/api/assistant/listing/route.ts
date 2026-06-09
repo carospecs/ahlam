@@ -14,13 +14,13 @@ const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"; // Groq vision
 const SYSTEM = `You write and price used auto listings for a salvage/used-parts shop. Groq is the only AI here.
 Return ONLY a JSON object with these keys (omit none you can fill):
 { "title": string, "description": string, "suggestedPriceUsd": number,
-  "partName": string, "condition": "Good"|"Poor",
+  "partName": string, "condition": "A"|"B"|"C",
   "vehicle": { "make": string, "model": string, "year": number, "body": string, "mileage": string } }
 Rules:
 - "title": short, search-friendly (<= 80 chars), include year/make/model + the part (or "parting out"/"whole car") when known.
 - "description": 1–3 honest sentences (what it is, fitment, condition). NEVER invent damage, mileage, VIN, or features you can't see/aren't told.
-- "suggestedPriceUsd": realistic USED resale price (number). "Poor"/damaged = core pricing. Use 0 if you truly can't estimate.
-- "condition": only "Good" (installable as-is) or "Poor" (needs repair / core).
+- "suggestedPriceUsd": realistic USED resale price (number). Grade C / damaged = core pricing. Use 0 if you truly can't estimate.
+- "condition": ARA grade — "A" (like-new, installs as-is), "B" (good, normal wear, usable as-is), or "C" (rough / needs repair / core).
 - When a photo is provided, identify what you actually see and fill partName/vehicle/condition from it. Don't guess sides; never put left/right on center parts (hood, grille, bumper, etc.).
 - Write in English.`;
 
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
     let out: any = {};
     try { out = JSON.parse(raw); } catch { try { out = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)); } catch {} }
 
-    const cond = out.condition === "Good" || out.condition === "Poor" ? out.condition : null;
+    const cond = ["A", "B", "C"].includes(out.condition) ? out.condition : null;
     const veh = out.vehicle && typeof out.vehicle === "object" ? {
       make: typeof out.vehicle.make === "string" ? out.vehicle.make : null,
       model: typeof out.vehicle.model === "string" ? out.vehicle.model : null,

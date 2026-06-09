@@ -9,9 +9,9 @@ import { useData, csToast } from "../Dashboard";
 // Platforms with no listing API — we prepare the text + photos and open the
 // posting page so the seller just pastes and hits post.
 const PREPARE_CHANNELS = [
-  { name: "Facebook Marketplace", icon: Share2, color: "#1877f2", url: "https://www.facebook.com/marketplace/create/item", note: "Facebook has no posting API — we copy your text and open the form." },
-  { name: "OfferUp", icon: Tag, color: "var(--accent)", url: "https://offerup.com/post/", note: "Copy & paste + attach your saved photos." },
-  { name: "Craigslist", icon: Globe, color: "var(--success)", url: "https://post.craigslist.org/", note: "Copy the formatted listing text and pick your city." },
+  { name: "Facebook Marketplace", icon: Share2, color: "#1877f2", url: "https://www.facebook.com/marketplace/create/item", note: "No posting API — we copy your text, save the photos, and open the form to paste & drag in. For bulk, use the Facebook catalog CSV below." },
+  { name: "OfferUp", icon: Tag, color: "var(--accent)", url: "https://offerup.com/post/", note: "Copies text and saves your photos so you just paste & drag them in." },
+  { name: "Craigslist", icon: Globe, color: "var(--success)", url: "https://post.craigslist.org/", note: "Copies the formatted listing text and saves photos; pick your city." },
 ];
 
 export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
@@ -62,16 +62,42 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
     if (p.has("ebay")) window.history.replaceState({}, "", window.location.pathname);
   }, [loadEbay]);
 
-  function prepareAndOpen(ch: typeof PREPARE_CHANNELS[number], l: any) {
-    try { navigator.clipboard?.writeText(buildListingText(l, shop)); } catch {}
-    csToast(`Copied — opening ${ch.name}`);
-    window.open(ch.url, "_blank", "noopener");
+  // Photos can't be auto-attached to Facebook/OfferUp/Craigslist (no API), so we
+  // save them to the seller's device — they drag them straight into the form.
+  async function savePhotos(urls: string[], prefix: string) {
+    const clean = urls.filter((u) => u && /^https?:\/\//.test(u));
+    if (!clean.length) return 0;
+    let n = 0;
+    for (let i = 0; i < clean.length; i++) {
+      try {
+        const res = await fetch(clean[i]);
+        const blob = await res.blob();
+        const ext = (blob.type.split("/")[1] || "jpg").split("+")[0];
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = `${prefix}-${i + 1}.${ext}`; a.click();
+        URL.revokeObjectURL(url); n++;
+      } catch { /* skip a photo that won't fetch (CORS/offline) */ }
+    }
+    return n;
   }
 
-  function prepareCar(ch: typeof PREPARE_CHANNELS[number], v: any) {
-    try { navigator.clipboard?.writeText(buildVehicleText(v, shop)); } catch {}
-    csToast(`Copied car ad — opening ${ch.name}`);
+  const slug = (s: string) => (s || "listing").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+
+  async function prepareAndOpen(ch: typeof PREPARE_CHANNELS[number], l: any) {
+    try { navigator.clipboard?.writeText(buildListingText(l, shop)); } catch {}
+    csToast(`Copied — saving photos & opening ${ch.name}`);
     window.open(ch.url, "_blank", "noopener");
+    const n = await savePhotos([l.image, ...(Array.isArray(l.images) ? l.images : [])], slug(l.part));
+    if (n) csToast(`${n} photo${n === 1 ? "" : "s"} saved — drag them into ${ch.name}`);
+  }
+
+  async function prepareCar(ch: typeof PREPARE_CHANNELS[number], v: any) {
+    try { navigator.clipboard?.writeText(buildVehicleText(v, shop)); } catch {}
+    csToast(`Copied car ad — saving photos & opening ${ch.name}`);
+    window.open(ch.url, "_blank", "noopener");
+    const n = await savePhotos([v.image, ...(Array.isArray(v.images) ? v.images : [])], slug(`${v.year}-${v.make}-${v.model}`));
+    if (n) csToast(`${n} photo${n === 1 ? "" : "s"} saved — drag them into ${ch.name}`);
   }
 
   // One publisher for parts, wholesale lots, and whole cars — body decides which.
@@ -103,6 +129,30 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
   function exportJSON() {
     const data = ready.map((l: any) => ({ id: l.id, part: l.part, vehicle: listingVeh(l), fitment: l.fitment, price: l.price, grade: l.grade, status: l.status, description: l.desc || l.description }));
     downloadBlob(JSON.stringify(data, null, 2), "listings.json", "application/json");
+  }
+
+  // Facebook/Meta Commerce catalog feed. A shop with a Facebook Page Shop +
+  // Commerce Manager catalog uploads this CSV (Data sources → Add items → Data
+  // feed) to bulk-list everything — the only free, official way onto Facebook.
+  function exportFacebookCSV() {
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://ahlam.io";
+    const shopUrl = shop?.id ? `${origin}/shop/${shop.id}` : origin;
+    const headers = ["id", "title", "description", "availability", "condition", "price", "link", "image_link", "brand", "quantity_to_sell_on_facebook", "google_product_category", "product_type"];
+    const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const withImg = ready.filter((l: any) => l.image && /^https?:\/\//.test(l.image));
+    const rows = withImg.map((l: any) => {
+      const v = l.vehicleId ? vById.get(l.vehicleId) : null;
+      const title = [l.part, l.fitment || (v ? vehLabel(v) : "")].filter(Boolean).join(" — ").slice(0, 150);
+      const price = Number(l.price) > 0 ? `${Number(l.price).toFixed(2)} USD` : "1.00 USD";
+      return [
+        `ahlam-${l.id}`, title, (l.desc || l.description || title).slice(0, 5000),
+        "in stock", "used", price, shopUrl, l.image, v?.make || "OEM",
+        "1", "Vehicles & Parts > Vehicle Parts & Accessories", l.category || "Auto Part",
+      ].map(esc).join(",");
+    });
+    if (!rows.length) { csToast("No listings with a public photo to export — Facebook needs an image per item"); return; }
+    downloadBlob([headers.join(","), ...rows].join("\n"), "facebook-catalog.csv", "text/csv");
+    if (withImg.length < ready.length) csToast(`Exported ${withImg.length} of ${ready.length} — ${ready.length - withImg.length} skipped (no photo)`);
   }
 
   return (
@@ -252,11 +302,18 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
           <ChevronDown size={15} style={{ transform: advanced ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} /> Advanced — bulk file export
         </button>
         {advanced && (
-          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-            <button onClick={exportCSV} disabled={!ready.length} style={advBtn}><FileDown size={16} /> Export CSV</button>
-            <button onClick={exportJSON} disabled={!ready.length} style={advBtn}><Download size={16} /> Export JSON</button>
-            <button onClick={() => { try { navigator.clipboard?.writeText(ready.map((l: any) => buildListingText(l, shop)).join("\n\n———\n\n")); } catch {} csToast(`Copied ${ready.length} listings`); }} disabled={!ready.length} style={advBtn}><Copy size={16} /> Copy all text</button>
-          </div>
+          <>
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              <button onClick={exportFacebookCSV} disabled={!ready.length} style={advBtn}><Share2 size={16} color="#1877f2" /> Facebook catalog (CSV)</button>
+              <button onClick={exportCSV} disabled={!ready.length} style={advBtn}><FileDown size={16} /> Export CSV</button>
+              <button onClick={exportJSON} disabled={!ready.length} style={advBtn}><Download size={16} /> Export JSON</button>
+              <button onClick={() => { try { navigator.clipboard?.writeText(ready.map((l: any) => buildListingText(l, shop)).join("\n\n———\n\n")); } catch {} csToast(`Copied ${ready.length} listings`); }} disabled={!ready.length} style={advBtn}><Copy size={16} /> Copy all text</button>
+            </div>
+            <div style={{ display: "flex", gap: 8, fontSize: 12, color: "var(--muted)", lineHeight: 1.5, marginTop: 10 }}>
+              <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span><strong>Facebook catalog</strong> is the free, official way to bulk-list on Facebook: in Commerce Manager, create a catalog → Data sources → Add items → <strong>Data feed</strong>, then upload this CSV. Only items with a public photo are included.</span>
+            </div>
+          </>
         )}
       </div>
     </div>

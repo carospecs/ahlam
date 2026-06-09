@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Search, Wrench, Car, LoaderCircle, BookOpen, Info, ArrowRight, Boxes, Hash, Tag, AlertTriangle, ScanLine, RotateCcw, Store, ExternalLink, ShoppingBag, CheckCircle2, Fuel, Pencil } from "lucide-react";
+import { Search, Wrench, Car, LoaderCircle, BookOpen, Info, ArrowRight, Boxes, Hash, Tag, AlertTriangle, ScanLine, RotateCcw, Store, ExternalLink, ShoppingBag, CheckCircle2, Fuel, Pencil, Sparkles } from "lucide-react";
 import { Card, Combobox, ConditionBadge } from "../UI";
 import { csToast } from "../Dashboard";
 
@@ -42,10 +42,11 @@ function variantFromFuel(fuel?: string): string {
 }
 
 interface IcVehicle { make: string; model: string; years: string; note?: string }
+interface IcSuggestion { label: string; partNumber?: string; confidence: "high" | "medium" | "low"; reason: string }
 interface MarketMatch { id: string; part: string; price: number; grade: string; fit: string; shopId: string; shopName: string; link: string }
 interface IcResult {
   part: string; vehicle: string; summary: string;
-  compatibleVehicles: IcVehicle[]; oemNumbers: string[]; aftermarket: string[]; cautions: string[];
+  compatibleVehicles: IcVehicle[]; bestSuggestions?: IcSuggestion[]; oemNumbers: string[]; aftermarket: string[]; cautions: string[];
   marketMatches?: MarketMatch[];
 }
 
@@ -74,6 +75,7 @@ export function Interchange(_: { go: (id: string) => void }) {
   const [yearsLoading, setYearsLoading] = React.useState(false);
 
   const [result, setResult] = React.useState<IcResult | null>(null);
+  const [cached, setCached] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
 
@@ -132,7 +134,7 @@ export function Interchange(_: { go: (id: string) => void }) {
     if (!p) { setError("Pick or type the part you're looking for."); return; }
     if (!make.trim()) { setError("Add at least a brand (make)."); return; }
     if (forcePart) setPart(forcePart);
-    setError(""); setConfirming(false); setLoading(true); setResult(null);
+    setError(""); setConfirming(false); setLoading(true); setResult(null); setCached(false);
     try {
       const r = await fetch(`/api/interchange`, {
         method: "POST",
@@ -140,7 +142,7 @@ export function Interchange(_: { go: (id: string) => void }) {
         body: JSON.stringify({ part: p, make: make.trim(), model: model.trim(), year: year.trim(), variant: variant.trim() }),
       });
       const d = await r.json();
-      if (d.ok) setResult(d.result);
+      if (d.ok) { setResult(d.result); setCached(!!d.cached); }
       else setError(d.error || "Interchange lookup failed.");
     } catch { setError("Interchange lookup failed. Try again."); }
     setLoading(false);
@@ -290,25 +292,50 @@ export function Interchange(_: { go: (id: string) => void }) {
         </Card>
       )}
 
-      {result && !loading && <Results result={result} />}
+      {result && !loading && <Results result={result} cached={cached} />}
     </div>
   );
 }
 
-function Results({ result }: { result: IcResult }) {
+function Results({ result, cached }: { result: IcResult; cached?: boolean }) {
+  const suggestions = result.bestSuggestions || [];
+  const confColor = (c: string) => c === "high" ? "var(--success)" : c === "low" ? "var(--danger)" : "var(--signal)";
   return (
     <div style={{ display: "grid", gap: 16 }}>
       {/* Summary */}
       <Card pad={18}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
           <span style={{ width: 34, height: 34, borderRadius: 9, background: "var(--accent-tint)", display: "grid", placeItems: "center", flexShrink: 0 }}><Boxes size={18} color="var(--accent)" /></span>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 700 }}>{result.part}</div>
             <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{result.vehicle}</div>
           </div>
+          <span title={cached ? "Served from your interchange catalog — no AI call" : "Freshly looked up and saved to your catalog"} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: cached ? "var(--success)" : "var(--accent)", background: cached ? "var(--success-bg, color-mix(in srgb, var(--success) 14%, transparent))" : "var(--accent-tint)", borderRadius: 7, padding: "3px 8px", flexShrink: 0 }}>
+            {cached ? "From your catalog" : "New · saved to catalog"}
+          </span>
         </div>
         {result.summary && <p style={{ margin: 0, fontSize: 13.5, color: "var(--foreground)", lineHeight: 1.6 }}>{result.summary}</p>}
       </Card>
+
+      {/* Best 5 suggestions — the picks to check first, ranked */}
+      {suggestions.length > 0 && (
+        <Card pad={0}>
+          <div style={{ padding: "13px 18px", borderBottom: "1px solid var(--line)", fontSize: 13.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+            <Sparkles size={15} color="var(--accent)" /> Best {suggestions.length} {suggestions.length === 1 ? "pick" : "picks"} to check first
+          </div>
+          {suggestions.map((s, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 18px", borderBottom: i < suggestions.length - 1 ? "1px solid var(--line)" : "none" }}>
+              <span style={{ width: 22, height: 22, borderRadius: 999, background: "var(--accent-tint)", color: "var(--accent)", fontSize: 12, fontWeight: 800, display: "grid", placeItems: "center", flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{s.label}</div>
+                {s.reason && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2, lineHeight: 1.45 }}>{s.reason}</div>}
+                {s.partNumber && <div style={{ fontSize: 11.5, color: "var(--foreground)", marginTop: 4, fontFamily: "ui-monospace, monospace", opacity: 0.85 }}>{s.partNumber}</div>}
+              </div>
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: confColor(s.confidence), textTransform: "uppercase", letterSpacing: 0.3, flexShrink: 0, marginTop: 2 }}>{s.confidence}</span>
+            </div>
+          ))}
+        </Card>
+      )}
 
       {/* In our marketplace — the answer to "do we have it?" */}
       <MarketSection matches={result.marketMatches || []} part={result.part} />

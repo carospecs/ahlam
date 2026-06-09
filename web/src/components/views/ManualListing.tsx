@@ -44,7 +44,7 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
   const [mileage, setMileage] = React.useState("");
   // Part-only
   const [partName, setPartName] = React.useState("");
-  const [condition, setCondition] = React.useState<"Good" | "Poor">("Good");
+  const [condition, setCondition] = React.useState<"A" | "B" | "C">("B");
   // VIN parts checklist (car)
   const [vinParts, setVinParts] = React.useState<string[] | null>(null);
   const [selParts, setSelParts] = React.useState<Set<string>>(new Set());
@@ -79,7 +79,7 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
       const v = d.vehicle;
       if (v) { if (v.make) setMake(v.make); if (v.model) setModel(v.model); if (v.year) setYear(String(v.year)); if (v.body) setBody(v.body); if (v.mileage && kind === "car") setMileage(v.mileage); }
       if (kind === "part" && d.partName) setPartName(d.partName);
-      if (d.condition === "Good" || d.condition === "Poor") setCondition(d.condition);
+      if (["A", "B", "C"].includes(d.condition)) setCondition(d.condition);
       if (d.title) setTitle(d.title);
       if (d.description) setDescription(d.description);
       if (d.suggestedPriceUsd != null && !price) setPrice(String(d.suggestedPriceUsd));
@@ -137,7 +137,7 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
       const priceNum = price === "" ? null : Number(price);
       let payload: any;
       if (kind === "car") {
-        const extraParts = [...selParts].map((name) => ({ partName: name, partCategory: catOf(name), fitment: make ? [{ make, model, yearStart: Number(year) || 0, yearEnd: Number(year) || 0 }] : [], condition: "Good", conditionNotes: "", description: "", suggestedPriceUsd: null, confidence: "high", photoIndex: 0 }));
+        const extraParts = [...selParts].map((name) => ({ partName: name, partCategory: catOf(name), fitment: make ? [{ make, model, yearStart: Number(year) || 0, yearEnd: Number(year) || 0 }] : [], condition: "B", conditionNotes: "", description: "", suggestedPriceUsd: null, confidence: "high", photoIndex: 0 }));
         payload = {
           sellMode: selParts.size ? "both" : "whole",
           carPrice: priceNum, mileage: mileage || null, draft, images, heroIndex: 0,
@@ -253,10 +253,10 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
         {/* Condition (part) */}
         {!isCar && (
           <div>
-            <span style={lbl}>Condition</span>
+            <span style={lbl}>Grade</span>
             <div style={{ display: "inline-flex", border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
-              {(["Good", "Poor"] as const).map((g) => (
-                <button key={g} onClick={() => setCondition(g)} style={{ padding: "9px 20px", border: "none", cursor: "pointer", fontSize: 13.5, fontWeight: 700, background: condition === g ? (g === "Good" ? "var(--success)" : "var(--danger)") : "transparent", color: condition === g ? "#fff" : "var(--muted)" }}>{g}</button>
+              {([["A", "#22C55E"], ["B", "#F59E0B"], ["C", "#EF4444"]] as const).map(([g, col]) => (
+                <button key={g} onClick={() => setCondition(g)} title={`Grade ${g}`} style={{ padding: "9px 20px", border: "none", cursor: "pointer", fontSize: 13.5, fontWeight: 700, background: condition === g ? col : "transparent", color: condition === g ? "#fff" : "var(--muted)" }}>{g}</button>
               ))}
             </div>
           </div>
