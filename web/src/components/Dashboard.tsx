@@ -129,7 +129,7 @@ function Topbar({ meta, onMenu, onSignOut, onNav }: {
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span title="Language" style={{ display: "inline-flex", border: "1px solid var(--line)", borderRadius: 9, overflow: "hidden" }}>
+        <span title="Language" className="cs-lang" style={{ display: "inline-flex", border: "1px solid var(--line)", borderRadius: 9, overflow: "hidden" }}>
           {(["en", "es"] as const).map((l) => (
             <button key={l} onClick={() => setLang(l)} aria-label={l === "en" ? "English" : "Español"} style={{ padding: "6px 10px", fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: lang === l ? "var(--accent)" : "transparent", color: lang === l ? "#fff" : "var(--muted)" }}>{l.toUpperCase()}</button>
           ))}
@@ -168,7 +168,7 @@ function ProfileMenu({ onSignOut, onNav }: { onSignOut: () => void; onNav?: (id:
     <div ref={ref} style={{ position: "relative" }}>
       <button style={mx.profileBtn} onClick={() => setOpen(!open)}>
         <span style={mx.avatar}>{initials}</span>
-        <span style={{ textAlign: "left", lineHeight: 1.2 }}>
+        <span className="cs-profile-text" style={{ textAlign: "left", lineHeight: 1.2 }}>
           <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>{user.displayName || "User"}</span>
           <span style={{ display: "block", fontSize: 11.5, color: "var(--muted)" }}>{user.email || ""}</span>
         </span>

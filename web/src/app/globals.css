@@ -232,14 +232,21 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
   .cs-hamburger { display: grid !important; }
   .cs-search { display: none !important; }
 }
+/* Title never wraps into the header controls — truncate with an ellipsis. */
+.cs-topbar h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 @media (max-width: 760px) {
-  .cs-topbar { padding: 12px 16px !important; gap: 12px !important; }
+  .cs-topbar { padding: 12px 16px !important; gap: 10px !important; }
   .cs-content { padding: 16px !important; }
   .cs-sub { display: none; }
   .cs-bell { display: none !important; }
   .cs-addbtn-label { display: none; }
   .cs-addbtn { padding: 10px 12px !important; }
   .cs-topbar h1 { font-size: 18px !important; }
+  /* Language is also in the profile menu; drop the header copy on phones. */
+  .cs-lang { display: none !important; }
+  /* Avatar is enough on phones — the name/email crowd the title. */
+  .cs-profile-text { display: none !important; }
   .cs-grid4 { grid-template-columns: 1fr 1fr !important; }
   .cs-grid-2 { grid-template-columns: 1fr !important; }
   .cs-veh-hero { grid-template-columns: 1fr !important; }
