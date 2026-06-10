@@ -48,6 +48,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
   const [ebay, setEbay] = React.useState<{ configured: boolean; connected: boolean; account: string | null; env: string } | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null); // "part:id" | "lot:id" | "car:id"
   const [advanced, setAdvanced] = React.useState(false);
+  const advRef = React.useRef<HTMLDivElement>(null);
 
   // "Post elsewhere" prep sheet (text + photos, shown before opening the marketplace).
   const [prepare, setPrepare] = React.useState<PrepareState | null>(null);
@@ -301,8 +302,8 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
       </div>
 
       {/* Advanced: bulk file exports */}
-      <div>
-        <button onClick={() => setAdvanced((a) => !a)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "none", color: "var(--muted)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+      <div ref={advRef}>
+        <button onClick={() => { setAdvanced((a) => !a); if (!advanced) setTimeout(() => advRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "none", color: "var(--muted)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}>
           <ChevronDown size={15} style={{ transform: advanced ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} /> Advanced — bulk file export
         </button>
         {advanced && (
@@ -511,7 +512,7 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
               </button>
             )}
           </div>
-          <details style={{ marginTop: 8 }}>
+          <details open style={{ marginTop: 8 }}>
             <summary style={{ fontSize: 12, color: "var(--muted)", cursor: "pointer" }}>Preview the text you&apos;ll paste</summary>
             <textarea readOnly value={text} onFocus={(e) => e.currentTarget.select()} style={{ marginTop: 7, width: "100%", height: 110, resize: "vertical", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 12, lineHeight: 1.5, padding: "10px 12px", fontFamily: "inherit" }} />
           </details>
