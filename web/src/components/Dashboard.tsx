@@ -274,6 +274,8 @@ function ExportModal() {
   const [copied, setCopied] = useState(false);
   const [lightbox, setLightbox] = useState<number | null>(null); // photo open in the viewer
   const [showExport, setShowExport] = useState(false);           // export overlay open
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     (window as any).csOpenExport = (l: any) => {
@@ -301,6 +303,24 @@ function ExportModal() {
   const dirty = name !== (listing.part || "") || fitment !== (listing.fitment || "") || grade !== gradeOf(listing) || status !== listing.status || String(price) !== String(listing.price ?? "") || desc !== (listing.desc || "");
 
   function close() { setListing(null); }
+
+  // Upload photo(s) to this part from the editor — base64 → PATCH → instant preview.
+  async function addPhotos(files: FileList) {
+    const arr = Array.from(files).slice(0, 8);
+    if (!arr.length) return;
+    setUploading(true);
+    try {
+      const b64s = await Promise.all(arr.map((f) => new Promise<string>((res, rej) => {
+        const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(f);
+      })));
+      const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: listing.id, photosBase64: b64s }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't upload photo"); setUploading(false); return; }
+      setListing((prev: any) => ({ ...prev, image: b64s[0] })); // optimistic preview
+      csToast("Photo added");
+      (window as any).csReloadData?.();
+    } catch { csToast("Couldn't upload photo"); }
+    setUploading(false);
+  }
   function copy() { try { navigator.clipboard?.writeText(text); } catch {} setCopied(true); setTimeout(() => setCopied(false), 1800); csToast("Listing text copied"); }
   function exportCSV() {
     const headers = ["Part", "Fitment", "Price", "Grade", "Status", "Description"];
@@ -373,6 +393,10 @@ function ExportModal() {
                 <span style={{ position: "absolute", bottom: 8, left: 10, fontSize: 11, color: "#6b7793" }}>No photo yet</span>
               </div>
             )}
+            <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files) addPhotos(e.target.files); e.target.value = ""; }} />
+            <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 12px", borderRadius: 10, border: "1px dashed var(--line)", background: "transparent", color: "var(--muted)", fontSize: 13, fontWeight: 600, cursor: uploading ? "default" : "pointer" }}>
+              {uploading ? <LoaderCircle size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : <Plus size={15} />} {uploading ? "Uploading…" : photoUrls.length ? "Add / replace photo" : "Upload a photo"}
+            </button>
             {lowConf && (
               <div style={{ display: "flex", gap: 8, fontSize: 12, color: "var(--signal)", lineHeight: 1.5, background: "var(--signal-bg)", border: "1px solid color-mix(in srgb, var(--signal) 40%, transparent)", borderRadius: 10, padding: "10px 12px" }}>
                 <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />

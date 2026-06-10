@@ -182,6 +182,21 @@ export async function PATCH(req: Request) {
       if (body.fitment !== undefined) corrected.fitment = body.fitment;
       update.corrected = corrected;
     }
+    // New photo(s): base64 JPEGs uploaded to the part-photos bucket; the first
+    // becomes this part's photo. Lets sellers add a picture from the export flow.
+    if (Array.isArray(body.photosBase64) && body.photosBase64.length) {
+      const stamp = Date.now();
+      let first: string | null = null;
+      for (let i = 0; i < body.photosBase64.length && i < 8; i++) {
+        try {
+          const b64 = String(body.photosBase64[i]).replace(/^data:[^;]+;base64,/, "");
+          const path = `${shopId}/${stamp}-${i}-${String(body.listingId).slice(0, 8)}.jpg`;
+          const up = await db.storage.from("part-photos").upload(path, Buffer.from(b64, "base64"), { contentType: "image/jpeg", upsert: true });
+          if (!up.error && !first) first = db.storage.from("part-photos").getPublicUrl(path).data.publicUrl;
+        } catch { /* skip a photo that won't decode/upload */ }
+      }
+      if (first) update.photo_url = first;
+    }
     if (Object.keys(update).length === 0) return NextResponse.json({ ok: true });
 
     const { error } = await db.from("listings").update(update).eq("id", body.listingId).eq("shop_id", shopId);

@@ -61,6 +61,10 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
   const [busy, setBusy] = React.useState<string | null>(null); // "part:id" | "lot:id" | "car:id"
   const [advanced, setAdvanced] = React.useState(false);
   const advRef = React.useRef<HTMLDivElement>(null);
+  // Which vehicle groups are expanded. Default collapsed so it reads as a clean
+  // list of vehicles; click a vehicle to reveal its parts.
+  const [openGroups, setOpenGroups] = React.useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) => setOpenGroups((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   // "Post elsewhere" prep sheet (text + photos, shown before opening the marketplace).
   const [prepare, setPrepare] = React.useState<PrepareState | null>(null);
@@ -261,7 +265,14 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
 
       {/* Parts — grouped by vehicle */}
       <div>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Parts by vehicle <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {ready.length}</span></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, flex: 1 }}>Parts by vehicle <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {ready.length}</span></div>
+          {groups.length > 0 && (
+            <button onClick={() => setOpenGroups(openGroups.size ? new Set() : new Set(groups.map((g) => g.key)))} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              {openGroups.size ? "Collapse all" : "Expand all"}
+            </button>
+          )}
+        </div>
         {ready.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: "var(--muted)", fontSize: 14, border: "1px dashed var(--line)", borderRadius: 14 }}>
             No listings yet. <button onClick={() => go("add")} style={{ color: "var(--accent)", background: "none", border: "none", fontWeight: 600, cursor: "pointer" }}>Add a vehicle</button> to create some.
@@ -270,12 +281,16 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
           <div style={{ display: "grid", gap: 16 }}>
             {groups.map((g) => {
               const gv = g.key === "__other" ? null : vById.get(g.key);
+              const open = openGroups.has(g.key);
               return (
               <div key={g.key}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7, margin: "0 2px 8px", flexWrap: "wrap" }}>
-                  <Car size={14} color="var(--muted)" />
-                  <span style={{ fontSize: 13.5, fontWeight: 700 }}>{g.name}</span>
-                  <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 500 }}>· {g.items.length} part{g.items.length === 1 ? "" : "s"}</span>
+                  <button onClick={() => toggleGroup(g.key)} style={{ display: "flex", alignItems: "center", gap: 7, flex: 1, minWidth: 0, background: "transparent", border: "none", cursor: "pointer", color: "var(--foreground)", padding: 0, textAlign: "left" }}>
+                    <ChevronDown size={14} color="var(--muted)" style={{ flexShrink: 0, transform: open ? "none" : "rotate(-90deg)", transition: "transform 0.15s" }} />
+                    <Car size={14} color="var(--muted)" />
+                    <span style={{ fontSize: 13.5, fontWeight: 700 }}>{g.name}</span>
+                    <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 500 }}>· {g.items.length} part{g.items.length === 1 ? "" : "s"}</span>
+                  </button>
                   {gv && g.items.length > 1 && (
                     gv.ebayLotUrl ? (
                       <a href={gv.ebayLotUrl} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--success)", textDecoration: "none" }}><CircleCheck size={13} /> Lot on eBay</a>
@@ -286,6 +301,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
                     ) : null
                   )}
                 </div>
+                {open && (
                 <Card pad={0}>
                   {g.items.map((l: any, i: number) => (
                     <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 13, padding: "12px 16px", borderBottom: i < g.items.length - 1 ? "1px solid var(--line)" : "none", flexWrap: "wrap" }}>
@@ -306,6 +322,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
                     </div>
                   ))}
                 </Card>
+                )}
               </div>
               );
             })}
@@ -427,7 +444,29 @@ function StepNum({ n }: { n: number }) {
 function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareState; shop: any; onClose: () => void; onSavePhotos: (urls: string[], prefix: string) => Promise<number> }) {
   const { channel, kind, entity, photos, prefix } = data;
   const isCar = kind === "car";
-  const valid = photos.filter((u) => u && /^https?:\/\//.test(u));
+  // Photos uploaded from this sheet (data URLs), shown alongside the saved ones.
+  const [extraPhotos, setExtraPhotos] = React.useState<string[]>([]);
+  const [uploading, setUploading] = React.useState(false);
+  const upRef = React.useRef<HTMLInputElement>(null);
+  const valid = [...photos.filter((u) => u && /^https?:\/\//.test(u)), ...extraPhotos];
+
+  // Upload picture(s) to this part listing right from the export sheet.
+  async function uploadPhotos(files: FileList) {
+    const arr = Array.from(files).slice(0, 8);
+    if (!arr.length || isCar) return;
+    setUploading(true);
+    try {
+      const b64s = await Promise.all(arr.map((f) => new Promise<string>((res, rej) => {
+        const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(f);
+      })));
+      const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: entity.id, photosBase64: b64s }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't upload photo"); setUploading(false); return; }
+      setExtraPhotos((p) => [...p, ...b64s]);
+      csToast("Photo added");
+      (window as any).csReloadData?.();
+    } catch { csToast("Couldn't upload photo"); }
+    setUploading(false);
+  }
 
   // Editable copy of the post fields, seeded from the listing/vehicle.
   const [f, setF] = React.useState<Record<string, string>>(() => isCar ? {
@@ -562,6 +601,14 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
             </div>
           ) : (
             <div style={{ aspectRatio: "4 / 3", borderRadius: 12, border: "1px dashed var(--line)", display: "grid", placeItems: "center", color: "var(--muted)", fontSize: 12.5, background: "var(--surface2)" }}>No photo on this listing</div>
+          )}
+          {!isCar && (
+            <>
+              <input ref={upRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files) uploadPhotos(e.target.files); e.target.value = ""; }} />
+              <button onClick={() => upRef.current?.click()} disabled={uploading} style={{ marginTop: 8, width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 0", borderRadius: 10, border: "1px dashed var(--line)", background: "transparent", color: "var(--muted)", fontSize: 13, fontWeight: 600, cursor: uploading ? "default" : "pointer" }}>
+                {uploading ? <LoaderCircle size={15} className="spin" /> : <ImageDown size={15} />} {uploading ? "Uploading…" : valid.length ? "Add another photo" : "Upload a photo"}
+              </button>
+            </>
           )}
         </div>
 
