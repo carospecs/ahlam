@@ -491,10 +491,27 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
 
   return (
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, background: "var(--background)" }}>
-      <div style={{ width: "min(440px, 100%)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-xl)", padding: 28, boxShadow: "0 40px 80px -30px rgba(0,0,0,0.6)" }}>
-        <div style={{ width: 48, height: 48, borderRadius: 13, background: "var(--accent)", display: "grid", placeItems: "center", marginBottom: 16 }}>
-          {isIndiv ? <User size={22} color="#fff" /> : <Store size={22} color="#fff" />}
+      <div className="login-card" style={{ width: "min(840px, 100%)", display: "grid", gridTemplateColumns: "1fr 0.9fr", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-xl)", overflow: "hidden", boxShadow: "0 40px 80px -30px rgba(0,0,0,0.6)" }}>
+        {/* Brand panel — auto-hides on mobile via .login-panel */}
+        <div className="grain login-panel" style={{ padding: 34, display: "flex", flexDirection: "column", gap: 22, justifyContent: "space-between", borderRight: "1px solid var(--line)", minHeight: 500 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 10 }}><BrandChip size={34} /><span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span></span>
+          <div>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, borderRadius: 999, border: "1px solid color-mix(in srgb, var(--accent) 22%, transparent)", background: "var(--accent-tint)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--accent)" }}><span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--accent)" }} /> Pilot shops · early access</span>
+            <h1 style={{ margin: "16px 0 0", fontSize: 31, fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.02em" }}>You&apos;re one step<br /><span style={{ color: "var(--accent)" }}>from your first listing.</span></h1>
+            <p style={{ margin: "12px 0 0", color: "var(--muted)", fontSize: 14, lineHeight: 1.55 }}>Set up your {isIndiv ? "account" : "shop"} and your AI-graded inventory starts building itself.</p>
+          </div>
+          <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--line)", background: "var(--background)", padding: 15, display: "grid", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}><Sparkles size={15} color="var(--accent)" /><span style={{ fontWeight: 600, fontSize: 12.5 }}>AI review card</span></div>
+            {[["Part", "Alternator"], ["Fits", "2013–2017 Accord"], ["Suggested", "$85"]].map(([k, v]) => (
+              <div key={k} style={{ display: "flex", justifyContent: "space-between", background: "var(--surface2)", borderRadius: 8, padding: "8px 11px", fontSize: 12.5 }}><span style={{ color: "var(--muted)" }}>{k}</span><span style={{ fontWeight: 600 }}>{v}</span></div>
+            ))}
+          </div>
         </div>
+        {/* Form column */}
+        <div style={{ padding: 30 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 13, background: "var(--accent)", display: "grid", placeItems: "center", marginBottom: 16 }}>
+            {isIndiv ? <User size={22} color="#fff" /> : <Store size={22} color="#fff" />}
+          </div>
 
         {busy && !needForm ? (
           <>
@@ -546,7 +563,8 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
             </form>
           </>
         )}
-        <button onClick={onSignOut} style={{ marginTop: 16, width: "100%", background: "transparent", border: "none", color: "var(--muted)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign out</button>
+          <button onClick={onSignOut} style={{ marginTop: 16, width: "100%", background: "transparent", border: "none", color: "var(--muted)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign out</button>
+        </div>
       </div>
     </div>
   );
