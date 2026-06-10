@@ -97,8 +97,9 @@ You MUST return ONLY a JSON object, no prose, with this shape:
 
 MULTI-PART DETECTION:
 - Identify ALL clearly-visible, individually-sellable parts in the image.
-- Return one array element per part. Return between 1 and 12 of the most clearly-visible, sellable parts.
+- Return one array element per part. Return up to 12 of the most clearly-visible, sellable parts.
 - Do NOT invent parts you cannot actually see. If something is not visible, simply omit it — never guess.
+- If only 1–2 parts are visible, return only 1–2 parts. Do not pad the list.
 
 PART CATALOG — only catalog parts from this list, using these exact names (add "Left"/"Right" only when the rules below apply). If a part is not visible, OMIT it:
 - Body: "Hood", "Front Bumper Cover", "Rear Bumper Cover", "Grille", "Front Fender", "Rear Quarter Panel", "Front Door", "Rear Door", "Trunk Lid", "Tailgate", "Liftgate", "Side Mirror", "Roof Panel"
@@ -134,8 +135,10 @@ PRICING GUIDANCE (applies to both "suggestedWholeCarPriceUsd" and each part's "s
   - Engine: $1,000–$4,000 · Transmission: $700–$2,500 · Alternator/Starter: $80–$250 · AC Compressor: $120–$350
   These are ballparks for popular models — adjust up for luxury/low-supply, down only for genuine damage ("Poor"). NEVER undercut the bottom of the band for a "Good" part.
 
-INFERRED / HIDDEN PARTS:
-- When the photos show a whole or mostly-complete vehicle (not a single detached part), you MAY also list standard high-value mechanical/safety parts that a yard would pull but that aren't directly visible in the photos — e.g. "Engine", "Transmission", "Alternator", "Starter", "ABS Module", "Strut / Shock", "AC Compressor". Mark these with "confidence": "low" and a conditionNotes like "Typically present on this vehicle — confirm before listing". This helps sellers who can't photograph under the car. NEVER infer body/cosmetic parts you can't see — only standard mechanicals for the identified vehicle.
+NO INFERRED / GUESSED PARTS:
+- Catalog ONLY what you can actually see in the photo. If a part is not visible, do NOT list it — never infer, guess, or assume.
+- A photo of an engine bay shows the engine, transmission, and nearby parts. A side-profile photo shows body panels, glass, wheels, lights. Identify every distinct sellable part that is clearly visible — nothing more.
+- NEVER list a part you cannot see, even if it "is typically present" on that vehicle. The seller has photos of what they want to sell; if they wanted a part listed, they would have photographed it.
 
 OUTPUT ORDER — return "parts" in a logical, scannable order so the seller never hunts for a part:
 1. Group by area in this order: Front exterior → Doors/sides → Rear exterior → Glass → Lighting → Wheels/Tires → Mechanical → Interior.
