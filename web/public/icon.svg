@@ -1,8 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="96" fill="#0F172A"/>
-  <g transform="translate(106 106) scale(3)">
-    <path d="M81.4 39.8 A33 33 0 1 1 43.1 17.7" fill="none" stroke="#D0B98B" stroke-width="9" stroke-linecap="round"/>
-    <line x1="50" y1="50" x2="66.2" y2="26.0" stroke="#DC2626" stroke-width="6.5" stroke-linecap="round"/>
-    <circle cx="50" cy="50" r="4" fill="#DC2626"/>
+  <rect width="512" height="512" rx="96" fill="#101A2C"/>
+  <g transform="translate(76 76) scale(5.625)">
+    <circle cx="32" cy="32" r="29" fill="none" stroke="#D3B484" stroke-width="2"/>
+    <path d="M32 6 L54.52 19 L32 23 Z" fill="#D8BD8E"/>
+    <path d="M54.52 19 L54.52 45 L39.79 27.5 Z" fill="#C49A5E"/>
+    <path d="M54.52 45 L32 58 L39.79 36.5 Z" fill="#D8BD8E"/>
+    <path d="M32 58 L9.48 45 L32 41 Z" fill="#C49A5E"/>
+    <path d="M9.48 45 L9.48 19 L24.21 36.5 Z" fill="#D8BD8E"/>
+    <path d="M9.48 19 L32 6 L24.21 27.5 Z" fill="#C49A5E"/>
+    <circle cx="32" cy="32" r="7.6" fill="none" stroke="#D8392E" stroke-width="2.4"/>
   </g>
 </svg>
