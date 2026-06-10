@@ -56,9 +56,9 @@ export type AIResult =
   | { ok: false; userMessage: string; internalError: string };
 
 const CONDITION_RUBRIC: Record<string, { detail: string }> = {
-  A: { detail: "GRADE A (excellent): works 100% and looks clean. No cracks, breaks, bent, or missing mounting tabs. May have very light normal wear but is ready to install. A buyer installs it with no work." },
-  B: { detail: "GRADE B (good): has visible scratches or scuffs but works fine. Fully functional — all tabs and mounts intact. Not as cosmetically clean as Grade A, but everything works and is installable as-is." },
-  C: { detail: "GRADE C (poor): damaged, non-functional, or heavily worn. Cracks, breaks, dents, bends, heavy corrosion, missing mounting tabs, tears, leaks, shattered glass/lenses, or mechanical failure. Needs repair or sells as a core/project piece." },
+  A: { detail: "GRADE A — Like New. From low-mileage or newer vehicles; minimal to no visible wear. Body parts: 0–1 repair unit needed (e.g. a small dent on a door panel). Mechanical: under 60,000 miles total use, OR no more than 15,000 miles per year relative to the vehicle's model age (e.g. an engine with 30,000 miles). Most expensive tier; highest quality, least wear." },
+  B: { detail: "GRADE B — Reliable, More Wear. From moderate-mileage vehicles; still fully functional. Body parts: 1–2 repair units needed; visible damage but structurally sound. Mechanical: 60,000–200,000 miles total, AND more than 15,000 miles per year relative to model age; hard ceiling of under 200,000 miles total regardless of other factors. Middle tier; savings over Grade A in exchange for more wear." },
+  C: { detail: "GRADE C — Functional, High Wear. From older, high-mileage vehicles; visible wear but still serviceable. Body parts: 2 or more repair units needed; significant cosmetic or structural damage. Mechanical: over 200,000 miles total, regardless of vehicle age. Best fit for older or discontinued models; may require more maintenance attention." },
 };
 
 const VISION_SYSTEM_PROMPT = `You are an expert automotive salvage parts identifier. You look at a photo taken at a salvage yard — often a whole vehicle or a large section of one — and you catalog EVERY distinct sellable part you can see.
@@ -155,7 +155,7 @@ CONDITION RUBRIC — grade each part as exactly "A", "B", or "C" (ARA-style), ba
 - A: ${CONDITION_RUBRIC.A.detail}
 - B: ${CONDITION_RUBRIC.B.detail}
 - C: ${CONDITION_RUBRIC.C.detail}
-Pick the grade by visible damage: none/like-new → A; normal wear but installable as-is → B; cracked/broken/heavily worn/non-functional → C. When genuinely between two grades, choose the LOWER (more conservative) one.
+Pick the grade by visible wear and damage. When genuinely between two grades, choose the LOWER (more conservative) one.
 
 DAMAGE CODE ("damageCode"): a short ARA-style code summarizing the worst visible damage, as TYPE-LOCATION-SIZE.
 - TYPE: DT (dent), SC (scratch/scuff), CR (crack), BR (break/missing piece), RU (rust/corrosion), CH (chip), BN (bend), GL (glass damage), WR (general wear).
