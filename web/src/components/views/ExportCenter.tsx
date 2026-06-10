@@ -450,16 +450,17 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   const upRef = React.useRef<HTMLInputElement>(null);
   const valid = [...photos.filter((u) => u && /^https?:\/\//.test(u)), ...extraPhotos];
 
-  // Upload picture(s) to this part listing right from the export sheet.
+  // Upload picture(s) to this listing (part or whole car) right from the export sheet.
   async function uploadPhotos(files: FileList) {
     const arr = Array.from(files).slice(0, 8);
-    if (!arr.length || isCar) return;
+    if (!arr.length) return;
     setUploading(true);
     try {
       const b64s = await Promise.all(arr.map((f) => new Promise<string>((res, rej) => {
         const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(f);
       })));
-      const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: entity.id, photosBase64: b64s }) });
+      const payload = isCar ? { vehicleId: entity.id, photosBase64: b64s } : { listingId: entity.id, photosBase64: b64s };
+      const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't upload photo"); setUploading(false); return; }
       setExtraPhotos((p) => [...p, ...b64s]);
       csToast("Photo added");
@@ -584,8 +585,9 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
           <button onClick={onClose} aria-label="Close" style={{ display: "grid", placeItems: "center", width: 28, height: 28, borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}><X size={15} /></button>
         </div>
 
-        {/* Full post preview — photo, title, price, condition, fitment, description */}
+        {/* Full post preview — photo (click the empty box to upload), title, price, … */}
         <div style={{ padding: "12px 16px 0" }}>
+          <input ref={upRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files) uploadPhotos(e.target.files); e.target.value = ""; }} />
           {valid.length > 0 ? (
             <div style={{ display: "grid", gap: 6 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -598,17 +600,15 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
                   ))}
                 </div>
               )}
+              <button onClick={() => upRef.current?.click()} disabled={uploading} style={{ marginTop: 2, width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 0", borderRadius: 10, border: "1px dashed var(--line)", background: "transparent", color: "var(--muted)", fontSize: 13, fontWeight: 600, cursor: uploading ? "default" : "pointer" }}>
+                {uploading ? <LoaderCircle size={15} className="spin" /> : <ImageDown size={15} />} {uploading ? "Uploading…" : "Add another photo"}
+              </button>
             </div>
           ) : (
-            <div style={{ aspectRatio: "4 / 3", borderRadius: 12, border: "1px dashed var(--line)", display: "grid", placeItems: "center", color: "var(--muted)", fontSize: 12.5, background: "var(--surface2)" }}>No photo on this listing</div>
-          )}
-          {!isCar && (
-            <>
-              <input ref={upRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files) uploadPhotos(e.target.files); e.target.value = ""; }} />
-              <button onClick={() => upRef.current?.click()} disabled={uploading} style={{ marginTop: 8, width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 0", borderRadius: 10, border: "1px dashed var(--line)", background: "transparent", color: "var(--muted)", fontSize: 13, fontWeight: 600, cursor: uploading ? "default" : "pointer" }}>
-                {uploading ? <LoaderCircle size={15} className="spin" /> : <ImageDown size={15} />} {uploading ? "Uploading…" : valid.length ? "Add another photo" : "Upload a photo"}
-              </button>
-            </>
+            <button onClick={() => { if (!uploading) upRef.current?.click(); }} disabled={uploading} style={{ width: "100%", aspectRatio: "4 / 3", borderRadius: 12, border: "1px dashed var(--line)", display: "grid", placeItems: "center", gap: 9, color: "var(--muted)", fontSize: 13, fontWeight: 600, background: "var(--surface2)", cursor: uploading ? "default" : "pointer", padding: 0 }}>
+              {uploading ? <LoaderCircle size={22} className="spin" /> : <ImageDown size={24} />}
+              <span>{uploading ? "Uploading…" : "Click to upload a photo"}</span>
+            </button>
           )}
         </div>
 

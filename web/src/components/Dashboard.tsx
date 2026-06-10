@@ -388,10 +388,10 @@ function ExportModal() {
                 )}
               </>
             ) : (
-              <div className="photo-cell" style={{ aspectRatio: "4/3", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", position: "relative", overflow: "hidden", background: "radial-gradient(circle at 30% 25%, rgba(148,163,184,0.10), transparent 60%), linear-gradient(135deg, #20283c 0%, #161d2e 100%)" }}>
-                <Wrench size={40} strokeWidth={1.5} color="#5b6680" />
-                <span style={{ position: "absolute", bottom: 8, left: 10, fontSize: 11, color: "#6b7793" }}>No photo yet</span>
-              </div>
+              <button onClick={() => { if (!uploading) fileRef.current?.click(); }} className="photo-cell" style={{ width: "100%", aspectRatio: "4/3", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", gap: 8, position: "relative", overflow: "hidden", border: "1px dashed var(--line)", cursor: uploading ? "default" : "pointer", background: "radial-gradient(circle at 30% 25%, rgba(148,163,184,0.10), transparent 60%), linear-gradient(135deg, #20283c 0%, #161d2e 100%)" }}>
+                {uploading ? <LoaderCircle size={28} style={{ animation: "spin 0.8s linear infinite", color: "#7a86a3" }} /> : <Plus size={32} strokeWidth={1.5} color="#7a86a3" />}
+                <span style={{ fontSize: 12, color: "#8b97b3", fontWeight: 600 }}>{uploading ? "Uploading…" : "Click to upload a photo"}</span>
+              </button>
             )}
             <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files) addPhotos(e.target.files); e.target.value = ""; }} />
             <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 12px", borderRadius: 10, border: "1px dashed var(--line)", background: "transparent", color: "var(--muted)", fontSize: 13, fontWeight: 600, cursor: uploading ? "default" : "pointer" }}>

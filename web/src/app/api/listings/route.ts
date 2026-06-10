@@ -243,6 +243,26 @@ export async function PATCH(req: Request) {
     vehUpdate.asking_price = Number.isFinite(n as number) ? n : null;
   }
 
+  // New photo(s) for the vehicle — uploaded to the bucket and appended to the gallery.
+  if (Array.isArray(body.photosBase64) && body.photosBase64.length) {
+    const { data: cur } = await db.from("vehicles").select("photo_urls, photo_url").eq("id", vehicleId).eq("shop_id", shopId).single();
+    const existing: string[] = Array.isArray(cur?.photo_urls) ? cur!.photo_urls.filter(Boolean) : [];
+    const stamp = Date.now();
+    const added: string[] = [];
+    for (let i = 0; i < body.photosBase64.length && i < 8; i++) {
+      try {
+        const b64 = String(body.photosBase64[i]).replace(/^data:[^;]+;base64,/, "");
+        const path = `${shopId}/${stamp}-${i}-veh-${String(vehicleId).slice(0, 8)}.jpg`;
+        const up = await db.storage.from("part-photos").upload(path, Buffer.from(b64, "base64"), { contentType: "image/jpeg", upsert: true });
+        if (!up.error) added.push(db.storage.from("part-photos").getPublicUrl(path).data.publicUrl);
+      } catch { /* skip */ }
+    }
+    if (added.length) {
+      vehUpdate.photo_urls = [...existing, ...added];
+      if (!cur?.photo_url) vehUpdate.photo_url = added[0];
+    }
+  }
+
   if (Object.keys(vehUpdate).length === 0) return NextResponse.json({ ok: true });
 
   let { error } = await db.from("vehicles").update(vehUpdate).eq("id", vehicleId).eq("shop_id", shopId);
