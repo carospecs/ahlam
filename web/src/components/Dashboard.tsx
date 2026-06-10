@@ -66,6 +66,11 @@ const META: Record<string, { title: string; sub: string }> = {
   interchange: { title: "Parts interchange", sub: "Hollander-style cross-reference — search by VIN or part name" },
   yard: { title: "Yard management", sub: "Track part locations and barcodes across your lot" },
   files: { title: "Files", sub: "VIN reports & shop documents — owner only" },
+  settings: { title: "Account settings", sub: "Your name, contact, and online status" },
+  shop: { title: "Shop profile", sub: "Your public storefront — appears on every listing" },
+  team: { title: "Team & roles", sub: "Invite teammates and set their permissions" },
+  billing: { title: "Billing", sub: "Plan, usage, and payment method" },
+  notifications: { title: "Notifications", sub: "Choose what we email you about" },
 };
 
 function Sidebar({ active, onNav, onSignOut, open, onClose }: {
