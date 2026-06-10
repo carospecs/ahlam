@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { livePartPrice, livePricingEnabled } from "@/lib/pricing";
 import { geminiGenerate } from "@/lib/gemini";
+import { anthropicGenerate } from "@/lib/anthropic";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -201,6 +202,30 @@ async function callGemini(base64: string, mime: string, userText: string): Promi
   return Array.isArray(parts) ? parts.map((p: any) => p.text ?? "").join("") || undefined : undefined;
 }
 
+const CLAUDE_MODELS: Record<string, string> = {
+  sonnet: "claude-4-6-sonnet-latest",
+  haiku: "claude-4-5-haiku-latest",
+};
+
+async function callAnthropic(base64: string, mime: string, userText: string, modelKey: string): Promise<string | undefined> {
+  const model = CLAUDE_MODELS[modelKey];
+  if (!model) throw new Error(`Unknown Anthropic model: ${modelKey}`);
+
+  const res = await anthropicGenerate(model, VISION_SYSTEM_PROMPT, [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: userText },
+        { type: "image", source: { type: "base64", media_type: mime, data: base64 } },
+      ],
+    },
+  ]);
+  if (!res.ok) throw new Error(`Anthropic ${modelKey} ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const json = await res.json();
+  const text = json.content?.[0]?.text;
+  return typeof text === "string" ? text : undefined;
+}
+
 export async function POST(req: Request): Promise<NextResponse<AIResult>> {
   // Require authentication to prevent anonymous credit-burning. Accept either a
   // web session cookie OR a Bearer token (the native mobile app sends the latter,
@@ -225,7 +250,8 @@ export async function POST(req: Request): Promise<NextResponse<AIResult>> {
     return NextResponse.json(busyResult("bad request body"), { status: 400 });
   }
 
-  // Vision is Gemini-only (gemini-2.5-flash). The `provider` field is ignored.
+  const provider = body.provider ?? "gemini";
+
   const imageUrl =
     body.imageUrl ??
     (body.imageBase64
@@ -250,10 +276,15 @@ export async function POST(req: Request): Promise<NextResponse<AIResult>> {
   const userText = VISION_USER_INSTRUCTION + (body.vin ? vinContext(body.vin) : "") + photoContext;
 
   try {
-    const content = await callGemini(rawBase64, mime, userText);
+    let content: string | undefined;
+    if (provider === "sonnet" || provider === "haiku") {
+      content = await callAnthropic(rawBase64, mime, userText, provider);
+    } else {
+      content = await callGemini(rawBase64, mime, userText);
+    }
 
     if (!content) {
-      await alertTeam("gemini returned empty content");
+      await alertTeam(`${provider} returned empty content`);
       return NextResponse.json(busyResult("empty completion"), { status: 503 });
     }
 

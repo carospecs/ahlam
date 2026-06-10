@@ -40,13 +40,13 @@ export default function Review() {
   const [state, setState] = useState<State>({ phase: "loading" });
   const [drafts, setDrafts] = useState<PartDraft[]>([]);
   const [saving, setSaving] = useState(false);
-  const [scannedWith, setScannedWith] = useState<"gpt" | "gemini">("gemini");
+  const [scannedWith, setScannedWith] = useState<"gpt" | "gemini" | "sonnet" | "haiku">("gemini");
   const [showConfidence, setShowConfidence] = useState(true);
   const [vinInfo, setVinInfo] = useState<VinInfo | null>(null);
   const [vinScanning, setVinScanning] = useState(false);
   const [vinText, setVinText] = useState("");
 
-  async function run(useProvider: "gpt" | "gemini" = "gemini") {
+  async function run(useProvider: "gpt" | "gemini" | "sonnet" | "haiku" = "gemini") {
     if (!pending) {
       setState({ phase: "error", message: "No photo found.", canRetry: false });
       return;
@@ -293,7 +293,7 @@ function ConfidenceBar({
   onToggle,
 }: {
   ais: AIPartOutput[];
-  provider: "gpt" | "gemini";
+  provider: "gpt" | "gemini" | "sonnet" | "haiku";
   show: boolean;
   onToggle: () => void;
 }) {
@@ -309,7 +309,11 @@ function ConfidenceBar({
     counts.medium ? `${counts.medium} medium` : "",
     counts.low ? `${counts.low} low` : "",
   ].filter(Boolean).join(" · ");
-  const engine = provider === "gpt" ? "GPT-4o Vision" : "Gemini";
+  const engine =
+    provider === "gpt" ? "GPT-4o Vision" :
+    provider === "sonnet" ? "Claude 4.6 Sonnet" :
+    provider === "haiku" ? "Claude 4.5 Haiku" :
+    "Gemini";
 
   return (
     <View style={styles.confBar}>

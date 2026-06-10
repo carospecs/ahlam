@@ -10,8 +10,8 @@ import { supabase } from "@/lib/supabase";
 export async function identifyPart(params: {
   imageBase64: string;
   vin?: { make?: string; model?: string; year?: number };
-  /** Vision model. Backend is Gemini-only; kept for API compatibility. */
-  provider?: "gpt" | "gemini";
+  /** Vision model to use. */
+  provider?: "gpt" | "gemini" | "sonnet" | "haiku";
 }): Promise<AIResult> {
   try {
     // The app has no cookies — send the Supabase access token so the backend

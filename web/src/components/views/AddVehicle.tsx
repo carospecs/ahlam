@@ -30,6 +30,8 @@ type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; ve
 
 const PROVIDERS = [
   { id: "gemini", name: "Gemini 2.5 Flash", brand: "Google", tone: "var(--signal)", desc: "Fast pass with strong part ID, fitment, and pricing.", speed: "~15–20s" },
+  { id: "sonnet", name: "Claude 4.6 Sonnet", brand: "Anthropic", tone: "#d4a574", desc: "Top-tier vision reasoning for the most accurate part identification.", speed: "~15–20s" },
+  { id: "haiku", name: "Claude 4.5 Haiku", brand: "Anthropic", tone: "#d4a574", desc: "Fast, lightweight Claude for quick scans with solid accuracy.", speed: "~8–12s" },
 ];
 
 // Pick the single best whole-car price + label from per-photo AI estimates.
@@ -123,7 +125,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const [mainPhoto, setMainPhoto] = React.useState<string | null>(null);
   const [sellMode, setSellMode] = React.useState("parts");
   const [mode, setMode] = React.useState<null | "ai" | "manualCar" | "manualPart">(null);
-  const [provider] = React.useState<string>("gemini");
+  const [provider, setProvider] = React.useState<string>("gemini");
   const [photos, setPhotos] = React.useState<UploadedPhoto[]>([]);
   const [dragging, setDragging] = React.useState(false);
   const [carPrice, setCarPrice] = React.useState<string>("");
@@ -175,7 +177,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   // Send every photo to /api/identify; the AI defines what it can pull from each.
   async function runAnalysis() {
     setPhase("analyzing"); setError(null);
-    const prov = "gemini";
+    const prov = provider;
     try {
       const results = await Promise.all(
         photos.map(async (photo) => {
@@ -386,6 +388,30 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               ))}
             </div>
           )}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 0" }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--muted)" }}>AI model:</span>
+            {PROVIDERS.map((p) => {
+              const on = provider === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setProvider(p.id)}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "6px 12px", borderRadius: 999, border: `1.5px solid ${on ? p.tone : "var(--line)"}`,
+                    background: on ? `color-mix(in srgb, ${p.tone} 14%, transparent)` : "transparent",
+                    color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                  }}
+                  title={p.desc}
+                >
+                  {on && <Check size={13} />}
+                  {p.name}
+                  <span style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 500 }}>{p.brand}</span>
+                </button>
+              );
+            })}
+          </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
             <span style={{ fontSize: 12.5, color: atPhotoLimit ? "var(--signal)" : "var(--muted)" }}><Info size={13} style={{ verticalAlign: "-2px", marginRight: 5 }} />{photoCount} / {MAX_PHOTOS} photo{photoCount === 1 ? "" : "s"} added{atPhotoLimit ? " · limit reached" : ""}</span>
