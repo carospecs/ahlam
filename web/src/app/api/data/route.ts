@@ -43,6 +43,7 @@ export async function GET() {
         id: v.id, year: v.year, make: v.make, model: v.model, trim: v.trim || "",
         body: v.body || "", vin: v.vin || "", color: v.color || "",
         added: timeAgo(v.created_at), photos: v.photos || 0, image: v.photo_url || null,
+        images: Array.isArray(v.photo_urls) ? v.photo_urls.filter(Boolean) : (v.photo_url ? [v.photo_url] : []),
         parts: 0, value: 0, listed: 0, sold: 0,
         sellMode: v.sell_mode || "parts", askingPrice: v.asking_price, mileage: v.mileage || "",
         description: v.description || "", title: v.title || "", status: statusLabel(v.status),

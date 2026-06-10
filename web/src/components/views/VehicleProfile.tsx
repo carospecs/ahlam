@@ -196,7 +196,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
 
       <Card pad={0} style={{ overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "320px 1fr" }} className="cs-veh-hero">
-          <PhotoCell icon="Car" url={v.image} style={{ height: "100%", minHeight: 220, borderRadius: 0 }} iconSize={56} />
+          <VehicleGallery v={v} />
           <div style={{ padding: 22 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <SellModeBadge mode={sellMode} />
@@ -527,6 +527,30 @@ function Stat({ label, value, tone }: { label: string; value: string | number; t
     <div>
       <div className="tnum" style={{ fontSize: 19, fontWeight: 800, color: tone || "var(--foreground)" }}>{value}</div>
       <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{label}</div>
+    </div>
+  );
+}
+
+// Vehicle photo gallery — big selected photo + thumbnail strip. Each photo opens
+// the full-screen viewer on click (PhotoCell portals it to the body). Falls back
+// to a single photo when only one was uploaded.
+function VehicleGallery({ v }: { v: any }) {
+  const gallery: string[] = (Array.isArray(v.images) ? v.images : (v.image ? [v.image] : [])).filter(Boolean);
+  const [hero, setHero] = React.useState(0);
+  if (gallery.length <= 1) {
+    return <PhotoCell icon="Car" url={gallery[0] || v.image} style={{ height: "100%", minHeight: 220, borderRadius: 0 }} iconSize={56} />;
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 10 }}>
+      <PhotoCell key={hero} icon="Car" url={gallery[hero]} label="Tap to enlarge" style={{ aspectRatio: "4 / 3", borderRadius: 10 }} iconSize={48} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+        {gallery.slice(0, 8).map((u, i) => (
+          <button key={i} onClick={() => setHero(i)} aria-label={`Photo ${i + 1}`} style={{ padding: 0, border: i === hero ? "2px solid var(--accent)" : "1px solid var(--line)", borderRadius: 8, overflow: "hidden", aspectRatio: "1", cursor: "pointer", background: "var(--surface2)" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={u} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

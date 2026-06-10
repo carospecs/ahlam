@@ -69,6 +69,8 @@ export async function POST(req: Request) {
     }
   }
   const heroUrl = photoUrls[heroIndex] || photoUrls.find(Boolean) || null;
+  // Full gallery, hero first, de-duplicated — powers the vehicle photo gallery.
+  const gallery = [heroUrl, ...photoUrls].filter((u, i, arr): u is string => !!u && arr.indexOf(u) === i);
 
   // 1. Vehicle — active so whole/both variants surface in the market.
   const vehRow: Record<string, any> = {
@@ -85,8 +87,9 @@ export async function POST(req: Request) {
     mileage: mileage,                // private — never exposed in the public feed
     asking_price: carPrice,
     sell_mode: sellMode,
-    photos: vehicle.photos || 0,
+    photos: vehicle.photos || gallery.length,
     photo_url: heroUrl,
+    photo_urls: gallery,
     title: typeof vehicle.title === "string" && vehicle.title.trim() ? vehicle.title.trim() : null,
     description: typeof vehicle.description === "string" && vehicle.description.trim() ? vehicle.description : null,
     status,
@@ -97,7 +100,7 @@ export async function POST(req: Request) {
   // post still succeeds.
   for (let attempt = 0; vErr && attempt < 3; attempt++) {
     let dropped = false;
-    for (const col of ["photo_url", "title", "description", "stock_number"]) {
+    for (const col of ["photo_urls", "photo_url", "title", "description", "stock_number"]) {
       if (col in vehRow && new RegExp(col, "i").test(vErr.message || "")) { delete (vehRow as any)[col]; dropped = true; }
     }
     if (!dropped) break;

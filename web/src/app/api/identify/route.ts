@@ -139,6 +139,11 @@ NO INFERRED / GUESSED PARTS:
 - Catalog ONLY what you can actually see in the photo. If a part is not visible, do NOT list it — never infer, guess, or assume.
 - A photo of an engine bay shows the engine, transmission, and nearby parts. A side-profile photo shows body panels, glass, wheels, lights. Identify every distinct sellable part that is clearly visible — nothing more.
 - NEVER list a part you cannot see, even if it "is typically present" on that vehicle. The seller has photos of what they want to sell; if they wanted a part listed, they would have photographed it.
+- HARD RULE — the engine bay and interior must be VISIBLE in THIS photo:
+  · NEVER report "Engine", "Transmission", "Radiator", "Alternator", "Starter", "Battery", "AC Compressor", "ABS Module", "Power Steering Pump", "Fuel Pump", "Driveshaft", or "Catalytic Converter" UNLESS the hood is OPEN and that exact component is directly visible in THIS photo.
+  · NEVER report "Dashboard", "Instrument Cluster", "Center Console", "Steering Wheel", "Airbag", "Front Seat", "Rear Seat", "Door Panel", "Glove Box", or "Shifter" UNLESS the interior is actually visible in THIS photo.
+  · An EXTERIOR shot (front, rear, side-profile, or three-quarter) with the hood CLOSED shows ONLY exterior body, glass, lights, and wheels — from such a photo you MUST return ZERO under-hood parts and ZERO interior parts.
+  · Reporting an engine, transmission, or dashboard from a closed-hood or side-profile exterior photo is a HALLUCINATION and is strictly forbidden. When unsure whether the hood is open, assume it is closed and report nothing under it.
 
 OUTPUT ORDER — return "parts" in a logical, scannable order so the seller never hunts for a part:
 1. Group by area in this order: Front exterior → Doors/sides → Rear exterior → Glass → Lighting → Wheels/Tires → Mechanical → Interior.

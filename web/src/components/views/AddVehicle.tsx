@@ -205,12 +205,20 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         } else if (!firstError) firstError = r.userMessage;
       }
 
-      // Dedupe parts seen across multiple photos by name (keep the priced one).
+      // Dedupe parts seen across multiple photos by name. Prefer the instance the AI
+      // was most confident about (the photo that actually shows the part — e.g. the
+      // engine-bay shot for "Engine", not a side-profile that hallucinated it), then
+      // break ties by the higher price. This keeps each part's thumbnail correct.
+      const confRank = (p: AIPart) => (p.confidence === "high" ? 2 : p.confidence === "low" ? 0 : 1);
       const byName = new Map<string, AIPart>();
       for (const p of collected) {
         const key = p.partName.toLowerCase().trim();
         const existing = byName.get(key);
-        if (!existing || ((p.suggestedPriceUsd || 0) > (existing.suggestedPriceUsd || 0))) byName.set(key, p);
+        if (!existing
+          || confRank(p) > confRank(existing)
+          || (confRank(p) === confRank(existing) && (p.suggestedPriceUsd || 0) > (existing.suggestedPriceUsd || 0))) {
+          byName.set(key, p);
+        }
       }
       const deduped = [...byName.values()]
         .sort(comparePartsForDisplay)
