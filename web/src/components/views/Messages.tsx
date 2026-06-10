@@ -25,7 +25,7 @@ function asksAboutCar(messages: any[]): boolean {
   return messages.some((m) => m.from !== "me" && /(whole car|the car\b|the vehicle\b|mileage|miles\b|odometer|how many miles)/i.test(m.text));
 }
 
-export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
+export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => void; onVehicle?: (v: any) => void; showDeleted?: boolean }) {
   const { threads } = useData();
   const [activeId, setActiveId] = React.useState<string>("");
   const [draft, setDraft] = React.useState("");
@@ -34,15 +34,13 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
   const [dismissed, setDismissed] = React.useState<Record<string, boolean>>({});
   const [query, setQuery] = React.useState("");
   const [sending, setSending] = React.useState(false);
-  const [statusFilter, setStatusFilter] = React.useState<"all" | ConvStatus>("open");
+  const [statusFilter, setStatusFilter] = React.useState<"all" | ConvStatus>("all");
   const [localStatus, setLocalStatus] = React.useState<Record<string, ConvStatus>>({});
   // The status the user has *picked* for the open conversation but not saved yet.
   const [pendingStatus, setPendingStatus] = React.useState<ConvStatus | null>(null);
   const [savingStatus, setSavingStatus] = React.useState(false);
   const [deleted, setDeleted] = React.useState<Map<string, number>>(new Map());
-  const [showDeleted, setShowDeleted] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
-  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
   const marketMeta: Record<string, { icon: typeof Share2; color: string }> = {
     Ahlam: { icon: Store, color: "var(--accent)" },
@@ -79,13 +77,13 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
   React.useEffect(() => { if (!activeId && threads.length) setActiveId(threads[0].id); }, [threads, activeId]);
   // Auto-clean deleted conversations older than 30 days.
   React.useEffect(() => {
-    const cutoff = Date.now() - THIRTY_DAYS;
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
     setDeleted((p) => {
       const n = new Map(p); let changed = false;
       for (const [id, ts] of n) { if (ts < cutoff) { n.delete(id); changed = true; } }
       return changed ? n : p;
     });
-  }, [THIRTY_DAYS]);
+  }, []);
   // Reset the composer + any unsaved status pick when switching conversations.
   React.useEffect(() => { setDraft(""); setAttachments([]); setPendingStatus(null); }, [activeId]);
 
@@ -177,21 +175,17 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
             {(["all", "open", "dealt", "closed"] as const).map((f) => {
               const on = statusFilter === f;
               return (
-                <button key={f} onClick={() => { setStatusFilter(f); setShowDeleted(false); }}
+                <button key={f} onClick={() => setStatusFilter(f)}
                   style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 999, border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`, background: on ? "var(--accent-tint)" : "transparent", color: on ? "var(--accent)" : "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                   {f === "all" ? "All" : STATUS_META[f].label} <span style={{ opacity: 0.7 }}>{statusCounts[f]}</span>
                 </button>
               );
             })}
-            <button onClick={() => { setShowDeleted(!showDeleted); if (!showDeleted) setActiveId(""); }}
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 999, border: `1px solid ${showDeleted ? "var(--danger)" : "var(--line)"}`, background: showDeleted ? "rgba(239,68,68,0.1)" : "transparent", color: showDeleted ? "var(--danger)" : "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-              <Trash2 size={12} /> Deleted <span style={{ opacity: 0.7 }}>{deleted.size}</span>
-            </button>
           </div>
         </div>
         <div style={{ overflowY: "auto", flex: 1 }}>
           {visibleThreads2.length === 0 && <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: "var(--muted)" }}>{
-            showDeleted ? "No deleted conversations." : query ? `No conversations match “${query}”.` : statusFilter === "all" ? "No conversations." : `No ${STATUS_META[statusFilter as ConvStatus].label.toLowerCase()} conversations.`
+            query ? `No conversations match “${query}”.` : statusFilter === "all" ? "No conversations." : `No ${STATUS_META[statusFilter as ConvStatus].label.toLowerCase()} conversations.`
           }</div>}
           {visibleThreads2.map((th: any) => {
             const on = th.id === activeId;

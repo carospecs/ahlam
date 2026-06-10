@@ -7,7 +7,7 @@ import {
   Check, CircleCheck, Send, PencilLine, Tag, ShoppingBag,
   Globe, ChevronDown, User, Users, CreditCard, Download, Share2,
   CheckCheck, Info, Copy, ExternalLink, ChevronLeft, ChevronRight, LoaderCircle,
-  Sun, Moon, TrendingUp, BookOpen, FolderClosed, MapPin,
+  Sun, Moon, TrendingUp, BookOpen, FolderClosed, MapPin, Trash2,
 } from "lucide-react";
 import { buildListingText, buildVehicleText, partsForVehicle } from "./data";
 import { Overview } from "./views/Overview";
@@ -50,6 +50,7 @@ const NAV = [
   { id: "aichat", label: "AI assistant", icon: Sparkles },
   { id: "export", label: "Export & posting", icon: Send },
   { id: "messages", label: "Messages", icon: MessageSquare },
+  { id: "deleted-chats", label: "Deleted chats", icon: Trash2 },
 ];
 
 const META: Record<string, { title: string; sub: string }> = {
@@ -62,6 +63,7 @@ const META: Record<string, { title: string; sub: string }> = {
   aichat: { title: "AI assistant", sub: "Ask about pricing, fitment, and listings" },
   export: { title: "Export & posting", sub: "Cross-post your listings to Facebook, OfferUp, eBay & more" },
   messages: { title: "Messages", sub: "Buyer inquiries from your listings" },
+  "deleted-chats": { title: "Deleted chats", sub: "Recover or permanently remove conversations" },
   interchange: { title: "Parts interchange", sub: "Hollander-style cross-reference — search by VIN or part name" },
   yard: { title: "Yard management", sub: "Track part locations and barcodes across your lot" },
   files: { title: "Files", sub: "VIN reports & shop documents — owner only" },
@@ -222,6 +224,7 @@ const VIEWS: Record<string, React.ComponentType<any>> = {
   messages: Messages, aichat: AIChat, add: AddVehicle, interchange: Interchange, vehicleProfile: VehicleProfile,
   settings: AccountSettings, shop: ShopProfile, team: TeamRoles, billing: Billing, notifications: Notifications,
   files: Files, yard: YardManagement,
+  "deleted-chats": (p: any) => <Messages {...p} showDeleted />,
 };
 
 let toastFn: (msg: string) => void = () => {};
