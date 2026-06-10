@@ -365,10 +365,12 @@ const NOTIF_FIELDS = [
   { key: "marketing", label: "Product & feature updates", desc: "Occasional news about new Ahlam features" },
 ];
 
+const DEFAULT_PREFS = { buyer_messages: true, weekly_summary: true, ai_alerts: true, marketing: false, deleted_chats: false };
+
 export function Notifications(_: ViewProps) {
   const { user } = useData();
   const [prefs, setPrefs] = React.useState<Record<string, boolean>>(
-    user?.notificationPrefs || { buyer_messages: true, weekly_summary: true, ai_alerts: true, marketing: false }
+    user?.notificationPrefs || DEFAULT_PREFS
   );
   const [saving, setSaving] = React.useState(false);
 
@@ -400,6 +402,14 @@ export function Notifications(_: ViewProps) {
           <Toggle on={!!prefs[f.key]} onClick={() => toggle(f.key)} />
         </Card>
       ))}
+      <div style={{ height: 1, background: "var(--line)", margin: "4px 0" }} />
+      <Card style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>Deleted chats</div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>Show deleted conversations in your inbox</div>
+        </div>
+        <Toggle on={!!prefs["deleted_chats"]} onClick={() => toggle("deleted_chats")} />
+      </Card>
     </div>
   );
 }

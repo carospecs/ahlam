@@ -26,7 +26,7 @@ function asksAboutCar(messages: any[]): boolean {
 }
 
 export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
-  const { threads } = useData();
+  const { threads, user } = useData();
   const [activeId, setActiveId] = React.useState<string>("");
   const [draft, setDraft] = React.useState("");
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
@@ -35,7 +35,6 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
   const [query, setQuery] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [statusFilter, setStatusFilter] = React.useState<"all" | ConvStatus>("open");
-  const [showTrash, setShowTrash] = React.useState(false);
   const [localStatus, setLocalStatus] = React.useState<Record<string, ConvStatus>>({});
   // The status the user has *picked* for the open conversation but not saved yet.
   const [pendingStatus, setPendingStatus] = React.useState<ConvStatus | null>(null);
@@ -110,6 +109,7 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
   });
 
   const deletedThreads = threads.filter((th: any) => deleted.has(th.id));
+  const showTrash = user?.notificationPrefs?.deleted_chats ?? false;
   const visibleThreads2 = showTrash ? deletedThreads : visibleThreads.filter((th: any) => !deleted.has(th.id));
   const t = visibleThreads2.find((x: any) => x.id === activeId) || visibleThreads2[0] || null;
   const msgs: LocalMsg[] = t ? [...t.messages, ...(localMsgs[t.id] || [])] : [];
@@ -164,25 +164,21 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search messages…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 13, padding: "8px 0" }} />
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {(["all", "open", "dealt", "closed", "deleted"] as const).map((f) => {
-              const on = f === "deleted" ? showTrash : !showTrash && statusFilter === f;
-              const count = f === "deleted" ? deleted.size : statusCounts[f];
-              return f === "deleted" ? (
-                <button key={f} onClick={() => { setShowTrash(!showTrash); if (!showTrash) setActiveId(""); }}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 999, border: `1px solid ${showTrash ? "var(--signal)" : "var(--line)"}`, background: showTrash ? "var(--signal-bg)" : "transparent", color: showTrash ? "var(--signal)" : "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                  <Trash2 size={12} /> Deleted <span style={{ opacity: 0.7 }}>{count}</span>
-                </button>
-              ) : (
-                <button key={f} onClick={() => { setStatusFilter(f); setShowTrash(false); }}
+            {(["all", "open", "dealt", "closed"] as const).map((f) => {
+              const on = statusFilter === f;
+              return (
+                <button key={f} onClick={() => { setStatusFilter(f); }}
                   style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 999, border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`, background: on ? "var(--accent-tint)" : "transparent", color: on ? "var(--accent)" : "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                  {f === "all" ? "All" : STATUS_META[f as ConvStatus].label} <span style={{ opacity: 0.7 }}>{count}</span>
+                  {f === "all" ? "All" : STATUS_META[f].label} <span style={{ opacity: 0.7 }}>{statusCounts[f]}</span>
                 </button>
               );
             })}
           </div>
         </div>
         <div style={{ overflowY: "auto", flex: 1 }}>
-          {visibleThreads2.length === 0 && <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: "var(--muted)" }}>{showTrash ? "No deleted conversations." : query ? `No conversations match “${query}”.` : statusFilter === "all" ? "No conversations." : `No ${STATUS_META[statusFilter as ConvStatus].label.toLowerCase()} conversations.`}</div>}
+          {visibleThreads2.length === 0 && <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: "var(--muted)" }}>{
+            showTrash ? "No deleted conversations." : query ? `No conversations match “${query}”.` : statusFilter === "all" ? "No conversations." : `No ${STATUS_META[statusFilter as ConvStatus].label.toLowerCase()} conversations.`
+          }</div>}
           {visibleThreads2.map((th: any) => {
             const on = th.id === activeId;
             const last = th.messages[th.messages.length - 1];
