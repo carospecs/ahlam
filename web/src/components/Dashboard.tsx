@@ -20,6 +20,7 @@ import { Interchange } from "./views/Interchange";
 import { ExportCenter } from "./views/ExportCenter";
 import { AddVehicle } from "./views/AddVehicle";
 import { Analytics } from "./views/Analytics";
+import { Gallery } from "./views/Gallery";
 import { Files } from "./views/Files";
 import { VehicleProfile } from "./views/VehicleProfile";
 import { YardManagement } from "./views/YardManagement";
@@ -48,6 +49,7 @@ const NAV = [
   { id: "files", label: "Files", icon: FolderClosed, ownerOnly: true },
   { section: "Assist" },
   { id: "aichat", label: "AI assistant", icon: Sparkles },
+  { id: "gallery", label: "Gallery", icon: Images },
   { id: "export", label: "Export & posting", icon: Send },
   { id: "messages", label: "Messages", icon: MessageSquare },
 ];
@@ -65,6 +67,7 @@ const META: Record<string, { title: string; sub: string }> = {
   "deleted-chats": { title: "Deleted chats", sub: "Recover or permanently delete" },
   interchange: { title: "Parts interchange", sub: "Hollander-style cross-reference — search by VIN or part name" },
   yard: { title: "Yard management", sub: "Track part locations and barcodes across your lot" },
+  gallery: { title: "Photo gallery", sub: "Every photo across your inventory, grouped by car" },
   files: { title: "Files", sub: "VIN reports & shop documents — owner only" },
   settings: { title: "Account settings", sub: "Your name, contact, and online status" },
   shop: { title: "Shop profile", sub: "Your public storefront — appears on every listing" },
@@ -228,7 +231,7 @@ const VIEWS: Record<string, React.ComponentType<any>> = {
   overview: Overview, vehicles: Vehicles, browse: Browse, parts: Parts, export: ExportCenter, analytics: Analytics,
   messages: Messages, aichat: AIChat, add: AddVehicle, interchange: Interchange, vehicleProfile: VehicleProfile,
   settings: AccountSettings, shop: ShopProfile, team: TeamRoles, billing: Billing, notifications: Notifications,
-  files: Files, yard: YardManagement,
+  files: Files, yard: YardManagement, gallery: Gallery,
   "deleted-chats": DeletedChats,
 };
 

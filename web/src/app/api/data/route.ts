@@ -67,9 +67,15 @@ export async function GET() {
       });
 
       const vMap = new Map(vehicles.map((v: any) => [v.id, v]));
+      // A part belongs to a known vehicle, so its fitment should be that car —
+      // not whatever the AI could (or couldn't) infer from a single photo. Replace
+      // "unable to determine…" hedges (and blanks) with the linked car's identity.
+      const isHedge = (s: string) => !s || /unable to|cannot determine|can'?t determine|not (?:visible|clear|determinable)|from (?:an? )?interior|photo alone|insufficient|unknown/i.test(s);
+      const vehLabel = (v: any) => [v.year, v.make, v.model].filter(Boolean).join(" ");
       for (const l of listings) {
         const v = l.vehicleId ? vMap.get(l.vehicleId) : null;
         if (v) { v.parts++; if (l.price > 0) v.value += l.price; if (l.status === "Posted" || l.status === "active") v.listed++; if (l.status === "Sold") v.sold++; }
+        if (isHedge(l.fitment)) l.fitment = v ? vehLabel(v) : "";
       }
 
       threads = (convRes.data || []).map((c: any) => ({
