@@ -26,7 +26,7 @@ function asksAboutCar(messages: any[]): boolean {
 }
 
 export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
-  const { threads, user } = useData();
+  const { threads } = useData();
   const [activeId, setActiveId] = React.useState<string>("");
   const [draft, setDraft] = React.useState("");
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
@@ -39,8 +39,10 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
   // The status the user has *picked* for the open conversation but not saved yet.
   const [pendingStatus, setPendingStatus] = React.useState<ConvStatus | null>(null);
   const [savingStatus, setSavingStatus] = React.useState(false);
-  const [deleted, setDeleted] = React.useState<Set<string>>(new Set());
+  const [deleted, setDeleted] = React.useState<Map<string, number>>(new Map());
+  const [showDeleted, setShowDeleted] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
   const marketMeta: Record<string, { icon: typeof Share2; color: string }> = {
     Ahlam: { icon: Store, color: "var(--accent)" },
@@ -75,6 +77,15 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
   }
 
   React.useEffect(() => { if (!activeId && threads.length) setActiveId(threads[0].id); }, [threads, activeId]);
+  // Auto-clean deleted conversations older than 30 days.
+  React.useEffect(() => {
+    const cutoff = Date.now() - THIRTY_DAYS;
+    setDeleted((p) => {
+      const n = new Map(p); let changed = false;
+      for (const [id, ts] of n) { if (ts < cutoff) { n.delete(id); changed = true; } }
+      return changed ? n : p;
+    });
+  }, [THIRTY_DAYS]);
   // Reset the composer + any unsaved status pick when switching conversations.
   React.useEffect(() => { setDraft(""); setAttachments([]); setPendingStatus(null); }, [activeId]);
 
@@ -109,8 +120,7 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
   });
 
   const deletedThreads = threads.filter((th: any) => deleted.has(th.id));
-  const showTrash = user?.notificationPrefs?.deleted_chats ?? false;
-  const visibleThreads2 = showTrash ? deletedThreads : visibleThreads.filter((th: any) => !deleted.has(th.id));
+  const visibleThreads2 = showDeleted ? deletedThreads : visibleThreads.filter((th: any) => !deleted.has(th.id));
   const t = visibleThreads2.find((x: any) => x.id === activeId) || visibleThreads2[0] || null;
   const msgs: LocalMsg[] = t ? [...t.messages, ...(localMsgs[t.id] || [])] : [];
   const hasMileageAttached = attachments.some((a) => a.mileage);
@@ -167,17 +177,21 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
             {(["all", "open", "dealt", "closed"] as const).map((f) => {
               const on = statusFilter === f;
               return (
-                <button key={f} onClick={() => { setStatusFilter(f); }}
+                <button key={f} onClick={() => { setStatusFilter(f); setShowDeleted(false); }}
                   style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 999, border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`, background: on ? "var(--accent-tint)" : "transparent", color: on ? "var(--accent)" : "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                   {f === "all" ? "All" : STATUS_META[f].label} <span style={{ opacity: 0.7 }}>{statusCounts[f]}</span>
                 </button>
               );
             })}
+            <button onClick={() => { setShowDeleted(!showDeleted); if (!showDeleted) setActiveId(""); }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 999, border: `1px solid ${showDeleted ? "var(--danger)" : "var(--line)"}`, background: showDeleted ? "rgba(239,68,68,0.1)" : "transparent", color: showDeleted ? "var(--danger)" : "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <Trash2 size={12} /> Deleted <span style={{ opacity: 0.7 }}>{deleted.size}</span>
+            </button>
           </div>
         </div>
         <div style={{ overflowY: "auto", flex: 1 }}>
           {visibleThreads2.length === 0 && <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: "var(--muted)" }}>{
-            showTrash ? "No deleted conversations." : query ? `No conversations match “${query}”.` : statusFilter === "all" ? "No conversations." : `No ${STATUS_META[statusFilter as ConvStatus].label.toLowerCase()} conversations.`
+            showDeleted ? "No deleted conversations." : query ? `No conversations match “${query}”.` : statusFilter === "all" ? "No conversations." : `No ${STATUS_META[statusFilter as ConvStatus].label.toLowerCase()} conversations.`
           }</div>}
           {visibleThreads2.map((th: any) => {
             const on = th.id === activeId;
@@ -211,10 +225,10 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
                     </div>
                   </div>
                 </button>
-                {showTrash ? (
-                  <button onClick={() => setDeleted((p) => { const n = new Set(p); n.delete(th.id); return n; })} title="Restore conversation" style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}><Undo2 size={14} color="var(--accent)" /></button>
+                {showDeleted ? (
+                  <button onClick={() => setDeleted((p) => { const n = new Map(p); n.delete(th.id); return n; })} title="Restore conversation" style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}><Undo2 size={14} color="var(--accent)" /></button>
                 ) : (
-                  <button onClick={() => { setDeleted((p) => new Set(p).add(th.id)); if (activeId === th.id) setActiveId(visibleThreads2.find((x: any) => x.id !== th.id)?.id || ""); }} title="Delete conversation" style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}><Trash2 size={13} color="var(--muted)" /></button>
+                  <button onClick={() => { setDeleted((p) => { const n = new Map(p); n.set(th.id, Date.now()); return n; }); if (activeId === th.id) setActiveId(visibleThreads2.find((x: any) => x.id !== th.id)?.id || ""); }} title="Delete conversation" style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}><Trash2 size={13} color="var(--muted)" /></button>
                 )}
               </div>
             );
