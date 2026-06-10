@@ -1,12 +1,14 @@
 "use client";
 
 import React from "react";
-import { Wrench, Car, Send, EllipsisVertical, ChevronRight, CirclePlus } from "lucide-react";
+import { Wrench, Car, Send, EllipsisVertical, ChevronRight, CirclePlus, Upload, Tag, X, LoaderCircle, FileSpreadsheet } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge, MarketChip, StatusBadge } from "../UI";
-import { useData } from "../Dashboard";
+import { useData, csToast } from "../Dashboard";
 
 export function Parts({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
   const { vehicles, listings } = useData();
+  const [showImport, setShowImport] = React.useState(false);
+  const [showBulk, setShowBulk] = React.useState(false);
   const [filter, setFilter] = React.useState("All");
   const [group, setGroup] = React.useState("car"); // default: folders by car
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set()); // collapsed by default
@@ -54,11 +56,20 @@ export function Parts({ go }: { go: (id: string) => void; onVehicle?: (v: any) =
               );
             })}
           </div>
+          <button style={toolBtn} onClick={() => setShowImport(true)}>
+            <Upload size={15} /> Import CSV
+          </button>
+          <button style={toolBtn} onClick={() => setShowBulk(true)}>
+            <Tag size={15} /> Bulk price
+          </button>
           <button style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 600 }} onClick={() => (window as any).csOpenExport?.(listings.find((l: any) => l.status === "Draft") || listings[0])}>
             <Send size={15} /> Post selected
           </button>
         </div>
       </div>
+
+      {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+      {showBulk && <BulkPriceModal listings={listings} onClose={() => setShowBulk(false)} />}
 
       {rows.length === 0 && (
         <div style={{ padding: 48, textAlign: "center", border: "1px dashed var(--line)", borderRadius: 14 }}>
@@ -155,3 +166,163 @@ export function Parts({ go }: { go: (id: string) => void; onVehicle?: (v: any) =
     </div>
   );
 }
+
+const toolBtn: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", borderRadius: 10,
+  border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)",
+  fontSize: 13.5, fontWeight: 600, cursor: "pointer",
+};
+const ov: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 160, background: "rgba(7,11,22,0.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 24 };
+const modal: React.CSSProperties = { width: "min(560px, 100%)", maxHeight: "88vh", overflowY: "auto", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-xl)", padding: 22, display: "grid", gap: 12, boxShadow: "0 40px 90px -30px rgba(0,0,0,0.8)" };
+const primaryBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 18px", borderRadius: 11, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" };
+
+function ModalShell({ title, icon, onClose, children }: { title: string; icon: React.ReactNode; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div style={ov} onMouseDown={onClose}>
+      <div style={modal} className="fade-up" onMouseDown={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 16, fontWeight: 700 }}>{icon} {title}</div>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", cursor: "pointer" }}><X size={16} color="var(--muted)" /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Bulk YMS import — paste a spreadsheet export or upload a .csv, preview, import.
+function ImportModal({ onClose }: { onClose: () => void }) {
+  const [csv, setCsv] = React.useState("");
+  const [preview, setPreview] = React.useState<any>(null);
+  const [busy, setBusy] = React.useState(false);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  async function run(dryRun: boolean) {
+    if (!csv.trim()) { csToast("Paste a CSV or choose a file"); return; }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/listings/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ csv, dryRun }) });
+      const d = await r.json();
+      if (!r.ok) { csToast(d.error || "Import failed"); setBusy(false); return; }
+      if (dryRun) { setPreview(d); }
+      else {
+        csToast(`Imported ${d.created} part${d.created === 1 ? "" : "s"}`);
+        (window as any).csReloadData?.();
+        onClose();
+      }
+    } catch { csToast("Import failed"); }
+    setBusy(false);
+  }
+
+  function onFile(f: File | undefined) {
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => { setCsv(String(reader.result || "")); setPreview(null); };
+    reader.readAsText(f);
+  }
+
+  return (
+    <ModalShell title="Import parts from CSV" icon={<FileSpreadsheet size={18} color="var(--accent)" />} onClose={onClose}>
+      <p style={{ margin: 0, fontSize: 13, color: "var(--muted)", lineHeight: 1.55 }}>
+        Paste your yard export or upload a .csv. Columns are matched by header — include at least a <b>Part</b> (or Description) column. Recognized: Part, Price, Condition, Category, Year, Make, Model, Hollander, Notes, Stock.
+      </p>
+      <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ""; }} />
+      <button onClick={() => fileRef.current?.click()} style={{ ...toolBtn, width: "fit-content" }}><Upload size={15} /> Choose .csv file</button>
+      <textarea value={csv} onChange={(e) => { setCsv(e.target.value); setPreview(null); }} rows={6} placeholder={"Part,Price,Condition,Year,Make,Model,Hollander\nAlternator,95,B,2015,Honda,Accord,400-12345\nStarter,70,B,2014,Chevy,Cruze,410-54321"} style={{ width: "100%", padding: "11px 13px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 12.5, fontFamily: "var(--font-mono, monospace)", outline: "none", resize: "vertical" }} />
+
+      {preview && (
+        <div style={{ fontSize: 13, color: "var(--foreground)", background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 11, padding: 12 }}>
+          <b style={{ color: "var(--success)" }}>{preview.willCreate}</b> parts ready to import{preview.skipped?.length ? `, ${preview.skipped.length} skipped` : ""}.
+          {preview.sample?.length > 0 && (
+            <div style={{ marginTop: 8, display: "grid", gap: 4 }}>
+              {preview.sample.map((s: any, i: number) => (
+                <div key={i} style={{ fontSize: 12, color: "var(--muted)" }}>• {s.partName} — {s.condition}{s.suggestedPriceUsd ? ` · $${s.suggestedPriceUsd}` : ""}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => run(true)} disabled={busy} style={{ ...toolBtn, opacity: busy ? 0.6 : 1 }}>{busy ? <LoaderCircle size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : null} Preview</button>
+        <button onClick={() => run(false)} disabled={busy || !preview} style={{ ...primaryBtn, flex: 1, opacity: busy || !preview ? 0.6 : 1 }}>
+          {busy ? <LoaderCircle size={16} style={{ animation: "spin 0.8s linear infinite" }} /> : <Upload size={15} />} Import {preview ? `${preview.willCreate} parts` : "parts"}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+// Bulk pricing — apply a % change, flat delta, or fixed price to a set of parts.
+function BulkPriceModal({ listings, onClose }: { listings: any[]; onClose: () => void }) {
+  const categories = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const l of listings) { const c = l.category || l.partCategory; if (c) set.add(c); }
+    return ["All", ...Array.from(set).sort()];
+  }, [listings]);
+
+  const [category, setCategory] = React.useState("All");
+  const [mode, setMode] = React.useState<"percent" | "delta" | "set">("percent");
+  const [value, setValue] = React.useState("-10");
+  const [preview, setPreview] = React.useState<any>(null);
+  const [busy, setBusy] = React.useState(false);
+
+  async function run(dryRun: boolean) {
+    const num = Number(value);
+    if (Number.isNaN(num)) { csToast("Enter a number"); return; }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/listings/bulk-price", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category, mode, value: num, dryRun }) });
+      const d = await r.json();
+      if (!r.ok) { csToast(d.error || "Could not update prices"); setBusy(false); return; }
+      if (dryRun) setPreview(d);
+      else { csToast(`Updated ${d.updated} price${d.updated === 1 ? "" : "s"}`); (window as any).csReloadData?.(); onClose(); }
+    } catch { csToast("Could not update prices"); }
+    setBusy(false);
+  }
+
+  return (
+    <ModalShell title="Bulk pricing" icon={<Tag size={18} color="var(--accent)" />} onClose={onClose}>
+      <p style={{ margin: 0, fontSize: 13, color: "var(--muted)", lineHeight: 1.55 }}>Apply a price change across many parts at once. Preview before you commit.</p>
+      <label style={lbl}>Apply to</label>
+      <select value={category} onChange={(e) => { setCategory(e.target.value); setPreview(null); }} style={field}>
+        {categories.map((c) => <option key={c} value={c}>{c === "All" ? "All my parts" : c}</option>)}
+      </select>
+      <label style={lbl}>Change</label>
+      <div style={{ display: "flex", gap: 8 }}>
+        <select value={mode} onChange={(e) => { setMode(e.target.value as any); setPreview(null); }} style={{ ...field, flex: 1 }}>
+          <option value="percent">Percent change (%)</option>
+          <option value="delta">Add / subtract ($)</option>
+          <option value="set">Set fixed price ($)</option>
+        </select>
+        <input type="number" value={value} onChange={(e) => { setValue(e.target.value); setPreview(null); }} style={{ ...field, width: 110 }} />
+      </div>
+      <div style={{ fontSize: 12, color: "var(--muted)" }}>
+        {mode === "percent" ? "e.g. -10 = 10% off, 5 = 5% markup" : mode === "delta" ? "e.g. -15 takes $15 off each, 20 adds $20" : "every selected part gets this exact price"}
+      </div>
+
+      {preview && (
+        <div style={{ fontSize: 13, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 11, padding: 12 }}>
+          <b style={{ color: "var(--accent)" }}>{preview.count}</b> parts will change.
+          {preview.sample?.length > 0 && (
+            <div style={{ marginTop: 8, display: "grid", gap: 4 }}>
+              {preview.sample.map((s: any) => (
+                <div key={s.id} style={{ fontSize: 12, color: "var(--muted)" }}>${s.from} → <b style={{ color: "var(--success)" }}>${s.to}</b></div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => run(true)} disabled={busy} style={{ ...toolBtn, opacity: busy ? 0.6 : 1 }}>{busy ? <LoaderCircle size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : null} Preview</button>
+        <button onClick={() => run(false)} disabled={busy || !preview} style={{ ...primaryBtn, flex: 1, opacity: busy || !preview ? 0.6 : 1 }}>
+          {busy ? <LoaderCircle size={16} style={{ animation: "spin 0.8s linear infinite" }} /> : <Tag size={15} />} Apply {preview ? `to ${preview.count}` : ""}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+const lbl: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: "var(--muted)" };
+const field: React.CSSProperties = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, outline: "none", fontFamily: "inherit" };

@@ -24,6 +24,7 @@ import { Gallery } from "./views/Gallery";
 import { Files } from "./views/Files";
 import { VehicleProfile } from "./views/VehicleProfile";
 import { YardManagement } from "./views/YardManagement";
+import { Orders } from "./views/Orders";
 import { AccountSettings } from "./views/AccountSettings";
 import { ShopProfile, TeamRoles, Billing, Notifications } from "./views/SettingsViews";
 import { DashboardSkeleton } from "./UI";
@@ -39,6 +40,7 @@ const NAV = [
   { section: "Marketplace" },
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "browse", label: "Browse market", icon: Store },
+  { id: "orders", label: "Orders", icon: ShoppingBag },
   { section: "My shop" },
   { id: "vehicles", label: "Vehicles posted", icon: Car },
   { id: "parts", label: "Parts posted", icon: Wrench },
@@ -57,6 +59,7 @@ const NAV = [
 const META: Record<string, { title: string; sub: string }> = {
   overview: { title: "Overview", sub: "Your shop at a glance" },
   browse: { title: "Browse market", sub: "Cars and parts other shops have listed near you" },
+  orders: { title: "Orders", sub: "Purchases, sales, and escrow — pay and get paid securely" },
   vehicles: { title: "Vehicles posted", sub: "Your cars — drafts, parting out, whole, or both" },
   parts: { title: "Parts posted", sub: "Your parts — drafts, posted, and sold" },
   add: { title: "Add a vehicle", sub: "Snap or upload up to 8 photos + VIN — AI does the rest" },
@@ -228,7 +231,7 @@ function ProfileMenu({ onSignOut, onNav }: { onSignOut: () => void; onNav?: (id:
 }
 
 const VIEWS: Record<string, React.ComponentType<any>> = {
-  overview: Overview, vehicles: Vehicles, browse: Browse, parts: Parts, export: ExportCenter, analytics: Analytics,
+  overview: Overview, vehicles: Vehicles, browse: Browse, orders: Orders, parts: Parts, export: ExportCenter, analytics: Analytics,
   messages: Messages, aichat: AIChat, add: AddVehicle, interchange: Interchange, vehicleProfile: VehicleProfile,
   settings: AccountSettings, shop: ShopProfile, team: TeamRoles, billing: Billing, notifications: Notifications,
   files: Files, yard: YardManagement, gallery: Gallery,
@@ -707,6 +710,23 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   useEffect(() => { reload(); }, []);
   // Let views (e.g. Add vehicle) trigger a data refresh after they save.
   useEffect(() => { (window as any).csReloadData = reload; }, []);
+
+  // Handle returns from Stripe (checkout + Connect payout onboarding): toast the
+  // result, land the user on the right view, and strip the marker from the URL.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const order = p.get("order");
+    const payouts = p.get("payouts");
+    if (order === "success") { csToast("Payment complete — held safely in escrow"); setActive("orders"); }
+    else if (order === "cancelled") { csToast("Checkout cancelled — no charge made"); }
+    else if (payouts === "done") { csToast("Payout setup updated"); setActive("billing"); }
+    if (order || payouts) {
+      ["order", "id", "payouts"].forEach((k) => p.delete(k));
+      const url = new URL(window.location.href);
+      url.search = p.toString();
+      window.history.replaceState({}, "", url);
+    }
+  }, []);
 
   // Online presence heartbeat — marks user online every 60s, goes offline on unmount.
   useEffect(() => {

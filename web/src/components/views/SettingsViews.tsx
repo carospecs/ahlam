@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { CreditCard, Mail, Trash2, LoaderCircle, Check, Plus, Shield, Crown, Eye, PencilLine, ImagePlus, Info } from "lucide-react";
+import { CreditCard, Mail, Trash2, LoaderCircle, Check, Plus, Shield, Crown, Eye, PencilLine, ImagePlus, Info, Banknote, ShieldCheck, ExternalLink } from "lucide-react";
 import { Card } from "../UI";
 import { useData, csToast } from "../Dashboard";
 import { AddressAutocomplete, ZipField } from "../AddressAutocomplete";
@@ -23,6 +23,72 @@ const saveBtn: React.CSSProperties = {
 // ---------------------------------------------------------------------------
 // Shop profile
 // ---------------------------------------------------------------------------
+// Seller verification — submit a request, then show pending / verified state.
+// A verified badge appears on the storefront and every listing.
+function VerificationCard({ canManage }: { canManage: boolean }) {
+  const [state, setState] = React.useState<any>(null);
+  const [method, setMethod] = React.useState("business");
+  const [detail, setDetail] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+
+  function load() {
+    fetch("/api/verification").then((r) => r.json()).then(setState).catch(() => setState({ verified: false, request: null }));
+  }
+  React.useEffect(load, []);
+
+  async function submit() {
+    if (!detail.trim()) { csToast("Add your contact or document link"); return; }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/verification", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ method, detail }) });
+      const d = await r.json();
+      if (!r.ok) { csToast(d.error || "Could not submit"); setBusy(false); return; }
+      csToast("Verification request submitted");
+      load();
+    } catch { csToast("Could not submit"); }
+    setBusy(false);
+  }
+
+  if (!state) return null;
+  const verified = state.verified;
+  const pending = state.request?.status === "pending";
+
+  return (
+    <Card style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+      <span style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", background: `color-mix(in srgb, ${verified ? "var(--success)" : "var(--accent)"} 16%, transparent)`, flexShrink: 0 }}>
+        <ShieldCheck size={17} color={verified ? "var(--success)" : "var(--accent)"} />
+      </span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>Seller verification</div>
+        {verified ? (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, fontWeight: 700, color: "var(--success)", marginTop: 6 }}><Check size={15} /> Verified — the badge shows on your listings</div>
+        ) : pending ? (
+          <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 6 }}>Request received — we’re reviewing it. The verified badge appears once approved.</div>
+        ) : canManage ? (
+          <>
+            <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.55, marginTop: 4 }}>
+              Get a verified badge so buyers trust you. Submit a business email, phone, or a link to your dealer/business license.
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+              <select value={method} onChange={(e) => setMethod(e.target.value)} style={{ ...inp, width: 150 }}>
+                <option value="business">Business email</option>
+                <option value="phone">Phone number</option>
+                <option value="license">License / permit link</option>
+              </select>
+              <input value={detail} onChange={(e) => setDetail(e.target.value)} placeholder={method === "phone" ? "(555) 123-4567" : method === "license" ? "https://… link to your license" : "you@yourbusiness.com"} style={{ ...inp, flex: 1, minWidth: 180 }} />
+              <button onClick={submit} disabled={busy} style={{ ...saveBtn, opacity: busy ? 0.6 : 1 }}>
+                {busy ? <LoaderCircle size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : <ShieldCheck size={15} />} Request
+              </button>
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 6 }}>Ask the shop owner to request verification.</div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export function ShopProfile(_: ViewProps) {
   const { user } = useData();
   const canEdit = user?.role === "owner" || user?.role === "editor";
@@ -83,6 +149,7 @@ export function ShopProfile(_: ViewProps) {
       <p style={{ margin: "0 0 18px", fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5 }}>
         This is your public storefront — it appears on every listing buyers see in the marketplace.
       </p>
+      <div style={{ marginBottom: 18 }}><VerificationCard canManage={user?.role === "owner"} /></div>
       <form onSubmit={save} style={{ display: "grid", gap: 16 }}>
         <Field label="Shop logo">
           <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { uploadLogo(e.target.files?.[0]); e.target.value = ""; }} />
@@ -267,8 +334,66 @@ export function TeamRoles(_: ViewProps) {
 // ---------------------------------------------------------------------------
 // Billing
 // ---------------------------------------------------------------------------
+// Seller payouts via Stripe Connect. The shop must finish onboarding before
+// buyers can pay by card; status comes from the account.updated webhook.
+function PayoutCard({ canManage }: { canManage: boolean }) {
+  const [status, setStatus] = React.useState<any>(null);
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    fetch("/api/payments/connect").then((r) => r.json()).then(setStatus).catch(() => setStatus({ configured: false }));
+  }, []);
+
+  async function setup() {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/payments/connect", { method: "POST" });
+      const d = await r.json();
+      if (d.url) { window.location.href = d.url; return; }
+      csToast(d.error || "Payouts aren't available right now");
+    } catch { csToast("Couldn't reach Stripe — try again"); }
+    setBusy(false);
+  }
+
+  const ready = status?.chargesEnabled && status?.payoutsEnabled;
+  const started = status?.connected && !ready;
+
+  return (
+    <Card>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <span style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", background: `color-mix(in srgb, ${ready ? "var(--success)" : "var(--accent)"} 16%, transparent)`, flexShrink: 0 }}>
+          {ready ? <ShieldCheck size={17} color="var(--success)" /> : <Banknote size={17} color="var(--accent)" />}
+        </span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Get paid for sales</div>
+          <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.55, marginTop: 4 }}>
+            {ready
+              ? "Payouts are active. Buyers can pay by card; funds are held in escrow and released to your bank when the buyer confirms they got the part."
+              : started
+                ? "Onboarding started but not finished — complete it so buyers can check out."
+                : "Connect a bank account through Stripe so buyers can pay by card. Ahlam holds the payment in escrow and pays you out when the buyer confirms receipt."}
+          </div>
+          {ready ? (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700, color: "var(--success)", marginTop: 10 }}>
+              <Check size={14} /> Payouts active
+            </div>
+          ) : status?.configured === false ? (
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 10, opacity: 0.8 }}>Payments aren’t connected on this deployment yet (set STRIPE_SECRET_KEY).</div>
+          ) : canManage ? (
+            <button onClick={setup} disabled={busy || !status} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 600, marginTop: 10, opacity: busy ? 0.6 : 1 }}>
+              {busy ? <LoaderCircle size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : <ExternalLink size={15} />} {started ? "Finish payout setup" : "Set up payouts"}
+            </button>
+          ) : (
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 10 }}>Ask the shop owner to set up payouts.</div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function Billing(_: ViewProps) {
-  const { listings, vehicles, shop } = useData();
+  const { listings, vehicles, shop, user } = useData();
   const active = listings.filter((l: any) => l.status === "Posted").length;
   const sold = listings.filter((l: any) => l.status === "Sold").length;
   const identified = listings.length;
@@ -305,6 +430,8 @@ export function Billing(_: ViewProps) {
           </button>
         </div>
       </Card>
+
+      <PayoutCard canManage={user?.role === "owner"} />
 
       {/* What happens when the trial ends — clear, no anxiety. */}
       <Card style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>

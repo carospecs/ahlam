@@ -26,7 +26,10 @@ const mono = Space_Mono({
   display: "swap",
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ahlam.io";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "Ahlam — Photo to parts listing, in seconds",
   description:
     "Photograph an auto part, let AI identify it and grade its condition, review in a tap, and post it anywhere you sell. Built for small salvage yards and parts shops.",

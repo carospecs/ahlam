@@ -242,7 +242,30 @@ async function callAnthropic(base64: string, mime: string, userText: string, mod
   return typeof text === "string" ? text : undefined;
 }
 
+// CORS — the native mobile app and the Chrome extension call this endpoint from
+// origins that aren't ahlam.io, so browsers issue a preflight and enforce these
+// headers. Allow the credentials-less Bearer-token flow the app uses.
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Max-Age": "86400",
+};
+
+function withCors<T extends Response>(res: T): T {
+  for (const [k, v] of Object.entries(CORS_HEADERS)) res.headers.set(k, v);
+  return res;
+}
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function POST(req: Request): Promise<NextResponse<AIResult>> {
+  return withCors(await handlePOST(req));
+}
+
+async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
   // Require authentication to prevent anonymous credit-burning. Accept either a
   // web session cookie OR a Bearer token (the native mobile app sends the latter,
   // since it has no cookies).

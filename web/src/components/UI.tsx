@@ -5,8 +5,42 @@ import { createPortal } from "react-dom";
 import { CONDITION_GRADE_MAP } from "@ahlam/shared";
 import {
   Wrench, WrenchIcon, Car, Check, CircleCheck, Send, PencilLine,
-  ChevronDown, LoaderCircle, Search as SearchIcon, X,
+  ChevronDown, LoaderCircle, Search as SearchIcon, X, Star, BadgeCheck,
 } from "lucide-react";
+
+// Star rating display (and optional input). When `onRate` is provided the stars
+// are clickable, for the "write a review" flow.
+export function Stars({ value, count, size = 14, onRate }: { value: number; count?: number; size?: number; onRate?: (n: number) => void }) {
+  const rounded = Math.round(value);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star
+          key={n}
+          size={size}
+          onClick={onRate ? () => onRate(n) : undefined}
+          style={{ cursor: onRate ? "pointer" : "default" }}
+          color={n <= rounded ? "#F5A623" : "var(--line)"}
+          fill={n <= rounded ? "#F5A623" : "none"}
+        />
+      ))}
+      {count !== undefined && (
+        <span style={{ fontSize: size - 1, color: "var(--muted)", marginLeft: 4 }}>
+          {value > 0 ? value.toFixed(1) : "New"}{count > 0 ? ` (${count})` : ""}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// Verified-seller badge — shown next to a shop name once approved.
+export function VerifiedBadge({ size = 13, withLabel = false }: { size?: number; withLabel?: boolean }) {
+  return (
+    <span title="Verified seller" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--accent)", fontSize: size, fontWeight: 700 }}>
+      <BadgeCheck size={size + 2} />{withLabel ? "Verified" : ""}
+    </span>
+  );
+}
 
 // Combobox: a text field that's also a filterable dropdown. Type freely OR pick
 // from the suggested list. Used by the interchange guided form (part / make /

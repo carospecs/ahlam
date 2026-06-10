@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { Camera, Car, Wrench, MapPin, Store, Search, MessageSquare, X, Send, LoaderCircle, Eye, SlidersHorizontal, ChevronDown, Plus, Phone, MessageCircle } from "lucide-react";
-import { PhotoCell, ConditionBadge, conditionColorOf } from "../UI";
+import { Camera, Car, Wrench, MapPin, Store, Search, MessageSquare, X, Send, LoaderCircle, Eye, SlidersHorizontal, ChevronDown, Plus, Phone, MessageCircle, ShieldCheck, ShoppingBag } from "lucide-react";
+import { PhotoCell, ConditionBadge, conditionColorOf, Stars, VerifiedBadge } from "../UI";
 import { csToast } from "../Dashboard";
 
 interface MktPart {
@@ -10,17 +10,47 @@ interface MktPart {
   category: string; photoUrl: string | null; views: number; shopName: string;
   location: string; note: string; desc: string; shopId?: string; phone?: string | null;
   distance?: number | null; driveTime?: number | null;
+  verified?: boolean; rating?: number; ratingCount?: number;
 }
 interface MktVehicle {
   id: string; year: string; make: string; model: string; trim: string; body: string;
   color: string; mileage: string; sellMode: string; askingPrice: number | null;
   views: number; shopId: string; shopName: string; location: string; phone?: string | null;
   photoUrl?: string | null; distance?: number | null; driveTime?: number | null;
+  verified?: boolean; rating?: number; ratingCount?: number;
 }
 
 // Record a view (best-effort) when a buyer opens a post's detail.
 function recordView(body: { listingId?: string; vehicleId?: string }) {
   try { fetch("/api/marketplace/view", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); } catch {}
+}
+
+// Buy now — start a Stripe Checkout session and send the buyer to it. Returns
+// false if checkout wasn't available (the caller resets its busy state).
+async function startCheckout(body: { listingId?: string; vehicleId?: string }): Promise<boolean> {
+  try {
+    const r = await fetch("/api/payments/checkout", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (d.url) { window.location.href = d.url; return true; }
+    csToast(d.error || "Checkout isn't available right now");
+  } catch { csToast("Couldn't reach checkout — try again"); }
+  return false;
+}
+
+// Primary "Buy now" button with its own busy state. Shown on detail modals.
+function BuyButton({ body }: { body: { listingId?: string; vehicleId?: string } }) {
+  const [busy, setBusy] = React.useState(false);
+  return (
+    <button
+      onClick={async () => { setBusy(true); const ok = await startCheckout(body); if (!ok) setBusy(false); }}
+      disabled={busy}
+      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 4, padding: "11px 16px", borderRadius: 11, border: "none", background: "var(--success)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", width: "100%", opacity: busy ? 0.6 : 1 }}
+    >
+      {busy ? <LoaderCircle size={16} style={{ animation: "spin 0.8s linear infinite" }} /> : <ShoppingBag size={15} />} {busy ? "Starting checkout…" : "Buy now — secure checkout"}
+    </button>
+  );
 }
 
 export function Browse() {
@@ -297,7 +327,7 @@ export function Browse() {
                     <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.part}</div>
                     {l.fitment && <div style={{ fontSize: 12, color: "var(--muted)" }}>Fits {l.fitment}</div>}
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                      <Store size={13} /> <ShopLink id={l.shopId} name={l.shopName} />
+                      <Store size={13} /> <ShopLink id={l.shopId} name={l.shopName} />{l.verified ? <VerifiedBadge size={12} /> : null}{(l.ratingCount ?? 0) > 0 ? <>· <Stars value={l.rating || 0} count={l.ratingCount} size={11} /></> : null}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
                       <MapPin size={13} /> {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views} views
@@ -325,7 +355,7 @@ export function Browse() {
                   <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.part}</div>
                   {l.fitment && <div style={{ fontSize: 12, color: "var(--muted)" }}>Fits {l.fitment}</div>}
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                    <Store size={13} /> <ShopLink id={l.shopId} name={l.shopName} />
+                    <Store size={13} /> <ShopLink id={l.shopId} name={l.shopName} />{l.verified ? <VerifiedBadge size={12} /> : null}{(l.ratingCount ?? 0) > 0 ? <>· <Stars value={l.rating || 0} count={l.ratingCount} size={11} /></> : null}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
                     <MapPin size={13} /> {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views} views
@@ -358,7 +388,7 @@ export function Browse() {
                     <span>{v.mileage}</span><span>·</span><span>{v.body}</span><span>·</span><span>{v.color}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                    <Store size={13} /> <ShopLink id={v.shopId} name={v.shopName} /> · <MapPin size={12} /> {v.location || "—"}{v.distance != null ? ` · ${v.distance} mi` : ""}{v.driveTime != null ? ` · ~${v.driveTime} min` : ""} · <Eye size={12} /> {v.views} views
+                    <Store size={13} /> <ShopLink id={v.shopId} name={v.shopName} />{v.verified ? <VerifiedBadge size={12} /> : null}{(v.ratingCount ?? 0) > 0 ? <> · <Stars value={v.rating || 0} count={v.ratingCount} size={11} /></> : null} · <MapPin size={12} /> {v.location || "—"}{v.distance != null ? ` · ${v.distance} mi` : ""}{v.driveTime != null ? ` · ~${v.driveTime} min` : ""} · <Eye size={12} /> {v.views} views
                   </div>
                   <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ shopId: v.shopId, subject: `${v.year} ${v.make} ${v.model}`, title: `${v.year} ${v.make} ${v.model} · ${v.shopName}`, phone: v.phone }); }}>
                     <MessageSquare size={14} /> Message seller
@@ -427,11 +457,16 @@ function PartDetailModal({ part, onClose, onContact }: { part: MktPart; onClose:
           <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: "var(--foreground)" }}>{part.desc || part.note}</p>
         )}
         <div style={{ height: 1, background: "var(--line)" }} />
-        <MetaRow icon={<Store size={14} />}><ShopLink id={part.shopId} name={part.shopName} /></MetaRow>
+        <MetaRow icon={<Store size={14} />}><ShopLink id={part.shopId} name={part.shopName} />{part.verified ? <VerifiedBadge size={13} withLabel /> : null}</MetaRow>
+        {part.shopId && !part.shopId.startsWith("demo") && <ShopReviews shopId={part.shopId} />}
         <MetaRow icon={<MapPin size={14} />}>{part.location || "—"}{part.distance != null ? ` · ${part.distance} mi · ~${part.driveTime} min drive` : ""}</MetaRow>
         {part.phone && <MetaRow icon={<Phone size={14} />}><a href={`tel:${part.phone}`} style={{ color: "var(--foreground)", textDecoration: "none" }}>{part.phone}</a></MetaRow>}
         <MetaRow icon={<Eye size={14} />}>{part.views} {part.views === 1 ? "person has" : "people have"} viewed this</MetaRow>
-        <button style={primaryBtn} onClick={onContact}><MessageSquare size={15} /> Message seller</button>
+        <BuyButton body={{ listingId: part.id }} />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 11.5, color: "var(--muted)" }}>
+          <ShieldCheck size={12} color="var(--success)" /> Payment held in escrow until you confirm you got the part
+        </div>
+        <button style={{ ...primaryBtn, background: "transparent", border: "1px solid var(--line)", color: "var(--foreground)" }} onClick={onContact}><MessageSquare size={15} /> Message seller</button>
       </div>
     </DetailShell>
   );
@@ -453,11 +488,22 @@ function VehicleDetailModal({ vehicle: v, onClose, onContact }: { vehicle: MktVe
           Whole-car listing. Message the seller for mileage, history, and condition details.
         </p>
         <div style={{ height: 1, background: "var(--line)" }} />
-        <MetaRow icon={<Store size={14} />}><ShopLink id={v.shopId} name={v.shopName} /></MetaRow>
+        <MetaRow icon={<Store size={14} />}><ShopLink id={v.shopId} name={v.shopName} />{v.verified ? <VerifiedBadge size={13} withLabel /> : null}</MetaRow>
+        {v.shopId && !v.shopId.startsWith("demo") && <ShopReviews shopId={v.shopId} />}
         <MetaRow icon={<MapPin size={14} />}>{v.location || "—"}{v.distance != null ? ` · ${v.distance} mi · ~${v.driveTime} min drive` : ""}</MetaRow>
         {v.phone && <MetaRow icon={<Phone size={14} />}><a href={`tel:${v.phone}`} style={{ color: "var(--foreground)", textDecoration: "none" }}>{v.phone}</a></MetaRow>}
         <MetaRow icon={<Eye size={14} />}>{v.views} {v.views === 1 ? "person has" : "people have"} viewed this</MetaRow>
-        <button style={primaryBtn} onClick={onContact}><MessageSquare size={15} /> Message seller</button>
+        {v.askingPrice ? (
+          <>
+            <BuyButton body={{ vehicleId: v.id }} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 11.5, color: "var(--muted)" }}>
+              <ShieldCheck size={12} color="var(--success)" /> Payment held in escrow until you confirm the sale
+            </div>
+            <button style={{ ...primaryBtn, background: "transparent", border: "1px solid var(--line)", color: "var(--foreground)" }} onClick={onContact}><MessageSquare size={15} /> Message seller</button>
+          </>
+        ) : (
+          <button style={primaryBtn} onClick={onContact}><MessageSquare size={15} /> Message seller</button>
+        )}
       </div>
     </DetailShell>
   );
@@ -508,6 +554,71 @@ function ContactModal({ target, onClose }: { target: { listingId?: string; shopI
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Inline reviews block shown in a listing's detail modal: rating summary, a few
+// recent reviews, and a "write a review" form for signed-in buyers.
+function ShopReviews({ shopId }: { shopId: string }) {
+  const [data, setData] = React.useState<any>(null);
+  const [writing, setWriting] = React.useState(false);
+  const [rating, setRating] = React.useState(5);
+  const [body, setBody] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+
+  function load() {
+    fetch(`/api/reviews?shopId=${shopId}`).then((r) => r.json()).then(setData).catch(() => setData({ reviews: [], ratingCount: 0, ratingAvg: 0 }));
+  }
+  React.useEffect(load, [shopId]);
+
+  async function submit() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await fetch("/api/reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shopId, rating, body }) });
+      const d = await r.json();
+      if (!r.ok) { csToast(d.error || "Could not post review"); setBusy(false); return; }
+      csToast("Thanks for your review");
+      setWriting(false); setBody(""); load();
+    } catch { csToast("Could not post review"); }
+    setBusy(false);
+  }
+
+  if (!data) return null;
+
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+          <Stars value={data.ratingAvg} count={data.ratingCount} size={14} />
+        </div>
+        {!writing && <button onClick={() => setWriting(true)} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>Write a review</button>}
+      </div>
+
+      {writing && (
+        <div style={{ display: "grid", gap: 8, padding: 12, borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface2)" }}>
+          <Stars value={rating} size={20} onRate={setRating} />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder="How was the part and the seller?" style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 13.5, outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={submit} disabled={busy} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, opacity: busy ? 0.6 : 1 }}>
+              {busy ? <LoaderCircle size={14} style={{ animation: "spin 0.8s linear infinite" }} /> : <Send size={13} />} Post review
+            </button>
+            <button onClick={() => setWriting(false)} style={{ padding: "8px 14px", borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {data.reviews?.slice(0, 4).map((rv: any) => (
+        <div key={rv.id} style={{ display: "grid", gap: 3, paddingBottom: 8, borderBottom: "1px solid var(--line)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Stars value={rv.rating} size={12} />
+            <span style={{ fontSize: 12.5, fontWeight: 600 }}>{rv.author}</span>
+            {rv.verifiedPurchase && <span style={{ fontSize: 11, color: "var(--success)", fontWeight: 600 }}>· Verified purchase</span>}
+          </div>
+          {rv.body && <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 }}>{rv.body}</div>}
+        </div>
+      ))}
     </div>
   );
 }

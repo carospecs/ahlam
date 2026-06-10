@@ -39,17 +39,26 @@ export default async function ShopStorefront({ params }: Params) {
   let shop: any = null;
   let listingRows: any[] = [];
   let vehicleRows: any[] = [];
+  let reviewRows: any[] = [];
   try {
     const db = supabaseAdmin();
     const res = await db.from("shops").select("*").eq("id", id).single();
     shop = res.data;
     if (shop) {
-      const [l, v] = await Promise.all([
+      const [l, v, rv] = await Promise.all([
         db.from("listings").select("*").eq("shop_id", id).eq("status", "active").order("created_at", { ascending: false }),
         db.from("vehicles").select("*").eq("shop_id", id).in("sell_mode", ["whole", "both"]).eq("status", "active").order("created_at", { ascending: false }),
+        db.from("reviews").select("id, rating, body, verified_purchase, created_at, author_id").eq("shop_id", id).order("created_at", { ascending: false }).limit(20),
       ]);
       listingRows = l.data || [];
       vehicleRows = (v.data || []).filter((x: any) => x.status === "active");
+      reviewRows = rv.data || [];
+      const authorIds = Array.from(new Set(reviewRows.map((r: any) => r.author_id)));
+      if (authorIds.length) {
+        const { data: profs } = await db.from("profiles").select("id, display_name").in("id", authorIds);
+        const nameOf = new Map((profs || []).map((p: any) => [p.id, p.display_name]));
+        reviewRows = reviewRows.map((r: any) => ({ ...r, author: nameOf.get(r.author_id) || "Buyer" }));
+      }
     }
   } catch {
     // fall through to notFound below if shop never loaded
@@ -74,6 +83,8 @@ export default async function ShopStorefront({ params }: Params) {
 
   const initials = (shop.name || "S").split(" ").map((s: string) => s[0]).join("").toUpperCase().slice(0, 2);
   const count = parts.length + vehicles.length;
+  const ratingAvg = Number(shop.rating_avg || 0);
+  const ratingCount = shop.rating_count || 0;
 
   return (
     <main style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)" }}>
@@ -89,8 +100,12 @@ export default async function ShopStorefront({ params }: Params) {
               <div style={{ width: 72, height: 72, borderRadius: 16, background: "var(--accent)", color: "#fff", display: "grid", placeItems: "center", fontSize: 26, fontWeight: 800 }}>{initials}</div>
             )}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em" }}>{shop.name}</h1>
-              <div style={{ marginTop: 6, color: "var(--muted)", fontSize: 14, display: "flex", gap: 14, flexWrap: "wrap" }}>
+              <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                {shop.name}
+                {shop.verified && <span title="Verified seller" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 700, color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 14%, transparent)", borderRadius: 999, padding: "4px 11px" }}>✔ Verified seller</span>}
+              </h1>
+              <div style={{ marginTop: 6, color: "var(--muted)", fontSize: 14, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+                {ratingCount > 0 && <span style={{ color: "#F5A623", fontWeight: 700 }}>{starString(ratingAvg)} <span style={{ color: "var(--muted)", fontWeight: 500 }}>{ratingAvg.toFixed(1)} ({ratingCount})</span></span>}
                 {shop.location && <span>📍 {shop.location}</span>}
                 <span>{count} active listing{count === 1 ? "" : "s"}</span>
                 {shop.website && <a href={shop.website} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "none" }}>Website ↗</a>}
@@ -152,6 +167,24 @@ export default async function ShopStorefront({ params }: Params) {
           </>
         )}
 
+        {reviewRows.length > 0 && (
+          <>
+            <h2 style={sectionH}>Reviews ({ratingCount})</h2>
+            <div style={{ display: "grid", gap: 12 }}>
+              {reviewRows.map((r: any) => (
+                <div key={r.id} style={{ ...card, padding: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: "#F5A623", fontWeight: 700, letterSpacing: 1 }}>{starString(r.rating)}</span>
+                    <span style={{ fontSize: 13.5, fontWeight: 600 }}>{r.author}</span>
+                    {r.verified_purchase && <span style={{ fontSize: 11.5, color: "var(--success)", fontWeight: 600 }}>· Verified purchase</span>}
+                  </div>
+                  {r.body && <p style={{ margin: "8px 0 0", fontSize: 13.5, color: "var(--foreground)", opacity: 0.9, lineHeight: 1.55 }}>{r.body}</p>}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
         <div style={{ marginTop: 40, padding: 20, borderRadius: 14, border: "1px solid var(--line)", background: "var(--surface)", textAlign: "center" }}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>Want to message this seller or list your own inventory?</div>
           <Link href="/" style={{ display: "inline-flex", marginTop: 12, padding: "10px 20px", borderRadius: 11, background: "var(--accent)", color: "#fff", textDecoration: "none", fontSize: 14, fontWeight: 600 }}>Open Ahlam</Link>
@@ -159,6 +192,12 @@ export default async function ShopStorefront({ params }: Params) {
       </div>
     </main>
   );
+}
+
+// Round to the nearest whole star for the static (server-rendered) summary.
+function starString(value: number): string {
+  const n = Math.max(0, Math.min(5, Math.round(value)));
+  return "★★★★★".slice(0, n) + "☆☆☆☆☆".slice(0, 5 - n);
 }
 
 const sectionH: React.CSSProperties = { fontSize: 15, fontWeight: 700, margin: "26px 0 14px" };

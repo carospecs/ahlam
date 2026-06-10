@@ -17,6 +17,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
           <nav style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
             <a href="#how" style={navLink}>How it works</a>
             <a href="#pricing" style={navLink}>Pricing</a>
+            <a href="/guides" style={navLink}>Guides</a>
             <ThemeToggle size={36} />
             <button onClick={onSignIn} style={ghostBtn}>Sign in</button>
             <button onClick={onGetStarted} style={solidBtn}>Get started</button>
@@ -117,7 +118,8 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
           <BrandChip size={28} />
           <span style={{ fontSize: 14, fontWeight: 700 }}>Ahlam</span>
           <span style={{ fontSize: 12.5, color: "var(--muted)" }}>The marketplace for cars &amp; parts — every listing measured, every spec verified.</span>
-          <button onClick={onSignIn} style={{ ...ghostBtn, marginLeft: "auto" }}>Sign in</button>
+          <a href="/guides" style={{ ...navLink, marginLeft: "auto" }}>Guides</a>
+          <button onClick={onSignIn} style={ghostBtn}>Sign in</button>
         </div>
       </footer>
     </div>
