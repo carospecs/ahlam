@@ -595,7 +595,7 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
         </div>
 
         {/* Edit fields toggle */}
-        <details style={{ borderTop: "1px solid var(--line)" }}>
+        <details open={editOpen} style={{ borderTop: "1px solid var(--line)" }}>
           <summary onClick={(e) => { e.preventDefault(); setEditOpen(!editOpen); }} style={{ cursor: "pointer", padding: "10px 16px", fontSize: 13, fontWeight: 600, color: "var(--muted)", listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
             <ChevronDown size={14} style={{ transform: editOpen ? "none" : "rotate(-90deg)", transition: "transform 0.15s" }} /> Edit fields {dirty && <span style={{ fontSize: 11, color: "var(--signal)", fontWeight: 700 }}>(unsaved)</span>}
           </summary>
