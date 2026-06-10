@@ -489,6 +489,9 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
               {f.note && <span>· {f.note}</span>}
             </div>
           )}
+          <div style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
+            {isCar ? (f.description || (f.sellMode === "parts" ? "Parting out — all parts available" : f.sellMode === "both" ? "Selling whole or as parts" : "Posted for sale as-is")) : (f.note || (f.grade === "A" ? "Grade A — Like New, Almost" : f.grade === "B" ? "Grade B — A Step Below, but Still Reliable" : "Grade C — Affordable and Functional") || f.description || "Listed for sale")}
+          </div>
         </div>
 
         {/* Post text preview */}

@@ -4,7 +4,7 @@ import React from "react";
 import { CONDITION_GRADE_MAP } from "@ahlam/shared";
 import {
   Wrench, WrenchIcon, Car, Check, CircleCheck, Send, PencilLine,
-  ChevronDown, LoaderCircle, Search as SearchIcon,
+  ChevronDown, LoaderCircle, Search as SearchIcon, X,
 } from "lucide-react";
 
 // Combobox: a text field that's also a filterable dropdown. Type freely OR pick
@@ -118,13 +118,30 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function PhotoCell({ icon = "Car", label, style = {}, iconSize = 30, url }: { icon?: string; label?: string; style?: React.CSSProperties; iconSize?: number; url?: string | null }) {
   const IconComp = icon === "Car" ? Car : Wrench;
+  const [zoom, setZoom] = React.useState(false);
+  React.useEffect(() => {
+    if (!zoom) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setZoom(false); };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handler);
+    return () => { document.body.style.overflow = ""; window.removeEventListener("keydown", handler); };
+  }, [zoom]);
   if (url) {
     return (
-      <div className="photo-cell" style={{ borderRadius: "var(--radius-md)", overflow: "hidden", padding: 0, ...style }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={url} alt={label || ""} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-        {label && <span style={{ position: "absolute", bottom: 8, left: 10, fontSize: 11, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>{label}</span>}
-      </div>
+      <>
+        <div className="photo-cell" style={{ borderRadius: "var(--radius-md)", overflow: "hidden", padding: 0, ...style, cursor: "pointer" }} onClick={() => setZoom(true)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={label || ""} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          {label && <span style={{ position: "absolute", bottom: 8, left: 10, fontSize: 11, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>{label}</span>}
+        </div>
+        {zoom && (
+          <div onClick={() => setZoom(false)} style={{ position: "fixed", inset: 0, zIndex: 999, background: "rgba(7,11,22,0.88)", backdropFilter: "blur(6px)", display: "grid", placeItems: "center", padding: 24, cursor: "zoom-out" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url} alt={label || ""} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 8, boxShadow: "0 8px 40px rgba(0,0,0,0.6)" }} />
+            <button onClick={(e) => { e.stopPropagation(); setZoom(false); }} style={{ position: "absolute", top: 16, right: 16, width: 40, height: 40, borderRadius: 999, border: "none", background: "rgba(255,255,255,0.12)", color: "#fff", display: "grid", placeItems: "center", cursor: "pointer", fontSize: 18 }}><X size={20} /></button>
+          </div>
+        )}
+      </>
     );
   }
   return (
