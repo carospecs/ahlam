@@ -57,23 +57,36 @@ export function ZipField({ value, onChange, onResolve, placeholder, style, disab
     if (place) onResolve?.({ zip: zip.trim(), location: place });
     setOpen(false);
   }
+  const resolved = place && !open;
+  const borderColor = resolved ? "color-mix(in srgb, var(--accent) 40%, var(--line))" : "var(--line)";
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <input
-        value={zip}
-        disabled={disabled}
-        placeholder={placeholder}
-        inputMode="numeric"
-        maxLength={5}
-        onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); setZip(v); onChange(v); setOpen(true); }}
-        onFocus={() => place && setOpen(true)}
-        style={style}
-        autoComplete="off"
-      />
+      <div style={{ position: "relative" }}>
+        <input
+          value={zip}
+          disabled={disabled}
+          placeholder={placeholder}
+          inputMode="numeric"
+          maxLength={5}
+          onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); setZip(v); onChange(v); setOpen(true); }}
+          onFocus={() => place && setOpen(true)}
+          style={{ ...style, borderColor, paddingRight: resolved ? 32 : undefined }}
+          autoComplete="off"
+        />
+        {resolved && (
+          <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--accent)" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </span>
+        )}
+      </div>
       {open && place && (
         <div className="fade-up" style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, marginTop: 4, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, boxShadow: "0 18px 40px -16px rgba(0,0,0,0.35)", overflow: "hidden" }}>
-          <button type="button" className="cs-row" onClick={confirm} style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", border: "none", background: "transparent", color: "var(--foreground)", fontSize: 13.5, cursor: "pointer" }}>
-            <span style={{ fontWeight: 600 }}>{zip}</span> <span style={{ color: "var(--muted)" }}>· {place}</span>
+          <button type="button" className="cs-row" onClick={confirm} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "10px 13px", border: "none", background: "transparent", color: "var(--foreground)", fontSize: 13.5, cursor: "pointer" }}>
+            <span style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 8, background: "var(--accent-tint)", display: "grid", placeItems: "center" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            </span>
+            <span><span style={{ fontWeight: 700 }}>{zip}</span><span style={{ color: "var(--muted)" }}> · {place}</span></span>
+            <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 600, color: "var(--accent)", background: "var(--accent-tint)", padding: "2px 9px", borderRadius: 999 }}>Confirm →</span>
           </button>
         </div>
       )}

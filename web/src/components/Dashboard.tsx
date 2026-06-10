@@ -550,7 +550,7 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
             </p>
             <form onSubmit={create} style={{ display: "grid", gap: 14, marginTop: 22 }}>
               <Gfield label={isIndiv ? "Your name" : "Shop name"}><input value={name} onChange={(e) => setName(e.target.value)} placeholder={isIndiv ? "Alex Johnson" : "Westside Auto Salvage"} style={gInp} autoFocus /></Gfield>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 160px", gap: 12 }}>
                 <Gfield label="Location (optional)"><AddressAutocomplete value={location} onChange={setLocation} onSelect={(p) => { if (p.zip) setZip(p.zip); }} placeholder="Start typing your city…" style={gInp} /></Gfield>
                 <Gfield label="ZIP code"><ZipField value={zip} onChange={setZip} onResolve={(r) => { setZip(r.zip); if (!location.trim()) setLocation(r.location); }} placeholder="12345" style={gInp} /></Gfield>
               </div>
