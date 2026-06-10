@@ -29,7 +29,7 @@ interface VehicleEstimate {
 type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; vehicleFront?: string } | { ok: false; userMessage: string; internalError: string };
 
 const PROVIDERS = [
-  { id: "gemini", name: "Gemini 2.5 Flash", brand: "Google", tone: "var(--signal)", desc: "Fast pass with strong part ID, fitment, and pricing.", speed: "~15–20s" },
+  { id: "gemini", name: "Gemini 2.5 Pro", brand: "Google", tone: "var(--signal)", desc: "Best-in-class vision with the most accurate part ID and pricing.", speed: "~15–20s" },
   { id: "sonnet", name: "Claude Sonnet 4.6", brand: "Anthropic", tone: "#d4a574", desc: "Top-tier vision reasoning for the most accurate part identification.", speed: "~15–20s" },
   { id: "haiku", name: "Claude Haiku 4.5", brand: "Anthropic", tone: "#d4a574", desc: "Fast, lightweight Claude for quick scans with solid accuracy.", speed: "~8–12s" },
 ];
