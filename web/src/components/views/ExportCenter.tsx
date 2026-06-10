@@ -10,6 +10,10 @@ import { Send, Copy, Download, FileDown, ExternalLink, Info, CircleCheck, Share2
 function Portal({ children }: { children: React.ReactNode }) {
   return typeof document !== "undefined" ? createPortal(children, document.body) : null;
 }
+
+// Phones can't run browser extensions, so on mobile we hand the post off via the
+// native OS share sheet (text + photo files) → the real Facebook/OfferUp/etc. APP.
+const isMobileDevice = () => typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 import { Card, PhotoCell, ConditionBadge, SellModeBadge } from "../UI";
 import { buildListingText, buildVehicleText } from "../data";
 import { useData, csToast } from "../Dashboard";
@@ -474,10 +478,24 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
     setSaving(false);
   }
 
+  // Fetch the listing photos as File objects for the native share sheet.
+  async function photosToFiles(urls: string[]): Promise<File[]> {
+    const out: File[] = [];
+    for (const u of urls.slice(0, 10)) {
+      try {
+        const res = await fetch(u);
+        const blob = await res.blob();
+        const e = (blob.type.split("/")[1] || "jpg").split("+")[0];
+        out.push(new File([blob], `${prefix}-${out.length + 1}.${e}`, { type: blob.type || "image/jpeg" }));
+      } catch { /* skip a photo that won't fetch */ }
+    }
+    return out;
+  }
+
   async function confirmAndOpen() {
     const titleText = isCar ? (f.title || `${entity.year || ""} ${entity.make || ""} ${entity.model || ""}`.trim()) : f.part;
-    // If the Auto-Poster extension is installed, hand it the listing — it opens
-    // the marketplace and fills Title/Price/Description + photos for you.
+
+    // 1) Desktop with the Auto-Poster extension → it fills the marketplace form.
     if (ext) {
       try { await navigator.clipboard?.writeText(text); } catch {}
       window.postMessage({
@@ -488,8 +506,25 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
       csToast(`Sending to ${channel.name} — the extension will fill the form`);
       return;
     }
-    // No extension: copy text + save photos + open (paste & drag yourself). These
-    // marketplaces have no posting API, so this is the best a web app alone can do.
+
+    // 2) Phone → native share sheet so the photos + text go into the real APP.
+    if (isMobileDevice() && typeof navigator !== "undefined" && (navigator as any).share) {
+      try { await navigator.clipboard?.writeText(text); } catch {}
+      try {
+        const files = await photosToFiles(valid);
+        const payload: any = { title: titleText, text };
+        if (files.length && (navigator as any).canShare?.({ files })) payload.files = files;
+        await (navigator as any).share(payload);
+        setCopied(true);
+        csToast(`Shared — pick ${channel.name}; paste the text if it isn't there`);
+        return;
+      } catch (e: any) {
+        if (e?.name === "AbortError") return; // user closed the share sheet
+        // otherwise fall through to copy/open
+      }
+    }
+
+    // 3) Desktop without the extension → copy text + save photos + open the form.
     try { await navigator.clipboard?.writeText(text); } catch {}
     setCopied(true);
     window.open(channel.url, "_blank", "noopener");
@@ -553,7 +588,9 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
         {/* Confirm & copy button */}
         <div style={{ padding: "12px 16px" }}>
           <button onClick={confirmAndOpen} style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 0", borderRadius: 11, border: "none", background: copied ? "var(--success)" : channel.color, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
-            {copied ? <><Check size={18} /> {ext ? "Sent — check the new tab" : "Copied & opened"}</> : <><ExternalLink size={18} /> {ext ? `Auto-fill on ${channel.name}` : `Copy & post to ${channel.name}`}</>}
+            {copied
+              ? <><Check size={18} /> {ext ? "Sent — check the new tab" : isMobileDevice() ? "Shared" : "Copied & opened"}</>
+              : <><ExternalLink size={18} /> {ext ? `Auto-fill on ${channel.name}` : isMobileDevice() ? `Share to ${channel.name}` : `Copy & post to ${channel.name}`}</>}
           </button>
         </div>
 
