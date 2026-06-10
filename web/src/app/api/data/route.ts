@@ -72,9 +72,9 @@ export async function GET() {
       }
 
       threads = (convRes.data || []).map((c: any) => ({
-        id: c.id, name: c.contact_name, market: c.market,
+        id: c.id, name: c.contact_name, market: c.market === "CaroSpecs" ? "Ahlam" : (c.market || "Ahlam"),
         status: c.status || "open",
-        part: c.part_name || "", unread: c.unread || 0,
+        part: c.part_name === "CaroSpecs" ? "Ahlam" : (c.part_name || ""), unread: c.unread || 0,
         time: c.last_time || "", avatar: c.contact_avatar || c.contact_name?.slice(0, 2).toUpperCase(),
         messages: (c.messages || []).map((m: any) => ({
           from: m.sender === "me" ? "me" : "them", text: m.body, time: m.time || "",
