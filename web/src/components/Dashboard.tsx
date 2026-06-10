@@ -7,7 +7,7 @@ import {
   Check, CircleCheck, Send, PencilLine, Tag, ShoppingBag,
   Globe, ChevronDown, User, Users, CreditCard, Download, Share2,
   CheckCheck, Info, Copy, ExternalLink, ChevronLeft, ChevronRight, LoaderCircle,
-  Sun, Moon, TrendingUp, BookOpen, FolderClosed, MapPin, Trash2,
+  Sun, Moon, TrendingUp, BookOpen, FolderClosed, MapPin, Trash2, Maximize2,
 } from "lucide-react";
 import { buildListingText, buildVehicleText, partsForVehicle } from "./data";
 import { Overview } from "./views/Overview";
@@ -260,10 +260,15 @@ function ExportModal() {
   const [desc, setDesc] = useState("");
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [lightbox, setLightbox] = useState<number | null>(null); // index of photo open in the viewer
 
   useEffect(() => {
-    (window as any).csOpenExport = (l: any) => { setListing(l); setStatus(l.status); setPrice(String(l.price ?? "")); setDesc(l.desc || ""); setCopied(false); };
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setListing(null); }
+    (window as any).csOpenExport = (l: any) => { setListing(l); setStatus(l.status); setPrice(String(l.price ?? "")); setDesc(l.desc || ""); setCopied(false); setLightbox(null); };
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      // Escape closes the photo viewer first (if open), otherwise the modal.
+      setLightbox((lb) => { if (lb !== null) return null; setListing(null); return null; });
+    }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
@@ -272,7 +277,8 @@ function ExportModal() {
   // Build the marketplace text from the in-progress edits so the preview is live.
   const text = buildListingText({ ...listing, price: Number(price) || listing.price, desc });
   const lowConf = listing.confidence === "low";
-  const photos = Array.from({ length: Math.max(listing.photos, 1) });
+  // Real uploaded photos for this part (most have one). Used by the photo viewer.
+  const photoUrls: string[] = [listing.image, ...(Array.isArray(listing.images) ? listing.images : [])].filter((u: any) => u && /^https?:\/\//.test(u));
   const dirty = status !== listing.status || String(price) !== String(listing.price ?? "") || desc !== (listing.desc || "");
 
   function copy() {
@@ -281,6 +287,20 @@ function ExportModal() {
     csToast("Listing text copied to clipboard");
   }
   function close() { setListing(null); }
+
+  function exportCSV() {
+    const headers = ["Part", "Fitment", "Price", "Grade", "Status", "Description"];
+    const row = [listing.part, listing.fitment || "", String(Number(price) || listing.price || ""), listing.grade || "", status, (desc || "").replace(/\n/g, " ")];
+    const csv = [headers, row].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `${(listing.part || "listing").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.csv`; a.click();
+    URL.revokeObjectURL(url); csToast("Downloaded CSV");
+  }
+  async function share() {
+    try { if ((navigator as any).share) { await (navigator as any).share({ title: listing.part, text }); return; } } catch { return; }
+    try { await navigator.clipboard?.writeText(text); csToast("Listing copied — ready to share"); } catch { csToast("Press Ctrl/Cmd+C to copy"); }
+  }
 
   // Persist status / price / description for this part listing, then refresh.
   async function save() {
@@ -300,6 +320,7 @@ function ExportModal() {
   }
 
   return (
+    <>
     <div style={mx.overlay} onMouseDown={close}>
       <div style={mx.modal} className="fade-up" onMouseDown={(e) => e.stopPropagation()}>
         <div style={mx.modalHead}>
@@ -313,17 +334,30 @@ function ExportModal() {
         </div>
         <div style={mx.modalBody} className="cs-modal-body">
           <div style={mx.leftCol}>
-            <div className="photo-cell" style={{ aspectRatio: "4/3", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", position: "relative", overflow: "hidden", background: "radial-gradient(circle at 30% 25%, rgba(148,163,184,0.10), transparent 60%), linear-gradient(135deg, #20283c 0%, #161d2e 100%)" }}>
-              <Wrench size={40} strokeWidth={1.5} color="#5b6680" />
-              <span style={{ position: "absolute", bottom: 8, left: 10, fontSize: 11, color: "#6b7793" }}>Primary photo</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
-              {photos.slice(0, 3).map((_, i) => (
-                <div key={i} className="photo-cell" style={{ aspectRatio: "1", borderRadius: 9, display: "grid", placeItems: "center", background: "radial-gradient(circle at 30% 25%, rgba(148,163,184,0.10), transparent 60%), linear-gradient(135deg, #20283c 0%, #161d2e 100%)" }}>
-                  <Wrench size={16} strokeWidth={1.5} color="#5b6680" />
-                </div>
-              ))}
-            </div>
+            {photoUrls.length > 0 ? (
+              <>
+                <button onClick={() => setLightbox(0)} title="Click to enlarge" style={{ padding: 0, border: "1px solid var(--line)", borderRadius: "var(--radius-md)", overflow: "hidden", cursor: "zoom-in", background: "var(--surface2)", position: "relative", aspectRatio: "4/3", display: "block" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photoUrls[0]} alt={listing.part} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  <span style={{ position: "absolute", bottom: 8, right: 8, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#fff", background: "rgba(7,11,22,0.62)", borderRadius: 7, padding: "4px 8px" }}><Maximize2 size={12} /> Enlarge</span>
+                </button>
+                {photoUrls.length > 1 && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+                    {photoUrls.slice(1, 5).map((u, i) => (
+                      <button key={i} onClick={() => setLightbox(i + 1)} style={{ padding: 0, border: "1px solid var(--line)", borderRadius: 9, overflow: "hidden", cursor: "zoom-in", aspectRatio: "1", background: "var(--surface2)", display: "block" }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={u} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="photo-cell" style={{ aspectRatio: "4/3", borderRadius: "var(--radius-md)", display: "grid", placeItems: "center", position: "relative", overflow: "hidden", background: "radial-gradient(circle at 30% 25%, rgba(148,163,184,0.10), transparent 60%), linear-gradient(135deg, #20283c 0%, #161d2e 100%)" }}>
+                <Wrench size={40} strokeWidth={1.5} color="#5b6680" />
+                <span style={{ position: "absolute", bottom: 8, left: 10, fontSize: 11, color: "#6b7793" }}>No photo yet</span>
+              </div>
+            )}
             <div style={{ marginTop: 4 }}>
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{listing.part}</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
@@ -369,8 +403,8 @@ function ExportModal() {
               <button style={{ ...mx.primaryBtn, flex: 1 }} onClick={copy}>
                 <Copy size={16} /> {copied ? "Copied!" : "Copy listing text"}
               </button>
-              <button style={mx.ghostBtn} onClick={() => csToast("Exported listing as CSV")}><Download size={16} /> CSV</button>
-              <button style={mx.ghostBtn} onClick={() => csToast("Opened share sheet")}><Share2 size={16} /></button>
+              <button style={mx.ghostBtn} onClick={exportCSV}><Download size={16} /> CSV</button>
+              <button style={mx.ghostBtn} onClick={share}><Share2 size={16} /></button>
             </div>
             <div style={{ height: 1, background: "var(--line)", margin: "4px 0" }} />
             <div style={{ display: "flex", gap: 12 }}>
@@ -403,6 +437,35 @@ function ExportModal() {
           </div>
         </div>
       </div>
+    </div>
+    {lightbox !== null && photoUrls[lightbox] && (
+      <Lightbox images={photoUrls} index={lightbox} onClose={() => setLightbox(null)} onIndex={setLightbox} />
+    )}
+    </>
+  );
+}
+
+// Full-screen photo viewer — opens centered above everything; click the backdrop,
+// the ✕, or press Esc to exit. Arrow keys / on-screen arrows page through photos.
+function Lightbox({ images, index, onClose, onIndex }: { images: string[]; index: number; onClose: () => void; onIndex: (i: number) => void }) {
+  const many = images.length > 1;
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "ArrowRight" && many) onIndex((index + 1) % images.length);
+      else if (e.key === "ArrowLeft" && many) onIndex((index - 1 + images.length) % images.length);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [index, images.length, many, onIndex]);
+  const navBtn: React.CSSProperties = { position: "absolute", top: "50%", transform: "translateY(-50%)", width: 46, height: 46, borderRadius: 999, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(7,11,22,0.55)", color: "#fff", display: "grid", placeItems: "center", cursor: "pointer" };
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(4,7,14,0.92)", backdropFilter: "blur(3px)", display: "grid", placeItems: "center", padding: 28 }}>
+      <button onClick={onClose} aria-label="Close" style={{ position: "absolute", top: 18, right: 20, width: 42, height: 42, borderRadius: 999, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(7,11,22,0.55)", color: "#fff", display: "grid", placeItems: "center", cursor: "pointer" }}><X size={20} /></button>
+      {many && <button onClick={(e) => { e.stopPropagation(); onIndex((index - 1 + images.length) % images.length); }} aria-label="Previous" style={{ ...navBtn, left: 20 }}><ChevronLeft size={24} /></button>}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={images[index]} alt="" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "92vw", maxHeight: "86vh", objectFit: "contain", borderRadius: 10, boxShadow: "0 30px 90px -20px rgba(0,0,0,0.9)" }} />
+      {many && <button onClick={(e) => { e.stopPropagation(); onIndex((index + 1) % images.length); }} aria-label="Next" style={{ ...navBtn, right: 20 }}><ChevronRight size={24} /></button>}
+      {many && <div style={{ position: "absolute", bottom: 22, left: "50%", transform: "translateX(-50%)", fontSize: 12.5, fontWeight: 600, color: "#fff", background: "rgba(7,11,22,0.6)", borderRadius: 999, padding: "6px 14px" }}>{index + 1} / {images.length}</div>}
     </div>
   );
 }
