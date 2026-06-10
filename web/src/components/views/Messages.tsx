@@ -14,6 +14,29 @@ type ConvStatus = keyof typeof STATUS_META;
 import { MarketChip } from "../UI";
 import { useData, csToast } from "../Dashboard";
 
+const DELETED_KEY = "ahlam_deleted_chats";
+function loadDeleted(): Map<string, number> {
+  try {
+    const raw = localStorage.getItem(DELETED_KEY);
+    if (raw) return new Map(JSON.parse(raw));
+  } catch {}
+  return new Map();
+}
+function saveDeleted(m: Map<string, number>) {
+  localStorage.setItem(DELETED_KEY, JSON.stringify([...m.entries()]));
+}
+const PERMA_DELETED_KEY = "ahlam_permadeleted_chats";
+function loadPermaDeleted(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PERMA_DELETED_KEY);
+    if (raw) return new Set(JSON.parse(raw));
+  } catch {}
+  return new Set();
+}
+function savePermaDeleted(s: Set<string>) {
+  localStorage.setItem(PERMA_DELETED_KEY, JSON.stringify([...s]));
+}
+
 function reloadData(): Promise<any> { return (window as any).csReloadData?.() ?? Promise.resolve(); }
 
 interface Attachment { name: string; mileage?: boolean }
@@ -39,8 +62,11 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
   // The status the user has *picked* for the open conversation but not saved yet.
   const [pendingStatus, setPendingStatus] = React.useState<ConvStatus | null>(null);
   const [savingStatus, setSavingStatus] = React.useState(false);
-  const [deleted, setDeleted] = React.useState<Map<string, number>>(new Map());
+  const [deleted, setDeleted] = React.useState<Map<string, number>>(loadDeleted);
+  const [permaDeleted] = React.useState<Set<string>>(loadPermaDeleted);
   const fileRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => { saveDeleted(deleted); }, [deleted]);
 
   const marketMeta: Record<string, { icon: typeof Share2; color: string }> = {
     Ahlam: { icon: Store, color: "var(--accent)" },
@@ -111,13 +137,14 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
   const statusCounts = { all: threads.length, open: 0, dealt: 0, closed: 0 } as Record<string, number>;
   threads.forEach((th: any) => { statusCounts[statusOf(th)]++; });
   const visibleThreads = threads.filter((th: any) => {
+    if (permaDeleted.has(th.id)) return false;
     if (statusFilter !== "all" && statusOf(th) !== statusFilter) return false;
     if (!ql) return true;
     const last = th.messages[th.messages.length - 1];
     return `${th.name} ${th.part} ${last?.text || ""}`.toLowerCase().includes(ql);
   });
 
-  const deletedThreads = threads.filter((th: any) => deleted.has(th.id));
+  const deletedThreads = threads.filter((th: any) => deleted.has(th.id) && !permaDeleted.has(th.id));
   const visibleThreads2 = showDeleted ? deletedThreads : visibleThreads.filter((th: any) => !deleted.has(th.id));
   const t = visibleThreads2.find((x: any) => x.id === activeId) || visibleThreads2[0] || null;
   const msgs: LocalMsg[] = t ? [...t.messages, ...(localMsgs[t.id] || [])] : [];
@@ -328,6 +355,53 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
         </div>
       </div>
       )}
+    </div>
+  );
+}
+
+export function DeletedChats({ go }: { go: (id: string) => void }) {
+  const { threads } = useData();
+  const [deleted, setDeleted] = React.useState<Map<string, number>>(loadDeleted);
+  const [perma, setPerma] = React.useState<Set<string>>(loadPermaDeleted);
+
+  React.useEffect(() => { saveDeleted(deleted); }, [deleted]);
+  React.useEffect(() => { savePermaDeleted(perma); }, [perma]);
+
+  const list = threads.filter((th: any) => deleted.has(th.id) && !perma.has(th.id));
+
+  function recover(id: string) {
+    setDeleted((p) => { const n = new Map(p); n.delete(id); return n; });
+    csToast("Conversation restored to Inbox");
+  }
+  function deleteForever(id: string) {
+    setDeleted((p) => { const n = new Map(p); n.delete(id); return n; });
+    setPerma((p) => { const n = new Set(p); n.add(id); return n; });
+    csToast("Conversation permanently deleted");
+  }
+
+  if (!list.length) return <div style={{ padding: 40, textAlign: "center", color: "var(--muted)", fontSize: 13.5 }}>No deleted conversations.</div>;
+
+  return (
+    <div style={{ maxWidth: 700, display: "flex", flexDirection: "column", gap: 2 }}>
+      {list.map((th: any) => (
+        <div key={th.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+              {th.name}
+              <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>— {th.part}</span>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+              Deleted {new Date(deleted.get(th.id)!).toLocaleDateString()}
+            </div>
+          </div>
+          <button onClick={() => recover(th.id)} style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid var(--accent)", background: "transparent", color: "var(--accent)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+            Recover
+          </button>
+          <button onClick={() => deleteForever(th.id)} style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid var(--danger)", background: "transparent", color: "var(--danger)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+            Delete forever
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
