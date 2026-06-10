@@ -537,7 +537,7 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
 
   return (
     <Portal><div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 18 }}>
-      <div onClick={(e) => e.stopPropagation()} className="fade-up" style={{ width: "min(480px, 100%)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16, boxShadow: "0 40px 80px -30px rgba(0,0,0,0.6)", display: "grid", gap: 0 }}>
+      <div onClick={(e) => e.stopPropagation()} className="fade-up" style={{ width: "min(480px, 100%)", maxHeight: "90vh", overflowY: "auto", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16, boxShadow: "0 40px 80px -30px rgba(0,0,0,0.6)", display: "grid", gap: 0 }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>
           <channel.icon size={18} color={channel.color} />
