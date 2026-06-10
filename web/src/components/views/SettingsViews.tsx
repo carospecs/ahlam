@@ -108,10 +108,10 @@ export function ShopProfile(_: ViewProps) {
           <Field label="Location"><AddressAutocomplete value={form.location} onChange={(v) => set("location", v)} onSelect={(p) => { if (p.zip) set("zip_code", p.zip); }} placeholder="Start typing your city…" style={inp} disabled={!canEdit} /></Field>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label="ZIP code"><ZipField value={form.zip_code} onChange={(v) => set("zip_code", v)} onResolve={(r) => { set("zip_code", r.zip); if (!form.location?.trim()) set("location", r.location); }} placeholder="90805" style={inp} disabled={!canEdit} /><span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4, display: "block" }}>Used to show buyers your area and sort listings by nearest.</span></Field>
+          <Field label="ZIP code"><ZipField value={form.zip_code} onChange={(v) => set("zip_code", v)} onResolve={(r) => { set("zip_code", r.zip); if (!form.location?.trim()) set("location", r.location); }} placeholder="12345" style={inp} disabled={!canEdit} /><span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4, display: "block" }}>Used to show buyers your area and sort listings by nearest.</span></Field>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label="Contact phone"><input value={form.business_phone} onChange={(e) => set("business_phone", e.target.value)} placeholder="(562) 555-0148" style={inp} disabled={!canEdit} /></Field>
+          <Field label="Contact phone"><input value={form.business_phone} onChange={(e) => set("business_phone", e.target.value)} placeholder="(555) 123-4567" style={inp} disabled={!canEdit} /></Field>
           <Field label="Public email"><input value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="sales@yourshop.com" style={inp} disabled={!canEdit} /></Field>
         </div>
         <Field label="Website"><input value={form.website} onChange={(e) => set("website", e.target.value)} placeholder="yourshop.com" style={inp} disabled={!canEdit} /></Field>

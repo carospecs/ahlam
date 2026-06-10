@@ -535,10 +535,10 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
               <Gfield label={isIndiv ? "Your name" : "Shop name"}><input value={name} onChange={(e) => setName(e.target.value)} placeholder={isIndiv ? "Alex Johnson" : "Westside Auto Salvage"} style={gInp} autoFocus /></Gfield>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12 }}>
                 <Gfield label="Location (optional)"><AddressAutocomplete value={location} onChange={setLocation} onSelect={(p) => { if (p.zip) setZip(p.zip); }} placeholder="Start typing your city…" style={gInp} /></Gfield>
-                <Gfield label="ZIP code"><ZipField value={zip} onChange={setZip} onResolve={(r) => { setZip(r.zip); if (!location.trim()) setLocation(r.location); }} placeholder="90805" style={gInp} /></Gfield>
+                <Gfield label="ZIP code"><ZipField value={zip} onChange={setZip} onResolve={(r) => { setZip(r.zip); if (!location.trim()) setLocation(r.location); }} placeholder="12345" style={gInp} /></Gfield>
               </div>
               <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: -6 }}>Your ZIP lets buyers see your area and find your listings by nearest.</div>
-              <Gfield label={isIndiv ? "Contact phone (optional)" : "Business phone (optional)"}><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(562) 555-0148" style={gInp} /></Gfield>
+              <Gfield label={isIndiv ? "Contact phone (optional)" : "Business phone (optional)"}><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(555) 123-4567" style={gInp} /></Gfield>
               {error && <div style={{ fontSize: 13, color: "var(--danger)" }}>{error}</div>}
               <button type="submit" disabled={busy} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, border: "none", borderRadius: 12, background: "var(--accent)", color: "#fff", fontSize: 15, fontWeight: 600, padding: "13px 0", opacity: busy ? 0.65 : 1 }}>
                 {busy && <LoaderCircle size={18} style={{ animation: "spin 0.8s linear infinite" }} />} {busy ? "Creating…" : isIndiv ? "Create account" : "Create shop"}

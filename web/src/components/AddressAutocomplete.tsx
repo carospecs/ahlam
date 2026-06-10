@@ -6,6 +6,18 @@ import React from "react";
 
 interface Picked { label: string; zip: string; lat: string; lng: string }
 
+// Build a readable label from an OSM result — street + city/locality + state, so
+// an address search ("13949 Bammel") shows the full address, not just the county.
+// Falls back through suburb/neighbourhood/county when there's no incorporated city.
+function formatPlace(s: any): { label: string; zip: string } {
+  const a = s.address || {};
+  const street = [a.house_number, a.road].filter(Boolean).join(" ");
+  const locality = a.city || a.town || a.village || a.hamlet || a.suburb || a.neighbourhood || a.municipality || a.county || "";
+  const parts = [street, locality, a.state].filter(Boolean);
+  const label = parts.join(", ") || (s.display_name || "").split(",").slice(0, 3).map((p: string) => p.trim()).join(", ");
+  return { label, zip: a.postcode || "" };
+}
+
 // Smart ZIP field: type a 5-digit US ZIP and it resolves the real city/state
 // (Zippopotam), shows it for confirmation, and registers the location + coords.
 export function ZipField({ value, onChange, onResolve, placeholder, style, disabled }: {
@@ -109,14 +121,11 @@ export function AddressAutocomplete({ value, onChange, onSelect, placeholder, st
   }, [q, open]);
 
   function pick(s: any) {
-    const a = s.address || {};
-    const city = a.city || a.town || a.village || a.hamlet || a.county || "";
-    const state = a.state || "";
-    const label = [city, state].filter(Boolean).join(", ") || (s.display_name || "").split(",").slice(0, 2).join(", ");
+    const { label, zip } = formatPlace(s);
     justPicked.current = true;
     setQ(label);
     onChange(label);
-    onSelect?.({ label, zip: a.postcode || "", lat: s.lat, lng: s.lon });
+    onSelect?.({ label, zip, lat: s.lat, lng: s.lon });
     setOpen(false);
     setSug([]);
   }
@@ -136,13 +145,11 @@ export function AddressAutocomplete({ value, onChange, onSelect, placeholder, st
         <div className="fade-up" style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, marginTop: 4, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, boxShadow: "0 18px 40px -16px rgba(0,0,0,0.35)", overflow: "hidden" }}>
           {loading && sug.length === 0 && <div style={{ padding: "10px 12px", fontSize: 12.5, color: "var(--muted)" }}>Searching…</div>}
           {sug.map((s, i) => {
-            const a = s.address || {};
-            const city = a.city || a.town || a.village || a.hamlet || a.county || "";
-            const main = [city, a.state].filter(Boolean).join(", ");
+            const { label, zip } = formatPlace(s);
             return (
               <button key={i} type="button" className="cs-row" onClick={() => pick(s)} style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", border: "none", background: "transparent", color: "var(--foreground)", fontSize: 13.5, cursor: "pointer", borderBottom: i < sug.length - 1 ? "1px solid var(--line)" : "none" }}>
-                <span style={{ fontWeight: 600 }}>{main || s.display_name?.split(",")[0]}</span>
-                {a.postcode && <span style={{ color: "var(--muted)" }}> · {a.postcode}</span>}
+                <span style={{ fontWeight: 600 }}>{label || s.display_name?.split(",")[0]}</span>
+                {zip && <span style={{ color: "var(--muted)" }}> · {zip}</span>}
               </button>
             );
           })}
