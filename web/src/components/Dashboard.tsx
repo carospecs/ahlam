@@ -14,7 +14,7 @@ import { Overview } from "./views/Overview";
 import { Vehicles } from "./views/Vehicles";
 import { Browse } from "./views/Browse";
 import { Parts } from "./views/Parts";
-import { Messages } from "./views/Messages";
+import { Messages, DeletedChats } from "./views/Messages";
 import { AIChat } from "./views/AIChat";
 import { Interchange } from "./views/Interchange";
 import { ExportCenter } from "./views/ExportCenter";
@@ -50,7 +50,6 @@ const NAV = [
   { id: "aichat", label: "AI assistant", icon: Sparkles },
   { id: "export", label: "Export & posting", icon: Send },
   { id: "messages", label: "Messages", icon: MessageSquare },
-  { id: "deleted-chats", label: "Deleted chats", icon: Trash2 },
 ];
 
 const META: Record<string, { title: string; sub: string }> = {
@@ -63,7 +62,7 @@ const META: Record<string, { title: string; sub: string }> = {
   aichat: { title: "AI assistant", sub: "Ask about pricing, fitment, and listings" },
   export: { title: "Export & posting", sub: "Cross-post your listings to Facebook, OfferUp, eBay & more" },
   messages: { title: "Messages", sub: "Buyer inquiries from your listings" },
-  "deleted-chats": { title: "Deleted chats", sub: "Recover or permanently remove conversations" },
+  "deleted-chats": { title: "Deleted chats", sub: "Recover or permanently delete" },
   interchange: { title: "Parts interchange", sub: "Hollander-style cross-reference — search by VIN or part name" },
   yard: { title: "Yard management", sub: "Track part locations and barcodes across your lot" },
   files: { title: "Files", sub: "VIN reports & shop documents — owner only" },
@@ -191,6 +190,7 @@ function ProfileMenu({ onSignOut, onNav }: { onSignOut: () => void; onNav?: (id:
             { icon: Users, label: "Team & roles", id: "team" },
             { icon: CreditCard, label: "Billing", id: "billing" },
             { icon: Bell, label: "Notifications", id: "notifications" },
+            { icon: Trash2, label: "Deleted chats", id: "deleted-chats" },
           ].map((m) => (
             <button key={m.label} className="cs-nav-item" style={mx.menuItem} onClick={() => { setOpen(false); onNav?.(m.id); }}>
               <m.icon size={16} color="var(--muted)" /> {t(m.label)}
@@ -224,7 +224,7 @@ const VIEWS: Record<string, React.ComponentType<any>> = {
   messages: Messages, aichat: AIChat, add: AddVehicle, interchange: Interchange, vehicleProfile: VehicleProfile,
   settings: AccountSettings, shop: ShopProfile, team: TeamRoles, billing: Billing, notifications: Notifications,
   files: Files, yard: YardManagement,
-  "deleted-chats": (p: any) => <Messages {...p} showDeleted />,
+  "deleted-chats": DeletedChats,
 };
 
 let toastFn: (msg: string) => void = () => {};
