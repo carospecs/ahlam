@@ -487,42 +487,45 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
           <button onClick={onClose} aria-label="Close" style={{ display: "grid", placeItems: "center", width: 28, height: 28, borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}><X size={15} /></button>
         </div>
 
-        {/* Compact summary — always visible */}
-        <div style={{ padding: "12px 16px", display: "grid", gap: 6 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.3 }}>
-            {isCar ? f.title || `${entity.year || ""} ${entity.make || ""} ${entity.model || ""}`.trim() : f.part || "Part"}
-          </div>
-          {isCar ? (
-            <div style={{ fontSize: 12.5, color: "var(--muted)" }}>
-              {f.mileage && `${f.mileage} · `}${f.price ? `$${f.price}` : "No price set"}
+        {/* Full post preview — photo, title, price, condition, fitment, description */}
+        <div style={{ padding: "12px 16px 0" }}>
+          {valid.length > 0 ? (
+            <div style={{ display: "grid", gap: 6 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={valid[0]} alt="" style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", borderRadius: 12, border: "1px solid var(--line)", display: "block" }} />
+              {valid.length > 1 && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {valid.slice(1, 6).map((u, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={i} src={u} alt="" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line)" }} />
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
-            <div style={{ fontSize: 12.5, color: "var(--muted)", display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {f.fitment && <span>{f.fitment}</span>}
-              <span style={{ color: "var(--foreground)", fontWeight: 600 }}>{f.price ? `$${f.price}` : "No price"}</span>
-              <span style={{ fontWeight: 600, color: f.grade === "A" ? "var(--success)" : f.grade === "B" ? "var(--signal)" : "var(--muted)" }}>Grade {f.grade}</span>
-              {f.note && <span>· {f.note}</span>}
-            </div>
+            <div style={{ aspectRatio: "4 / 3", borderRadius: 12, border: "1px dashed var(--line)", display: "grid", placeItems: "center", color: "var(--muted)", fontSize: 12.5, background: "var(--surface2)" }}>No photo on this listing</div>
           )}
-          <div style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
-            {isCar ? (f.description || (f.sellMode === "parts" ? "Parting out — all parts available" : f.sellMode === "both" ? "Selling whole or as parts" : "Posted for sale as-is")) : (f.note || (f.grade === "A" ? "Grade A — Like New, Almost" : f.grade === "B" ? "Grade B — A Step Below, but Still Reliable" : "Grade C — Affordable and Functional") || f.description || "Listed for sale")}
+        </div>
+
+        <div style={{ padding: "12px 16px 4px", display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, flex: 1, lineHeight: 1.25 }}>{isCar ? (f.title || `${entity.year || ""} ${entity.make || ""} ${entity.model || ""}`.trim()) : (f.part || "Part")}</div>
+            <div className="tnum" style={{ fontSize: 17, fontWeight: 800, color: f.price ? "var(--success)" : "var(--muted)" }}>{f.price ? `$${Number(f.price).toLocaleString()}` : "No price"}</div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: 12.5, color: "var(--muted)" }}>
+            {!isCar && <span style={{ fontWeight: 700, padding: "2px 9px", borderRadius: 6, color: f.grade === "A" ? "var(--success)" : f.grade === "B" ? "var(--signal)" : "var(--muted)", background: `color-mix(in srgb, ${f.grade === "A" ? "var(--success)" : f.grade === "B" ? "var(--signal)" : "var(--muted)"} 16%, transparent)` }}>Grade {f.grade}</span>}
+            {isCar ? (f.mileage ? <span>{f.mileage}</span> : null) : (f.fitment ? <span>{f.fitment}</span> : null)}
+          </div>
+          <div style={{ fontSize: 13, color: "var(--foreground)", lineHeight: 1.5, maxHeight: 96, overflowY: "auto", whiteSpace: "pre-wrap" }}>
+            {((f.description || (isCar ? "" : f.note) || "").trim()) || "No description yet — add one under Edit fields."}
           </div>
         </div>
 
-        {/* Post text preview */}
-        <div style={{ padding: "0 16px" }}>
-          <textarea readOnly value={text} style={{ width: "100%", height: 130, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 12.5, lineHeight: 1.5, padding: "9px 11px", fontFamily: "inherit", resize: "vertical" }} />
-        </div>
-
-        {/* Photos */}
-        {valid.length > 0 && (
-          <div style={{ padding: "10px 16px 0", display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {valid.slice(0, 8).map((u, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={i} src={u} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line)" }} />
-            ))}
-          </div>
-        )}
+        {/* Exact text that gets pasted (collapsible — the card above is the readable view) */}
+        <details style={{ padding: "2px 16px 0" }}>
+          <summary style={{ fontSize: 12, color: "var(--muted)", cursor: "pointer", padding: "4px 0", listStyle: "none" }}>▸ Preview the exact text you'll paste</summary>
+          <textarea readOnly value={text} style={{ width: "100%", height: 120, marginTop: 6, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 12.5, lineHeight: 1.5, padding: "9px 11px", fontFamily: "inherit", resize: "vertical" }} />
+        </details>
 
         {/* Confirm & copy button */}
         <div style={{ padding: "12px 16px" }}>
