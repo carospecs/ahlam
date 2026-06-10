@@ -220,8 +220,13 @@ async function callAnthropic(base64: string, mime: string, userText: string, mod
       ],
     },
   ]);
-  if (!res.ok) throw new Error(`Anthropic ${modelKey} ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  const json = await res.json();
+  const body = await res.text();
+  if (!res.ok) {
+    const short = body.slice(0, 300);
+    if (res.status === 402 || res.status === 429) throw new Error(`Anthropic ${modelKey} billing/credit error ${res.status}: ${short}`);
+    throw new Error(`Anthropic ${modelKey} ${res.status}: ${short}`);
+  }
+  const json = JSON.parse(body);
   const text = json.content?.[0]?.text;
   return typeof text === "string" ? text : undefined;
 }
@@ -397,6 +402,14 @@ export async function POST(req: Request): Promise<NextResponse<AIResult>> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await alertTeam(`identify route threw: ${msg}`);
+    const isAnthropicCredit = /anthropic.*(402|billing|credit|insufficient|quota|limit)/i.test(msg);
+    if (isAnthropicCredit) {
+      return NextResponse.json({
+        ok: false,
+        userMessage: "Your Claude API account doesn't have enough credits. Add funds at https://console.anthropic.com/settings/billing then try again.",
+        internalError: msg,
+      }, { status: 402 });
+    }
     return NextResponse.json(busyResult(msg), { status: 503 });
   }
 }
