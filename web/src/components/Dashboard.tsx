@@ -253,76 +253,86 @@ function ToastHost() {
   );
 }
 
+// Part editor — opened from "Parts posted". Kept simple (just the info), the way
+// the vehicle page edits a part. The marketplace/export stuff lives behind the
+// "Export" button, which opens an enlarged overlay (like the photo viewer).
+const gradeOf = (l: any) => (l.grade === "Poor" ? "C" : l.grade === "Good" ? "B" : (["A", "B", "C"].includes(l.grade) ? l.grade : "B"));
 function ExportModal() {
   const [listing, setListing] = useState<any>(null);
+  const [name, setName] = useState("");
+  const [fitment, setFitment] = useState("");
+  const [grade, setGrade] = useState("B");
   const [status, setStatus] = useState("Draft");
   const [price, setPrice] = useState("");
   const [desc, setDesc] = useState("");
-  const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [lightbox, setLightbox] = useState<number | null>(null); // index of photo open in the viewer
+  const [copied, setCopied] = useState(false);
+  const [lightbox, setLightbox] = useState<number | null>(null); // photo open in the viewer
+  const [showExport, setShowExport] = useState(false);           // export overlay open
 
   useEffect(() => {
-    (window as any).csOpenExport = (l: any) => { setListing(l); setStatus(l.status); setPrice(String(l.price ?? "")); setDesc(l.desc || ""); setCopied(false); setLightbox(null); };
+    (window as any).csOpenExport = (l: any) => {
+      setListing(l); setName(l.part || ""); setFitment(l.fitment || ""); setGrade(gradeOf(l));
+      setStatus(l.status); setPrice(String(l.price ?? "")); setDesc(l.desc || "");
+      setLightbox(null); setShowExport(false); setCopied(false);
+    };
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
-      // Escape closes the photo viewer first (if open), otherwise the modal.
-      setLightbox((lb) => { if (lb !== null) return null; setListing(null); return null; });
+      // Esc unwinds the deepest layer first: photo viewer → export overlay → modal.
+      setLightbox((lb) => {
+        if (lb !== null) return null;
+        setShowExport((se) => { if (se) return false; setListing(null); return false; });
+        return null;
+      });
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
   if (!listing) return null;
-  // Build the marketplace text from the in-progress edits so the preview is live.
-  const text = buildListingText({ ...listing, price: Number(price) || listing.price, desc });
+  const text = buildListingText({ ...listing, part: name, fitment, grade, price: Number(price) || listing.price, desc });
   const lowConf = listing.confidence === "low";
-  // Real uploaded photos for this part (most have one). Used by the photo viewer.
   const photoUrls: string[] = [listing.image, ...(Array.isArray(listing.images) ? listing.images : [])].filter((u: any) => u && /^https?:\/\//.test(u));
-  const dirty = status !== listing.status || String(price) !== String(listing.price ?? "") || desc !== (listing.desc || "");
+  const dirty = name !== (listing.part || "") || fitment !== (listing.fitment || "") || grade !== gradeOf(listing) || status !== listing.status || String(price) !== String(listing.price ?? "") || desc !== (listing.desc || "");
 
-  function copy() {
-    try { navigator.clipboard && navigator.clipboard.writeText(text); } catch (e) {}
-    setCopied(true); setTimeout(() => setCopied(false), 1800);
-    csToast("Listing text copied to clipboard");
-  }
   function close() { setListing(null); }
-
+  function copy() { try { navigator.clipboard?.writeText(text); } catch {} setCopied(true); setTimeout(() => setCopied(false), 1800); csToast("Listing text copied"); }
   function exportCSV() {
     const headers = ["Part", "Fitment", "Price", "Grade", "Status", "Description"];
-    const row = [listing.part, listing.fitment || "", String(Number(price) || listing.price || ""), listing.grade || "", status, (desc || "").replace(/\n/g, " ")];
+    const row = [name, fitment || "", String(Number(price) || listing.price || ""), grade, status, (desc || "").replace(/\n/g, " ")];
     const csv = [headers, row].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `${(listing.part || "listing").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.csv`; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = `${(name || "listing").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.csv`; a.click();
     URL.revokeObjectURL(url); csToast("Downloaded CSV");
   }
   async function share() {
-    try { if ((navigator as any).share) { await (navigator as any).share({ title: listing.part, text }); return; } } catch { return; }
+    try { if ((navigator as any).share) { await (navigator as any).share({ title: name, text }); return; } } catch { return; }
     try { await navigator.clipboard?.writeText(text); csToast("Listing copied — ready to share"); } catch { csToast("Press Ctrl/Cmd+C to copy"); }
   }
-
-  // Persist status / price / description for this part listing, then refresh.
   async function save() {
     if (saving) return;
     setSaving(true);
     try {
       const r = await fetch("/api/listings", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listingId: listing.id, status, priceUsd: price === "" ? undefined : Number(price), description: desc }),
+        body: JSON.stringify({ listingId: listing.id, partName: name, fitment, condition: grade, status, priceUsd: price === "" ? undefined : Number(price), description: desc }),
       });
       if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't save"); setSaving(false); return; }
-      csToast("Listing updated");
+      csToast("Part updated");
       (window as any).csReloadData?.();
       setSaving(false);
       close();
     } catch { csToast("Couldn't save — check your connection"); setSaving(false); }
   }
 
+  const fieldInput: React.CSSProperties = { width: "100%", border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 14, padding: "10px 12px", borderRadius: 10, boxSizing: "border-box" };
+  const pickBtn = (on: boolean): React.CSSProperties => ({ flex: 1, padding: "9px 0", borderRadius: 10, fontSize: 13, fontWeight: 700, border: on ? "1px solid var(--accent)" : "1px solid var(--line)", background: on ? "var(--accent-tint)" : "transparent", color: on ? "var(--accent)" : "var(--muted)", cursor: "pointer" });
+
   return (
     <>
     <div style={mx.overlay} onMouseDown={close}>
-      <div style={mx.modal} className="fade-up" onMouseDown={(e) => e.stopPropagation()}>
+      <div style={{ ...mx.modal, width: "min(680px, 100%)" }} className="fade-up" onMouseDown={(e) => e.stopPropagation()}>
         <div style={mx.modalHead}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 7, padding: "3px 9px", fontSize: 12, fontWeight: 600, color: status === "Posted" ? "var(--success)" : status === "Sold" ? "var(--signal)" : "var(--muted)", background: `color-mix(in srgb, ${status === "Posted" ? "var(--success)" : status === "Sold" ? "var(--signal)" : "var(--muted)"} 14%, transparent)` }}>
@@ -332,13 +342,13 @@ function ExportModal() {
           </div>
           <button style={mx.closeBtn} onClick={close}><X size={18} color="var(--muted)" /></button>
         </div>
-        <div style={mx.modalBody} className="cs-modal-body">
+        <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 20, padding: 20, overflowY: "auto" }} className="cs-modal-body">
           <div style={mx.leftCol}>
             {photoUrls.length > 0 ? (
               <>
                 <button onClick={() => setLightbox(0)} title="Click to enlarge" style={{ padding: 0, border: "1px solid var(--line)", borderRadius: "var(--radius-md)", overflow: "hidden", cursor: "zoom-in", background: "var(--surface2)", position: "relative", aspectRatio: "4/3", display: "block" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photoUrls[0]} alt={listing.part} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  <img src={photoUrls[0]} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                   <span style={{ position: "absolute", bottom: 8, right: 8, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#fff", background: "rgba(7,11,22,0.62)", borderRadius: 7, padding: "4px 8px" }}><Maximize2 size={12} /> Enlarge</span>
                 </button>
                 {photoUrls.length > 1 && (
@@ -358,86 +368,95 @@ function ExportModal() {
                 <span style={{ position: "absolute", bottom: 8, left: 10, fontSize: 11, color: "#6b7793" }}>No photo yet</span>
               </div>
             )}
-            <div style={{ marginTop: 4 }}>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{listing.part}</h3>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 7, padding: "3px 10px", fontSize: 12.5, fontWeight: 700, color: listing.grade === "Good" ? "var(--success)" : "var(--danger)", background: `color-mix(in srgb, ${listing.grade === "Good" ? "var(--success)" : "var(--danger)"} 16%, transparent)` }}>
-                  <span style={{ width: 6, height: 6, borderRadius: 999, background: listing.grade === "Good" ? "var(--success)" : "var(--danger)" }} />{listing.grade}
-                </span>
-                <span className="tnum" style={{ fontSize: 18, fontWeight: 800, color: "var(--success)" }}>${listing.price}</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 12, fontSize: 13 }}>
-                <Car size={14} color="var(--muted)" /><span style={{ color: "var(--muted)" }}>Fits</span><span style={{ marginLeft: "auto", fontWeight: 600, textAlign: "right" }}>{listing.fitment}</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 4, fontSize: 13 }}>
-                <span style={{ color: "var(--muted)" }}>Views</span><span style={{ marginLeft: "auto", fontWeight: 600 }}>{listing.views || "—"}</span>
-              </div>
-            </div>
             {lowConf && (
               <div style={{ display: "flex", gap: 8, fontSize: 12, color: "var(--signal)", lineHeight: 1.5, background: "var(--signal-bg)", border: "1px solid color-mix(in srgb, var(--signal) 40%, transparent)", borderRadius: 10, padding: "10px 12px" }}>
                 <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                <span>AI wasn't fully confident here. Double-check the part name and fitment before posting.</span>
+                <span>AI wasn't fully confident here — double-check the name and fitment.</span>
               </div>
             )}
           </div>
-          <div style={mx.rightCol}>
-            <div style={mx.sectionLabel}>Marketplace listing text</div>
-            <pre style={mx.preview}>{text}</pre>
-            <div style={{ display: "flex", gap: 8, fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5, background: "var(--surface2)", borderRadius: 10, padding: "10px 12px" }}>
-              <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span>Facebook & OfferUp don't allow auto-posting. Copy this text, paste it in, and attach the photos — they're already saved.</span>
+          <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
+            <div>
+              <div style={mx.sectionLabel}>Part name</div>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Right Side Mirror" style={fieldInput} />
             </div>
-            <div style={mx.sectionLabel}>Copy for marketplace</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-              {["Facebook", "OfferUp", "eBay"].map((m) => {
-                const posted = listing.markets?.includes(m);
-                return (
-                  <button key={m} style={mx.marketBtn} onClick={copy}>
-                    <span style={{ fontSize: 12.5, fontWeight: 600 }}>{m}</span>
-                    {posted ? <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 700, color: "var(--success)" }}><Check size={11} /> Posted</span> : <span style={{ fontSize: 10.5, color: "var(--muted)" }}>Copy & paste</span>}
-                  </button>
-                );
-              })}
+            <div>
+              <div style={mx.sectionLabel}>Fits (vehicle)</div>
+              <input value={fitment} onChange={(e) => setFitment(e.target.value)} placeholder="e.g. 2016–2021 Honda Civic" style={fieldInput} />
             </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-              <button style={{ ...mx.primaryBtn, flex: 1 }} onClick={copy}>
-                <Copy size={16} /> {copied ? "Copied!" : "Copy listing text"}
-              </button>
-              <button style={mx.ghostBtn} onClick={exportCSV}><Download size={16} /> CSV</button>
-              <button style={mx.ghostBtn} onClick={share}><Share2 size={16} /></button>
-            </div>
-            <div style={{ height: 1, background: "var(--line)", margin: "4px 0" }} />
             <div style={{ display: "flex", gap: 12 }}>
-              <div style={{ width: 120 }}>
+              <div style={{ width: 130 }}>
                 <div style={mx.sectionLabel}>Price</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid var(--line)", background: "var(--surface2)", borderRadius: 10, padding: "8px 10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid var(--line)", background: "var(--surface2)", borderRadius: 10, padding: "9px 11px" }}>
                   <span style={{ color: "var(--muted)", fontSize: 14 }}>$</span>
                   <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="tnum" style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 14, fontWeight: 700 }} />
                 </div>
               </div>
               <div style={{ flex: 1 }}>
-                <div style={mx.sectionLabel}>Status</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {["Draft", "Posted", "Sold"].map((s) => {
-                    const on = status === s;
-                    return (
-                      <button key={s} onClick={() => setStatus(s)} style={{ flex: 1, padding: "9px 0", borderRadius: 10, fontSize: 13, fontWeight: 600, border: on ? "1px solid var(--accent)" : "1px solid var(--line)", background: on ? "var(--accent-tint)" : "transparent", color: on ? "var(--accent)" : "var(--muted)" }}>
-                        {s}
-                      </button>
-                    );
-                  })}
+                <div style={mx.sectionLabel}>Condition</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {["A", "B", "C"].map((g) => <button key={g} onClick={() => setGrade(g)} style={pickBtn(grade === g)}>{g}</button>)}
                 </div>
               </div>
             </div>
-            <div style={mx.sectionLabel}>Description</div>
-            <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={4} placeholder="Add a description buyers will see…" style={{ width: "100%", padding: "11px 13px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, lineHeight: 1.5, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
-            <button onClick={save} disabled={saving || !dirty} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 16px", borderRadius: 11, border: "none", background: dirty ? "var(--accent)" : "var(--surface2)", color: dirty ? "#fff" : "var(--muted)", fontSize: 14, fontWeight: 600, cursor: dirty ? "pointer" : "default", opacity: saving ? 0.6 : 1 }}>
-              {saving ? <LoaderCircle size={16} style={{ animation: "spin 0.8s linear infinite" }} /> : <Check size={16} />} {saving ? "Saving…" : "Submit changes"}
-            </button>
+            <div>
+              <div style={mx.sectionLabel}>Status</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {["Draft", "Posted", "Sold"].map((s) => <button key={s} onClick={() => setStatus(s)} style={{ ...pickBtn(status === s), fontWeight: 600 }}>{s}</button>)}
+              </div>
+            </div>
+            <div>
+              <div style={mx.sectionLabel}>Description</div>
+              <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={4} placeholder="Condition, what's included, fitment notes…" style={{ ...fieldInput, lineHeight: 1.5, resize: "vertical", fontFamily: "inherit" }} />
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
+              <button onClick={save} disabled={saving || !dirty} style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 16px", borderRadius: 11, border: "none", background: dirty ? "var(--accent)" : "var(--surface2)", color: dirty ? "#fff" : "var(--muted)", fontSize: 14, fontWeight: 600, cursor: dirty ? "pointer" : "default", opacity: saving ? 0.6 : 1 }}>
+                {saving ? <LoaderCircle size={16} style={{ animation: "spin 0.8s linear infinite" }} /> : <Check size={16} />} {saving ? "Saving…" : "Save changes"}
+              </button>
+              <button onClick={() => setShowExport(true)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "11px 16px", borderRadius: 11, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                <Send size={15} /> Export
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
+
+    {/* Export — opens enlarged (like the photo viewer) with the marketplace text + copy. */}
+    {showExport && (
+      <div onMouseDown={() => setShowExport(false)} style={{ position: "fixed", inset: 0, zIndex: 900, background: "rgba(4,7,14,0.9)", backdropFilter: "blur(3px)", display: "grid", placeItems: "center", padding: 24 }}>
+        <div onMouseDown={(e) => e.stopPropagation()} className="fade-up" style={{ width: "min(620px, 100%)", maxHeight: "88vh", overflowY: "auto", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16, padding: 22, boxShadow: "0 40px 90px -30px rgba(0,0,0,0.85)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, flex: 1 }}>Export — {name}</div>
+            <button style={mx.closeBtn} onClick={() => setShowExport(false)}><X size={18} color="var(--muted)" /></button>
+          </div>
+          <div style={mx.sectionLabel}>Marketplace listing text</div>
+          <pre style={mx.preview}>{text}</pre>
+          <div style={{ display: "flex", gap: 8, fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5, background: "var(--surface2)", borderRadius: 10, padding: "10px 12px", marginTop: 8 }}>
+            <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>Facebook & OfferUp don't allow auto-posting. Copy this text, paste it in, and attach the photos — they're already saved.</span>
+          </div>
+          <div style={mx.sectionLabel}>Copy for marketplace</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            {["Facebook", "OfferUp", "eBay"].map((m) => {
+              const posted = listing.markets?.includes(m);
+              return (
+                <button key={m} style={mx.marketBtn} onClick={copy}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>{m}</span>
+                  {posted ? <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 700, color: "var(--success)" }}><Check size={11} /> Posted</span> : <span style={{ fontSize: 10.5, color: "var(--muted)" }}>Copy & paste</span>}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+            <button style={{ ...mx.primaryBtn, flex: 1 }} onClick={copy}><Copy size={16} /> {copied ? "Copied!" : "Copy listing text"}</button>
+            <button style={mx.ghostBtn} onClick={exportCSV}><Download size={16} /> CSV</button>
+            <button style={mx.ghostBtn} onClick={share}><Share2 size={16} /></button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {lightbox !== null && photoUrls[lightbox] && (
       <Lightbox images={photoUrls} index={lightbox} onClose={() => setLightbox(null)} onIndex={setLightbox} />
     )}
