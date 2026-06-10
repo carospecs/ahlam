@@ -311,8 +311,8 @@ function ConfidenceBar({
   ].filter(Boolean).join(" · ");
   const engine =
     provider === "gpt" ? "GPT-4o Vision" :
-    provider === "sonnet" ? "Claude 4.6 Sonnet" :
-    provider === "haiku" ? "Claude 4.5 Haiku" :
+    provider === "sonnet" ? "Claude Sonnet 4.6" :
+    provider === "haiku" ? "Claude Haiku 4.5" :
     "Gemini";
 
   return (

@@ -30,8 +30,8 @@ type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; ve
 
 const PROVIDERS = [
   { id: "gemini", name: "Gemini 2.5 Flash", brand: "Google", tone: "var(--signal)", desc: "Fast pass with strong part ID, fitment, and pricing.", speed: "~15–20s" },
-  { id: "sonnet", name: "Claude 4.6 Sonnet", brand: "Anthropic", tone: "#d4a574", desc: "Top-tier vision reasoning for the most accurate part identification.", speed: "~15–20s" },
-  { id: "haiku", name: "Claude 4.5 Haiku", brand: "Anthropic", tone: "#d4a574", desc: "Fast, lightweight Claude for quick scans with solid accuracy.", speed: "~8–12s" },
+  { id: "sonnet", name: "Claude Sonnet 4.6", brand: "Anthropic", tone: "#d4a574", desc: "Top-tier vision reasoning for the most accurate part identification.", speed: "~15–20s" },
+  { id: "haiku", name: "Claude Haiku 4.5", brand: "Anthropic", tone: "#d4a574", desc: "Fast, lightweight Claude for quick scans with solid accuracy.", speed: "~8–12s" },
 ];
 
 // Pick the single best whole-car price + label from per-photo AI estimates.
