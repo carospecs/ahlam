@@ -1,7 +1,15 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import { Send, Copy, Download, FileDown, ExternalLink, Info, CircleCheck, Share2, Tag, ShoppingBag, Globe, LoaderCircle, Link2, RefreshCw, ChevronDown, Car, X, AlertTriangle, Check, ImageDown } from "lucide-react";
+
+// Render an overlay through the document body so its position:fixed always
+// covers the real viewport — a transformed ancestor (the scrolled content area)
+// would otherwise trap it mid-page and force the user to scroll to find it.
+function Portal({ children }: { children: React.ReactNode }) {
+  return typeof document !== "undefined" ? createPortal(children, document.body) : null;
+}
 import { Card, PhotoCell, ConditionBadge, SellModeBadge } from "../UI";
 import { buildListingText, buildVehicleText } from "../data";
 import { useData, csToast } from "../Dashboard";
@@ -391,7 +399,7 @@ function Sheet({ title, accent, onClose, children, footer }: { title: React.Reac
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 18 }}>
+    <Portal><div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="fade-up" style={{ width: "min(540px, 100%)", maxHeight: "88vh", display: "flex", flexDirection: "column", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16, boxShadow: "0 40px 80px -30px rgba(0,0,0,0.6)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 18px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
           <div style={{ fontSize: 15.5, fontWeight: 700, flex: 1, color: accent || "var(--foreground)" }}>{title}</div>
@@ -402,7 +410,7 @@ function Sheet({ title, accent, onClose, children, footer }: { title: React.Reac
           <div style={{ flexShrink: 0, borderTop: "1px solid var(--line)", padding: "12px 18px", background: "var(--surface)" }}>{footer}</div>
         )}
       </div>
-    </div>
+    </div></Portal>
   );
 }
 
@@ -455,15 +463,22 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
     setSaving(false);
   }
 
-  function confirmAndOpen() {
-    try { navigator.clipboard?.writeText(text); } catch {}
-    window.open(channel.url, "_blank", "noopener");
+  async function confirmAndOpen() {
+    // Copy the text BEFORE opening the tab (clipboard needs our doc focused), then
+    // save the photos so the seller can drag them in. Facebook/OfferUp/Craigslist
+    // have no posting API, so this paste-and-drag flow is the best we can offer.
+    try { await navigator.clipboard?.writeText(text); } catch {}
     setCopied(true);
-    csToast(`Copied & opened ${channel.name}`);
+    window.open(channel.url, "_blank", "noopener");
+    csToast(`Text copied${valid.length ? " · saving photos…" : ""} — paste into ${channel.name}`);
+    if (valid.length) {
+      const n = await onSavePhotos(valid, prefix);
+      if (n) csToast(`${n} photo${n === 1 ? "" : "s"} saved — drag them into ${channel.name}`);
+    }
   }
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 18 }}>
+    <Portal><div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="fade-up" style={{ width: "min(480px, 100%)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16, boxShadow: "0 40px 80px -30px rgba(0,0,0,0.6)", display: "grid", gap: 0 }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>
@@ -560,7 +575,7 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
           )}
         </details>
       </div>
-    </div>
+    </div></Portal>
   );
 }
 
