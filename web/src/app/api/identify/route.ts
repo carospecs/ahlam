@@ -203,8 +203,8 @@ async function callGemini(base64: string, mime: string, userText: string): Promi
 }
 
 const CLAUDE_MODELS: Record<string, string> = {
-  sonnet: "claude-4-6-sonnet-latest",
-  haiku: "claude-4-5-haiku-latest",
+  sonnet: "claude-sonnet-4-6",
+  haiku: "claude-haiku-4-5-20251001",
 };
 
 async function callAnthropic(base64: string, mime: string, userText: string, modelKey: string): Promise<string | undefined> {
