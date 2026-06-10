@@ -632,7 +632,10 @@ const sx: Record<string, React.CSSProperties> = {
   shopCard: { display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, background: "var(--surface2)", border: "1px solid var(--line)" },
   shopIcon: { width: 30, height: 30, borderRadius: 8, background: "var(--accent-tint)", display: "grid", placeItems: "center", flexShrink: 0 },
   signout: { display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", fontSize: 13.5, fontWeight: 600 },
-  main: { display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" },
+  // minHeight:0 is required: as a grid item, min-height defaults to `auto`, so a
+  // tall view (e.g. the AI chat) grows .cs-main past 100vh and pushes the fixed
+  // Topbar off-screen. Pinning it lets .cs-content scroll internally instead.
+  main: { display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" },
   topbar: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, padding: "16px 28px", borderBottom: "1px solid var(--line)", background: "var(--surface)" },
   search: { display: "flex", alignItems: "center", gap: 9, padding: "0 12px", width: 280, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 10 },
   searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 13.5, padding: "9px 0" },
