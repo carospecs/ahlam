@@ -227,7 +227,10 @@ async function callAnthropic(base64: string, mime: string, userText: string, mod
     throw new Error(`Anthropic ${modelKey} ${res.status}: ${short}`);
   }
   const json = JSON.parse(body);
-  const text = json.content?.[0]?.text;
+  let text = json.content?.[0]?.text;
+  if (typeof text === "string") {
+    text = text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "");
+  }
   return typeof text === "string" ? text : undefined;
 }
 
@@ -294,7 +297,8 @@ export async function POST(req: Request): Promise<NextResponse<AIResult>> {
     }
 
     type RawPart = Partial<AIPartOutput> & { imageSide?: ImageSide };
-    const parsed = JSON.parse(content) as {
+    const cleaned = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+    const parsed = JSON.parse(cleaned) as {
       vehicleFront?: VehicleFront;
       vehicle?: Partial<VehicleEstimate>;
       parts?: RawPart[];
