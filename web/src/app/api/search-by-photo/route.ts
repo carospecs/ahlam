@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { normalizeGrade } from "@/lib/grade";
+import { geminiGenerate } from "@/lib/gemini";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -9,19 +10,14 @@ const GEMINI_MODEL = "gemini-2.5-flash";
 
 const PHOTO_SEARCH_PROMPT = `Identify the single most prominent car part in this photo. Return ONLY JSON: { partName: string, confidence: 'high'|'medium'|'low' }`;
 
-async function callGemini(key: string, base64: string, mime: string, userText: string): Promise<string | undefined> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: PHOTO_SEARCH_PROMPT }] },
-      contents: [{ role: "user", parts: [
-        { text: userText },
-        { inline_data: { mime_type: mime, data: base64 } },
-      ] }],
-      generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
-    }),
+async function callGemini(base64: string, mime: string, userText: string): Promise<string | undefined> {
+  const res = await geminiGenerate(GEMINI_MODEL, {
+    system_instruction: { parts: [{ text: PHOTO_SEARCH_PROMPT }] },
+    contents: [{ role: "user", parts: [
+      { text: userText },
+      { inline_data: { mime_type: mime, data: base64 } },
+    ] }],
+    generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const json = await res.json();
@@ -46,13 +42,8 @@ export async function POST(req: Request) {
   const rawBase64 = body.image.replace(/^data:[^;]+;base64,/, "");
   const mime = body.image.startsWith("data:") ? (body.image.match(/^data:([^;]+);/)?.[1] ?? "image/jpeg") : "image/jpeg";
 
-  const gkey = process.env.GEMINI_API_KEY;
-  if (!gkey) {
-    return NextResponse.json({ error: "GEMINI_API_KEY missing" }, { status: 503 });
-  }
-
   try {
-    const content = await callGemini(gkey, rawBase64, mime, "Identify the car part in this photo.");
+    const content = await callGemini(rawBase64, mime, "Identify the car part in this photo.");
     if (!content) {
       return NextResponse.json({ error: "empty completion" }, { status: 503 });
     }

@@ -384,7 +384,7 @@ function CardField({ label, value, onChange, placeholder, missing, area, suffix 
 }
 
 // Shared centered modal shell.
-function Sheet({ title, accent, onClose, children }: { title: React.ReactNode; accent?: string; onClose: () => void; children: React.ReactNode }) {
+function Sheet({ title, accent, onClose, children, footer }: { title: React.ReactNode; accent?: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode }) {
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -392,12 +392,15 @@ function Sheet({ title, accent, onClose, children }: { title: React.ReactNode; a
   }, [onClose]);
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 18 }}>
-      <div onClick={(e) => e.stopPropagation()} className="fade-up" style={{ width: "min(540px, 100%)", maxHeight: "88vh", overflowY: "auto", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16, boxShadow: "0 40px 80px -30px rgba(0,0,0,0.6)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 18px", borderBottom: "1px solid var(--line)", position: "sticky", top: 0, background: "var(--surface)", zIndex: 1 }}>
+      <div onClick={(e) => e.stopPropagation()} className="fade-up" style={{ width: "min(540px, 100%)", maxHeight: "88vh", display: "flex", flexDirection: "column", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16, boxShadow: "0 40px 80px -30px rgba(0,0,0,0.6)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 18px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
           <div style={{ fontSize: 15.5, fontWeight: 700, flex: 1, color: accent || "var(--foreground)" }}>{title}</div>
           <button onClick={onClose} aria-label="Close" style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}><X size={16} /></button>
         </div>
-        <div style={{ padding: 18 }}>{children}</div>
+        <div style={{ flex: 1, overflowY: "auto", padding: 18 }}>{children}</div>
+        {footer && (
+          <div style={{ flexShrink: 0, borderTop: "1px solid var(--line)", padding: "12px 18px", background: "var(--surface)" }}>{footer}</div>
+        )}
       </div>
     </div>
   );
@@ -467,22 +470,38 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   const priceMissing = !f.price || Number(f.price) <= 0;
   const descMissing = !f.description?.trim();
 
+  const [copied, setCopied] = React.useState(false);
+
   return (
-    <Sheet title={<span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}><channel.icon size={18} color={channel.color} /> Post to {channel.name}</span>} onClose={onClose}>
+    <Sheet
+      title={<span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}><channel.icon size={18} color={channel.color} /> Post to {channel.name}</span>}
+      onClose={onClose}
+      footer={
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 600 }}>3. Open &amp; paste</div>
+            <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Text copied to clipboard — paste it into the form</div>
+          </div>
+          {dirty && <div style={{ fontSize: 11.5, color: "var(--signal)" }}>Unsaved edits</div>}
+          <button onClick={() => { setCopied(true); openMarket(); }} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 20px", borderRadius: 10, border: "none", background: copied ? "var(--success)" : channel.color, color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
+            {copied ? <><Check size={16} /> Opened</> : <><ExternalLink size={16} /> Copy &amp; open {channel.name}</>}
+          </button>
+        </div>
+      }>
       <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, marginBottom: 14 }}>
-        Review your post below and fix anything missing — your changes save back to the listing. {channel.name} has no posting API, so we prep the text &amp; photos for you to paste.
+        Review your post — your changes save back to the listing. {channel.name} has no posting API, so we prep the text &amp; photos for you to paste.
       </div>
 
       {/* Step 1 — the editable post card */}
       <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         <StepNum n={1} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>Review &amp; fix the post</div>
-          <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--background)", padding: 13, display: "grid", gap: 11 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>Review post</div>
+          <div style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--background)", padding: 11, display: "grid", gap: 8 }}>
             {isCar ? (
               <>
                 <CardField label="Title" value={f.title} onChange={set("title")} placeholder="2015 Honda Accord EX" />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   <CardField label="Asking price" value={f.price} onChange={set("price")} placeholder="0" suffix="$" missing={priceMissing} />
                   <CardField label="Mileage" value={f.mileage} onChange={set("mileage")} placeholder="120,000 mi" />
                 </div>
@@ -491,7 +510,7 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
             ) : (
               <>
                 <CardField label="Part" value={f.part} onChange={set("part")} placeholder="Alternator" missing={!f.part?.trim()} />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   <CardField label="Fits (vehicle)" value={f.fitment} onChange={set("fitment")} placeholder="2015 Honda Accord" missing={!f.fitment?.trim()} />
                   <CardField label="Price" value={f.price} onChange={set("price")} placeholder="0" suffix="$" missing={priceMissing} />
                 </div>
@@ -499,7 +518,7 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
                   <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)" }}>Condition</span>
                   <div style={{ display: "flex", gap: 6, marginTop: 5 }}>
                     {["A", "B", "C"].map((g) => (
-                      <button key={g} onClick={() => set("grade")(g)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1px solid ${f.grade === g ? "var(--accent)" : "var(--line)"}`, background: f.grade === g ? "var(--accent-tint)" : "transparent", color: f.grade === g ? "var(--accent)" : "var(--muted)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{g}</button>
+                      <button key={g} onClick={() => set("grade")(g)} style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: `1px solid ${f.grade === g ? "var(--accent)" : "var(--line)"}`, background: f.grade === g ? "var(--accent-tint)" : "transparent", color: f.grade === g ? "var(--accent)" : "var(--muted)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{g}</button>
                     ))}
                   </div>
                 </div>
@@ -507,50 +526,38 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
               </>
             )}
             {dirty && (
-              <button onClick={saveFields} disabled={saving} style={{ justifySelf: "start", display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
-                {saving ? <><LoaderCircle size={14} className="spin" /> Saving…</> : <><Check size={14} /> Save changes</>}
+              <button onClick={saveFields} disabled={saving} style={{ justifySelf: "start", display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 12px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                {saving ? <><LoaderCircle size={13} className="spin" /> Saving…</> : <><Check size={13} /> Save</>}
               </button>
             )}
           </div>
           <details open style={{ marginTop: 8 }}>
             <summary style={{ fontSize: 12, color: "var(--muted)", cursor: "pointer" }}>Preview the text you&apos;ll paste</summary>
-            <textarea readOnly value={text} onFocus={(e) => e.currentTarget.select()} style={{ marginTop: 7, width: "100%", height: 110, resize: "vertical", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 12, lineHeight: 1.5, padding: "10px 12px", fontFamily: "inherit" }} />
+            <textarea readOnly value={text} onFocus={(e) => e.currentTarget.select()} style={{ marginTop: 7, width: "100%", height: 65, resize: "vertical", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 12, lineHeight: 1.5, padding: "8px 10px", fontFamily: "inherit" }} />
           </details>
         </div>
       </div>
 
       {/* Step 2 — photos */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 10 }}>
         <StepNum n={2} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>Save the photos {valid.length > 0 && <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {valid.length}</span>}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>Save photos {valid.length > 0 && <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {valid.length}</span>}</div>
           {valid.length === 0 ? (
-            <div style={{ fontSize: 12.5, color: "var(--signal)" }}>No photos on this listing — add some for a stronger ad.</div>
+            <div style={{ fontSize: 12.5, color: "var(--signal)" }}>No photos — add some for a stronger ad.</div>
           ) : (
             <>
               <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 8 }}>
                 {valid.slice(0, 8).map((u, i) => (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img key={i} src={u} alt="" style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line)" }} />
+                  <img key={i} src={u} alt="" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line)" }} />
                 ))}
               </div>
-              <button onClick={savePhotos} disabled={savingPhotos} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 13px", borderRadius: 9, border: "1px solid var(--line)", background: savedPhotos ? "var(--accent-tint)" : "transparent", color: savedPhotos ? "var(--accent)" : "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
-                {savingPhotos ? <><LoaderCircle size={14} className="spin" /> Saving…</> : savedPhotos ? <><Check size={14} /> {savedPhotos} saved</> : <><ImageDown size={14} /> Save {valid.length} photo{valid.length === 1 ? "" : "s"}</>}
+              <button onClick={savePhotos} disabled={savingPhotos} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 12px", borderRadius: 9, border: "1px solid var(--line)", background: savedPhotos ? "var(--accent-tint)" : "transparent", color: savedPhotos ? "var(--accent)" : "var(--foreground)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                {savingPhotos ? <><LoaderCircle size={13} className="spin" /> Saving…</> : savedPhotos ? <><Check size={13} /> {savedPhotos} saved</> : <><ImageDown size={13} /> Save {valid.length} photo{valid.length === 1 ? "" : "s"}</>}
               </button>
             </>
           )}
-        </div>
-      </div>
-
-      {/* Step 3 — open */}
-      <div style={{ display: "flex", gap: 10 }}>
-        <StepNum n={3} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>Open {channel.name} &amp; paste</div>
-          {dirty && <div style={{ fontSize: 12, color: "var(--signal)", marginBottom: 7 }}>You have unsaved edits — they&apos;re still included in the copied text.</div>}
-          <button onClick={openMarket} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", borderRadius: 10, border: "none", background: channel.color, color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
-            <ExternalLink size={15} /> Copy &amp; open {channel.name}
-          </button>
         </div>
       </div>
     </Sheet>

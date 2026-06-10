@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase-server";
 import { normalizeGrade } from "@/lib/grade";
+import { geminiGenerate } from "@/lib/gemini";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -164,15 +165,10 @@ Rules:
 }`;
 }
 
-async function callGemini(key: string, prompt: string): Promise<string | undefined> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.3, responseMimeType: "application/json" },
-    }),
+async function callGemini(prompt: string): Promise<string | undefined> {
+  const res = await geminiGenerate(GEMINI_MODEL, {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.3, responseMimeType: "application/json" },
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const json = await res.json();
@@ -198,9 +194,6 @@ export async function POST(req: Request) {
   if (!part) return NextResponse.json({ ok: false, error: "Pick or type a part." }, { status: 400 });
   if (!make && !model) return NextResponse.json({ ok: false, error: "Add at least a brand (make)." }, { status: 400 });
 
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return NextResponse.json({ ok: false, error: "Interchange is temporarily unavailable." }, { status: 503 });
-
   try {
     const ckey = cacheKey(part, make, model, year, variant);
 
@@ -210,7 +203,7 @@ export async function POST(req: Request) {
 
     // 2. Otherwise ask the AI, then store it (and seed the structured catalog).
     if (!result) {
-      const raw = await callGemini(key, buildPrompt(part, make, model, year, variant));
+      const raw = await callGemini(buildPrompt(part, make, model, year, variant));
       if (!raw) return NextResponse.json({ ok: false, error: "No interchange data returned. Try again." }, { status: 502 });
       let parsed: InterchangeResult;
       try { parsed = JSON.parse(raw); } catch { return NextResponse.json({ ok: false, error: "Could not read interchange data." }, { status: 502 }); }

@@ -32,6 +32,7 @@ export function AIChat(_: { go: (id: string) => void; onVehicle?: (v: any) => vo
   const [draft, setDraft] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [open, setOpen] = React.useState<Record<string, boolean>>({});
+  const openProject = (id: string) => setOpen((o) => ({ ...o, [id]: true }));
   const [renaming, setRenaming] = React.useState<string | null>(null);
   const [renameVal, setRenameVal] = React.useState("");
   const [dialog, setDialog] = React.useState<{ mode: "create" | "rename"; id?: string; value: string; error: string } | null>(null);
@@ -49,6 +50,7 @@ export function AIChat(_: { go: (id: string) => void; onVehicle?: (v: any) => vo
           // Backfill lastOpened for older saved data.
           parsed.chats.forEach((c) => { if (!c.lastOpened) c.lastOpened = c.createdAt || Date.now(); if (c.autoTitle === undefined) c.autoTitle = c.title === "New chat"; });
           setStore({ ...parsed, activeId: parsed.activeId && parsed.chats.some((c) => c.id === parsed.activeId) ? parsed.activeId : parsed.chats[0].id });
+          parsed.projects.forEach((p) => openProject(p.id));
           loaded.current = true;
           return;
         }
@@ -86,7 +88,7 @@ export function AIChat(_: { go: (id: string) => void; onVehicle?: (v: any) => vo
     if (dialog.mode === "create") {
       const p = { id: uid(), name };
       setStore((s) => ({ ...s, projects: [p, ...s.projects] }));
-      setOpen((o) => ({ ...o, [p.id]: true }));
+      openProject(p.id);
     } else if (dialog.id) {
       const id = dialog.id;
       setStore((s) => ({ ...s, projects: s.projects.map((p) => p.id === id ? { ...p, name } : p) }));

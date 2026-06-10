@@ -1,7 +1,7 @@
-// Parts are graded on the ARA-style A / B / C scale:
-//   A = installs as-is, like-new (minimal/no damage)
-//   B = good, usable as-is with normal wear (moderate)
-//   C = rough — needs repair or sells as a core
+// Parts are graded on the A / B / C scale:
+//   A = excellent — works 100%, looks clean (even if used)
+//   B = good — has scratches, works fine, not same quality as A
+//   C = poor — damaged or non-functional
 // Legacy rows stored as Good/Poor (and old A–F) are folded in here so nothing
 // in the database has to be rewritten.
 export type Grade = "A" | "B" | "C";

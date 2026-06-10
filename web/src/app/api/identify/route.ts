@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { livePartPrice, livePricingEnabled } from "@/lib/pricing";
+import { geminiGenerate } from "@/lib/gemini";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -54,9 +55,9 @@ export type AIResult =
   | { ok: false; userMessage: string; internalError: string };
 
 const CONDITION_RUBRIC: Record<string, { detail: string }> = {
-  A: { detail: "GRADE A (like-new): minimal to no damage. Structurally perfect with no cracks, breaks, bends, or broken/missing mounting tabs; at most very light wear or a tiny scuff. Clean, low-mileage, or tested. A buyer installs it with zero work." },
-  B: { detail: "GRADE B (good, usable as-is): moderate normal wear but fully serviceable. Minor scuffs, light scratches, dirt, or surface rust; all mounting tabs intact and the part works as intended. Installable without repair." },
-  C: { detail: "GRADE C (rough / core): damaged or compromised. Cracks, breaks, deep gouges, dents, bends, heavy corrosion, broken/missing mounting tabs, tears, leaks, shattered glass/lenses, or non-functional. Needs repair or only sells as a core/project piece." },
+  A: { detail: "GRADE A (excellent): works 100% and looks clean. No cracks, breaks, bent, or missing mounting tabs. May have very light normal wear but is ready to install. A buyer installs it with no work." },
+  B: { detail: "GRADE B (good): has visible scratches or scuffs but works fine. Fully functional — all tabs and mounts intact. Not as cosmetically clean as Grade A, but everything works and is installable as-is." },
+  C: { detail: "GRADE C (poor): damaged, non-functional, or heavily worn. Cracks, breaks, dents, bends, heavy corrosion, missing mounting tabs, tears, leaks, shattered glass/lenses, or mechanical failure. Needs repair or sells as a core/project piece." },
 };
 
 const VISION_SYSTEM_PROMPT = `You are an expert automotive salvage parts identifier. You look at a photo taken at a salvage yard — often a whole vehicle or a large section of one — and you catalog EVERY distinct sellable part you can see.
@@ -185,19 +186,14 @@ type ImageSide = "left" | "right" | "center";
 const GEMINI_MODEL = "gemini-2.5-pro";
 
 // Calls Gemini Vision; returns the raw JSON string (or throws on API error).
-async function callGemini(key: string, base64: string, mime: string, userText: string): Promise<string | undefined> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: VISION_SYSTEM_PROMPT }] },
-      contents: [{ role: "user", parts: [
-        { text: userText },
-        { inline_data: { mime_type: mime, data: base64 } },
-      ] }],
-      generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
-    }),
+async function callGemini(base64: string, mime: string, userText: string): Promise<string | undefined> {
+  const res = await geminiGenerate(GEMINI_MODEL, {
+    system_instruction: { parts: [{ text: VISION_SYSTEM_PROMPT }] },
+    contents: [{ role: "user", parts: [
+      { text: userText },
+      { inline_data: { mime_type: mime, data: base64 } },
+    ] }],
+    generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const json = await res.json();
@@ -254,12 +250,7 @@ export async function POST(req: Request): Promise<NextResponse<AIResult>> {
   const userText = VISION_USER_INSTRUCTION + (body.vin ? vinContext(body.vin) : "") + photoContext;
 
   try {
-    const gkey = process.env.GEMINI_API_KEY;
-    if (!gkey) {
-      await alertTeam("GEMINI_API_KEY missing on server");
-      return NextResponse.json(busyResult("GEMINI_API_KEY missing"), { status: 503 });
-    }
-    const content = await callGemini(gkey, rawBase64, mime, userText);
+    const content = await callGemini(rawBase64, mime, userText);
 
     if (!content) {
       await alertTeam("gemini returned empty content");

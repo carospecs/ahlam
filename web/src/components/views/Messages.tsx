@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Inbox, ExternalLink, Paperclip, Send, X, Gauge, Search, CircleDot, Handshake, Ban, Check, LoaderCircle } from "lucide-react";
+import { Inbox, ExternalLink, Paperclip, Send, X, Gauge, Search, CircleDot, Handshake, Ban, Check, LoaderCircle, Trash2, Share2, Tag, Globe } from "lucide-react";
 
 // Conversation lifecycle: open = still chatting, dealt = a deal was made,
 // closed = ended with no deal.
@@ -39,7 +39,14 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
   // The status the user has *picked* for the open conversation but not saved yet.
   const [pendingStatus, setPendingStatus] = React.useState<ConvStatus | null>(null);
   const [savingStatus, setSavingStatus] = React.useState(false);
+  const [deleted, setDeleted] = React.useState<Set<string>>(new Set());
   const fileRef = React.useRef<HTMLInputElement>(null);
+
+  const marketMeta: Record<string, { icon: typeof Share2; color: string }> = {
+    Facebook: { icon: Share2, color: "#1877f2" },
+    OfferUp: { icon: Tag, color: "var(--accent)" },
+    Craigslist: { icon: Globe, color: "var(--success)" },
+  };
 
   const statusOf = (th: any): ConvStatus => localStatus[th.id] ?? (th.status as ConvStatus) ?? "open";
 
@@ -88,7 +95,7 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
-  if (!threads.length) return <div style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>No conversations yet.</div>;
+  if (!threads.length && !deleted.size) return <div style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>No conversations yet.</div>;
 
   const ql = query.trim().toLowerCase();
   const statusCounts = { all: threads.length, open: 0, dealt: 0, closed: 0 } as Record<string, number>;
@@ -100,7 +107,8 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
     return `${th.name} ${th.part} ${last?.text || ""}`.toLowerCase().includes(ql);
   });
 
-  const t = threads.find((x: any) => x.id === activeId) || threads[0];
+  const visibleThreads2 = visibleThreads.filter((th: any) => !deleted.has(th.id));
+  const t = visibleThreads2.find((x: any) => x.id === activeId) || visibleThreads2[0] || null;
   const msgs: LocalMsg[] = [...t.messages, ...(localMsgs[t.id] || [])];
   const hasMileageAttached = attachments.some((a) => a.mileage);
   const showMileageSuggestion = asksAboutCar(msgs) && !dismissed[t.id] && !hasMileageAttached;
@@ -166,35 +174,50 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
           </div>
         </div>
         <div style={{ overflowY: "auto", flex: 1 }}>
-          {visibleThreads.length === 0 && <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: "var(--muted)" }}>{query ? `No conversations match “${query}”.` : statusFilter === "all" ? "No conversations." : `No ${STATUS_META[statusFilter as ConvStatus].label.toLowerCase()} conversations.`}</div>}
-          {visibleThreads.map((th: any) => {
+          {visibleThreads2.length === 0 && <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: "var(--muted)" }}>{query ? `No conversations match “${query}”.` : statusFilter === "all" ? "No conversations." : `No ${STATUS_META[statusFilter as ConvStatus].label.toLowerCase()} conversations.`}</div>}
+          {visibleThreads2.map((th: any) => {
             const on = th.id === activeId;
             const last = th.messages[th.messages.length - 1];
+            const m = marketMeta[th.market] || null;
             return (
-              <button key={th.id} onClick={() => setActiveId(th.id)} style={{ display: "flex", gap: 11, padding: "12px 14px", border: "none", borderBottom: "1px solid var(--line)", width: "100%", alignItems: "flex-start", background: on ? "var(--surface2)" : "transparent" }}>
-                <div style={{ width: 38, height: 38, borderRadius: 999, background: "var(--surface2)", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 700, color: "var(--foreground)", flexShrink: 0, border: "1px solid var(--line)" }}>{th.avatar}</div>
-                <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 6, alignItems: "center" }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                      {(() => { const st = statusOf(th); const M = STATUS_META[st]; return <M.Icon size={12} color={M.color} style={{ flexShrink: 0 }} />; })()}
-                      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.name}</span>
-                    </span>
-                    <span style={{ fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>{th.time}</span>
+              <div key={th.id} style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--line)" }}>
+                <button onClick={() => setActiveId(th.id)} style={{ flex: 1, display: "flex", gap: 11, padding: "12px 14px", border: "none", width: "100%", alignItems: "flex-start", background: on ? "var(--surface2)" : "transparent", cursor: "pointer", textAlign: "left" }}>
+                  {(() => { const IconComp = m?.icon; return (
+                  <div style={{ width: 38, height: 38, borderRadius: 999, background: m ? `${m.color}18` : "var(--surface2)", display: "grid", placeItems: "center", flexShrink: 0, border: "1px solid var(--line)" }}>
+                    {IconComp ? <IconComp size={17} color={m!.color} /> : <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>{th.avatar}</span>}
                   </div>
-                  <div style={{ fontSize: 11.5, color: "var(--accent)", fontWeight: 600, margin: "1px 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.part}</div>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 6, alignItems: "center" }}>
-                    <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{last.from === "me" ? "You: " : ""}{last.text}</span>
-                    {th.unread > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#fff", background: "var(--accent)", borderRadius: 999, minWidth: 17, height: 17, display: "grid", placeItems: "center", padding: "0 5px", flexShrink: 0 }}>{th.unread}</span>}
+                  ); })()}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 6, alignItems: "center" }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                        {(() => { const st = statusOf(th); const M = STATUS_META[st]; return <M.Icon size={12} color={M.color} style={{ flexShrink: 0 }} />; })()}
+                        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.name}</span>
+                      </span>
+                      <span style={{ fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>{th.time}</span>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: "var(--accent)", fontWeight: 600, margin: "1px 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.part}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 6, alignItems: "center" }}>
+                      <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{last.from === "me" ? "You: " : ""}{last.text}</span>
+                      {th.unread > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#fff", background: "var(--accent)", borderRadius: 999, minWidth: 17, height: 17, display: "grid", placeItems: "center", padding: "0 5px", flexShrink: 0 }}>{th.unread}</span>}
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
+                <button onClick={() => { setDeleted((p) => new Set(p).add(th.id)); if (activeId === th.id) setActiveId(visibleThreads2.find((x: any) => x.id !== th.id)?.id || ""); }} title="Delete conversation" style={{ alignSelf: "center", width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0, opacity: 0.4 }}><Trash2 size={13} color="var(--muted)" /></button>
+              </div>
             );
           })}
         </div>
       </div>
+      {!t ? (
+        <div style={{ flex: 1, display: "grid", placeItems: "center", color: "var(--muted)", fontSize: 14 }}>Select a conversation</div>
+      ) : (
       <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 18px", borderBottom: "1px solid var(--line)" }}>
-          <div style={{ width: 38, height: 38, borderRadius: 999, background: "var(--surface2)", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 700, color: "var(--foreground)", flexShrink: 0, border: "1px solid var(--line)" }}>{t.avatar}</div>
+          {(() => { const m2 = marketMeta[t.market]; const IconComp = m2?.icon; return (
+          <div style={{ width: 38, height: 38, borderRadius: 999, background: m2 ? `${m2.color}18` : "var(--surface2)", display: "grid", placeItems: "center", flexShrink: 0, border: "1px solid var(--line)" }}>
+            {IconComp ? <IconComp size={17} color={m2!.color} /> : <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>{t.avatar}</span>}
+          </div>
+          ); })()}
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 700 }}>{t.name}</div>
             <div style={{ fontSize: 12, color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}>
@@ -227,7 +250,6 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
               </div>
             );
           })()}
-          <button style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", flexShrink: 0 }}><ExternalLink size={16} color="var(--muted)" /></button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 12, background: "var(--background)" }}>
           {msgs.map((m: LocalMsg, i: number) => (
@@ -239,7 +261,10 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
                     {a.mileage ? <Gauge size={14} /> : <Paperclip size={14} />} {a.name}
                   </div>
                 ))}
-                <div style={{ fontSize: 10.5, opacity: 0.7, marginTop: 4, textAlign: "right" }}>{m.time}</div>
+                <div style={{ fontSize: 10.5, opacity: 0.7, marginTop: 4, textAlign: "right", display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
+                  {m.from === "me" && <Check size={11} color="var(--success)" />}
+                  {m.time}
+                </div>
               </div>
             </div>
           ))}
@@ -274,6 +299,7 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
           <button disabled={sending} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 600, opacity: sending ? 0.7 : 1 }} onClick={send}><Send size={15} /> Send</button>
         </div>
       </div>
+      )}
     </div>
   );
 }

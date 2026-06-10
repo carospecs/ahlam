@@ -207,9 +207,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
 .cs-chat-row:hover { background: var(--surface2); box-shadow: inset 0 0 0 1px var(--line); }
 .cs-chat-row.on { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
 .cs-chat-row:active { transform: scale(0.99); }
-.cs-chat-actions { opacity: 0; transition: opacity 0.16s var(--ease-out); }
-.cs-chat-row:hover .cs-chat-actions, .cs-chat-row.on .cs-chat-actions { opacity: 1; }
-
+.cs-chat-actions { opacity: 1; }
 /* Generic surface row (table rows / list items) hover */
 .cs-row:hover { background: var(--surface2); }
 

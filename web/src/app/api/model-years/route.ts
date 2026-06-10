@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
+import { geminiGenerate } from "@/lib/gemini";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -21,21 +22,14 @@ export async function GET(req: Request) {
   const model = searchParams.get("model")?.trim();
   if (!make || !model) return NextResponse.json({ ok: true, years: [] });
 
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return NextResponse.json({ ok: true, years: [] });
-
   const prompt = `For the vehicle make "${make}" model "${model}", give the model-year range it was sold (US/North America).
 If still in production, set "end" to ${MAX_YEAR - 1}. If it doesn't exist or you're unsure, set both to null.
 Return STRICT JSON only: {"start": number|null, "end": number|null}`;
 
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0, responseMimeType: "application/json" },
-      }),
+    const res = await geminiGenerate(GEMINI_MODEL, {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0, responseMimeType: "application/json" },
     });
     if (!res.ok) return NextResponse.json({ ok: true, years: [] });
     const json = await res.json();
