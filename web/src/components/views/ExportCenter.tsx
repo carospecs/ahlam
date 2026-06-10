@@ -17,9 +17,9 @@ import { useData, csToast } from "../Dashboard";
 // Platforms with no listing API — we prepare the text + photos and open the
 // posting page so the seller just pastes and hits post.
 const PREPARE_CHANNELS = [
-  { name: "Facebook Marketplace", icon: Share2, color: "#1877f2", url: "https://www.facebook.com/marketplace/create/item", note: "No posting API — we copy your text, save the photos, and open the form to paste & drag in. For bulk, use the Facebook catalog CSV below." },
-  { name: "OfferUp", icon: Tag, color: "var(--accent)", url: "https://offerup.com/post/", note: "Copies text and saves your photos so you just paste & drag them in." },
-  { name: "Craigslist", icon: Globe, color: "var(--success)", url: "https://post.craigslist.org/", note: "Copies the formatted listing text and saves photos; pick your city." },
+  { key: "facebook", name: "Facebook Marketplace", icon: Share2, color: "#1877f2", url: "https://www.facebook.com/marketplace/create/item", note: "No posting API — we copy your text, save the photos, and open the form to paste & drag in. For bulk, use the Facebook catalog CSV below." },
+  { key: "offerup", name: "OfferUp", icon: Tag, color: "var(--accent)", url: "https://offerup.com/post/", note: "Copies text and saves your photos so you just paste & drag them in." },
+  { key: "craigslist", name: "Craigslist", icon: Globe, color: "var(--success)", url: "https://post.craigslist.org/", note: "Copies the formatted listing text and saves photos; pick your city." },
 ];
 
 export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
@@ -445,6 +445,17 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   const [saving, setSaving] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
 
+  // Detect the Ahlam Auto-Poster browser extension (it sets this attribute on
+  // ahlam.io). When present we hand it the listing and it fills the form for you.
+  const [ext, setExt] = React.useState(false);
+  React.useEffect(() => {
+    const has = () => document.documentElement.getAttribute("data-ahlam-autopost") === "1";
+    if (has()) { setExt(true); return; }
+    let n = 0;
+    const id = setInterval(() => { if (has()) { setExt(true); clearInterval(id); } else if (++n > 12) clearInterval(id); }, 300);
+    return () => clearInterval(id);
+  }, []);
+
   // Live post text rebuilt from the edited fields (what gets pasted).
   const text = isCar
     ? buildVehicleText({ ...entity, description: f.description, askingPrice: Number(f.price) || 0, mileage: f.mileage, title: f.title } as any, shop)
@@ -464,9 +475,21 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   }
 
   async function confirmAndOpen() {
-    // Copy the text BEFORE opening the tab (clipboard needs our doc focused), then
-    // save the photos so the seller can drag them in. Facebook/OfferUp/Craigslist
-    // have no posting API, so this paste-and-drag flow is the best we can offer.
+    const titleText = isCar ? (f.title || `${entity.year || ""} ${entity.make || ""} ${entity.model || ""}`.trim()) : f.part;
+    // If the Auto-Poster extension is installed, hand it the listing — it opens
+    // the marketplace and fills Title/Price/Description + photos for you.
+    if (ext) {
+      try { await navigator.clipboard?.writeText(text); } catch {}
+      window.postMessage({
+        __ahlamAutopost: true, kind: "post", channel: (channel as any).key || "facebook",
+        listing: { title: titleText, price: f.price || "", description: text, text, photos: valid, location: shop?.location || "" },
+      }, "*");
+      setCopied(true);
+      csToast(`Sending to ${channel.name} — the extension will fill the form`);
+      return;
+    }
+    // No extension: copy text + save photos + open (paste & drag yourself). These
+    // marketplaces have no posting API, so this is the best a web app alone can do.
     try { await navigator.clipboard?.writeText(text); } catch {}
     setCopied(true);
     window.open(channel.url, "_blank", "noopener");
@@ -530,7 +553,7 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
         {/* Confirm & copy button */}
         <div style={{ padding: "12px 16px" }}>
           <button onClick={confirmAndOpen} style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 0", borderRadius: 11, border: "none", background: copied ? "var(--success)" : channel.color, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
-            {copied ? <><Check size={18} /> Copied & opened</> : <><ExternalLink size={18} /> Copy & post to {channel.name}</>}
+            {copied ? <><Check size={18} /> {ext ? "Sent — check the new tab" : "Copied & opened"}</> : <><ExternalLink size={18} /> {ext ? `Auto-fill on ${channel.name}` : `Copy & post to ${channel.name}`}</>}
           </button>
         </div>
 
