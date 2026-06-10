@@ -24,6 +24,7 @@ export async function GET() {
       phone: profile?.phone || null,
       bio: profile?.bio || null,
       shopId: profile?.shop_id || null,
+      showOnline: profile?.is_online ?? true,
     },
   });
 }

@@ -75,11 +75,20 @@ export async function GET() {
         id: c.id, name: c.contact_name, market: c.market === "CaroSpecs" ? "Ahlam" : (c.market || "Ahlam"),
         status: c.status || "open",
         part: c.part_name === "CaroSpecs" ? "Ahlam" : (c.part_name || ""), unread: c.unread || 0,
+        buyerId: c.buyer_id || null,
         time: c.last_time || "", avatar: c.contact_avatar || c.contact_name?.slice(0, 2).toUpperCase(),
         messages: (c.messages || []).map((m: any) => ({
           from: m.sender === "me" ? "me" : "them", text: m.body, time: m.time || "",
         })),
       }));
+
+      // Attach online status for each unique buyer.
+      const buyerIds = [...new Set(threads.map((t: any) => t.buyerId).filter(Boolean))];
+      if (buyerIds.length) {
+        const { data: buyers } = await db.from("profiles").select("id, is_online").in("id", buyerIds);
+        const onlineMap = new Map((buyers || []).map((b: any) => [b.id, b.is_online]));
+        threads.forEach((t: any) => { if (t.buyerId) t.isOnline = onlineMap.get(t.buyerId) || false; });
+      }
 
       activity = (actRes.data || []).map((a: any) => {
         // No entity FK on activity_log, so route the click to the relevant section.

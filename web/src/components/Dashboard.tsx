@@ -591,6 +591,14 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   // Let views (e.g. Add vehicle) trigger a data refresh after they save.
   useEffect(() => { (window as any).csReloadData = reload; }, []);
 
+  // Online presence heartbeat — marks user online every 60s, goes offline on unmount.
+  useEffect(() => {
+    const beat = () => fetch("/api/online/heartbeat", { method: "POST" }).catch(() => {});
+    beat();
+    const iv = setInterval(beat, 60_000);
+    return () => { clearInterval(iv); fetch("/api/online/heartbeat", { method: "DELETE" }).catch(() => {}); };
+  }, []);
+
   if (!loading && !data.user?.shopId) {
     return <CreateShopGate user={data.user} onDone={() => { setLoading(true); reload(); }} onSignOut={onSignOut} />;
   }

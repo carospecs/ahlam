@@ -164,20 +164,21 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search messages…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 13, padding: "8px 0" }} />
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {(["all", "open", "dealt", "closed"] as const).map((f) => {
-              const on = !showTrash && statusFilter === f;
-              const label = f === "all" ? "All" : STATUS_META[f].label;
-              return (
+            {(["all", "open", "dealt", "closed", "deleted"] as const).map((f) => {
+              const on = f === "deleted" ? showTrash : !showTrash && statusFilter === f;
+              const count = f === "deleted" ? deleted.size : statusCounts[f];
+              return f === "deleted" ? (
+                <button key={f} onClick={() => { setShowTrash(!showTrash); if (!showTrash) setActiveId(""); }}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 999, border: `1px solid ${showTrash ? "var(--signal)" : "var(--line)"}`, background: showTrash ? "var(--signal-bg)" : "transparent", color: showTrash ? "var(--signal)" : "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  <Trash2 size={12} /> Deleted <span style={{ opacity: 0.7 }}>{count}</span>
+                </button>
+              ) : (
                 <button key={f} onClick={() => { setStatusFilter(f); setShowTrash(false); }}
                   style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 999, border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`, background: on ? "var(--accent-tint)" : "transparent", color: on ? "var(--accent)" : "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                  {label} <span style={{ opacity: 0.7 }}>{statusCounts[f]}</span>
+                  {f === "all" ? "All" : STATUS_META[f as ConvStatus].label} <span style={{ opacity: 0.7 }}>{count}</span>
                 </button>
               );
             })}
-            <button onClick={() => { setShowTrash(!showTrash); if (!showTrash) setActiveId(""); }}
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 999, border: `1px solid ${showTrash ? "var(--signal)" : "var(--line)"}`, background: showTrash ? "var(--signal-bg)" : "transparent", color: showTrash ? "var(--signal)" : "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-              <Trash2 size={12} /> Trash <span style={{ opacity: 0.7 }}>{deleted.size}</span>
-            </button>
           </div>
         </div>
         <div style={{ overflowY: "auto", flex: 1 }}>
@@ -188,17 +189,22 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
             const m = marketMeta[th.market] || null;
             return (
               <div key={th.id} style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--line)" }}>
-                <button onClick={() => setActiveId(th.id)} style={{ flex: 1, display: "flex", gap: 11, padding: "12px 14px", border: "none", width: "100%", alignItems: "flex-start", background: on ? "var(--surface2)" : "transparent", cursor: "pointer", textAlign: "left" }}>
+                <button onClick={() => setActiveId(th.id)} style={{ flex: 1, minWidth: 0, display: "flex", gap: 11, padding: "12px 14px", border: "none", alignItems: "flex-start", background: on ? "var(--surface2)" : "transparent", cursor: "pointer", textAlign: "left" }}>
                   {(() => { const IconComp = m?.icon; return (
                   <div style={{ width: 38, height: 38, borderRadius: 999, background: m ? `${m.color}18` : "var(--surface2)", display: "grid", placeItems: "center", flexShrink: 0, border: "1px solid var(--line)" }}>
                     {IconComp ? <IconComp size={17} color={m!.color} /> : <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>{th.avatar}</span>}
                   </div>
                   ); })()}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 6, alignItems: "center" }}>
-                      <span style={{ fontSize: 13.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                        {(() => { const st = statusOf(th); const M = STATUS_META[st]; return <M.Icon size={12} color={M.color} style={{ flexShrink: 0 }} />; })()}
-                        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.name}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 6, alignItems: "center" }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                          {(() => { const st = statusOf(th); const M = STATUS_META[st]; return <M.Icon size={12} color={M.color} style={{ flexShrink: 0 }} />; })()}
+                          {th.buyerId ? (
+                            <a href={`/profile/${th.buyerId}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "inherit", textDecoration: "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.name}</a>
+                          ) : (
+                            <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.name}</span>
+                          )}
+                          {th.isOnline && <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--success)", display: "inline-block", flexShrink: 0 }} />}
                       </span>
                       <span style={{ fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>{th.time}</span>
                     </div>
@@ -230,7 +236,14 @@ export function Messages({ go }: { go: (id: string) => void; onVehicle?: (v: any
           </div>
           ); })()}
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>{t.name}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+              {t.buyerId ? (
+                <a href={`/profile/${t.buyerId}`} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "none" }}>{t.name}</a>
+              ) : (
+                t.name
+              )}
+              {t.isOnline && <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--success)", display: "inline-block", flexShrink: 0 }} title="Online" />}
+            </div>
             <div style={{ fontSize: 12, color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}>
               <MarketChip name={t.market} /> {t.part}
             </div>
