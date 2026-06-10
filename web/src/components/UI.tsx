@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import { CONDITION_GRADE_MAP } from "@ahlam/shared";
 import {
   Wrench, WrenchIcon, Car, Check, CircleCheck, Send, PencilLine,
@@ -134,12 +135,15 @@ export function PhotoCell({ icon = "Car", label, style = {}, iconSize = 30, url 
           <img src={url} alt={label || ""} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           {label && <span style={{ position: "absolute", bottom: 8, left: 10, fontSize: 11, color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>{label}</span>}
         </div>
-        {zoom && (
-          <div onClick={() => setZoom(false)} style={{ position: "fixed", inset: 0, zIndex: 999, background: "rgba(7,11,22,0.88)", backdropFilter: "blur(6px)", display: "grid", placeItems: "center", padding: 24, cursor: "zoom-out" }}>
+        {zoom && typeof document !== "undefined" && createPortal(
+          // Portal to <body> so `position:fixed` covers the whole viewport even when
+          // an ancestor has a transform (which would otherwise trap/clip the overlay).
+          <div onClick={() => setZoom(false)} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(4,7,14,0.92)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 28, cursor: "zoom-out" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={label || ""} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 8, boxShadow: "0 8px 40px rgba(0,0,0,0.6)" }} />
-            <button onClick={(e) => { e.stopPropagation(); setZoom(false); }} style={{ position: "absolute", top: 16, right: 16, width: 40, height: 40, borderRadius: 999, border: "none", background: "rgba(255,255,255,0.12)", color: "#fff", display: "grid", placeItems: "center", cursor: "pointer", fontSize: 18 }}><X size={20} /></button>
-          </div>
+            <img src={url} alt={label || ""} onClick={(e) => e.stopPropagation()} style={{ maxWidth: "92vw", maxHeight: "86vh", objectFit: "contain", borderRadius: 10, boxShadow: "0 30px 90px -20px rgba(0,0,0,0.9)", cursor: "default" }} />
+            <button onClick={(e) => { e.stopPropagation(); setZoom(false); }} aria-label="Close" style={{ position: "absolute", top: 18, right: 20, width: 42, height: 42, borderRadius: 999, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(7,11,22,0.55)", color: "#fff", display: "grid", placeItems: "center", cursor: "pointer" }}><X size={20} /></button>
+          </div>,
+          document.body
         )}
       </>
     );
