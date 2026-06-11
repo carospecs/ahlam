@@ -1,6 +1,6 @@
 "use client";
 
-import { ScanLine, Sparkles, Send, ArrowRight, Camera, Tag, ShieldCheck, Check, Store } from "lucide-react";
+import { ScanLine, Sparkles, Send, ArrowRight, Camera, Tag, ShieldCheck, Check } from "lucide-react";
 import { BrandChip } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -31,10 +31,10 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
           <div>
             <span style={pill}><span style={pillDot} /> For salvage yards, mechanics & individual sellers</span>
             <h1 style={{ margin: "20px 0 0", fontSize: 52, fontWeight: 800, lineHeight: 1.05, letterSpacing: "-0.03em" }}>
-              Photograph a part.<br /><span style={{ color: "var(--accent)" }}>List it in seconds.</span>
+              Photograph a car.<br /><span style={{ color: "var(--accent)" }}>List every part in seconds.</span>
             </h1>
             <p style={{ margin: "20px 0 0", fontSize: 17, color: "var(--muted)", lineHeight: 1.6, maxWidth: 520 }}>
-              Ahlam uses AI to identify each part, grade its condition, and price it — then formats listings you can post everywhere you sell. Snap a few photos and your inventory builds itself.
+              Ahlam's AI identifies every part, grades its condition, and prices it straight from your photos — then auto-posts to eBay and preps Facebook, OfferUp &amp; Craigslist. The hours you spend cataloging and typing listings: gone.
             </p>
             <div style={{ display: "flex", gap: 12, marginTop: 28, flexWrap: "wrap" }}>
               <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtn, padding: "13px 24px", fontSize: 15 }}>Start free <ArrowRight size={17} /></button>
@@ -49,9 +49,9 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
           <div style={previewCard}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <ScanLine size={16} color="var(--accent)" /><span style={{ fontWeight: 600, fontSize: 13 }}>AI review card</span>
-              <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "var(--success)", background: "color-mix(in srgb, var(--success) 16%, transparent)", borderRadius: 999, padding: "2px 9px" }}>Good</span>
+              <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "var(--success)", background: "color-mix(in srgb, var(--success) 16%, transparent)", borderRadius: 999, padding: "2px 9px" }}>Grade B</span>
             </div>
-            {[["Part", "Alternator"], ["Fits", "2013–2017 Accord"], ["Condition", "Good · bench-tested"], ["Suggested", "$85"]].map(([k, v]) => (
+            {[["Part", "Alternator"], ["Fits", "2013–2017 Accord"], ["Condition", "Grade B · tested"], ["Suggested", "$85"]].map(([k, v]) => (
               <div key={k} style={previewRow}><span style={{ color: "var(--muted)" }}>{k}</span><span style={{ fontWeight: 600 }}>{v}</span></div>
             ))}
             <button onClick={onGetStarted} style={{ ...solidBtn, width: "100%", justifyContent: "center", marginTop: 14 }}><Send size={15} /> Post listing</button>
@@ -82,9 +82,9 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
         <div style={{ maxWidth: 1080, margin: "0 auto", padding: "56px 24px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }} className="cs-grid4">
             {[
-              { icon: ScanLine, t: "AI grading", d: "Good/Poor condition calls with notes you can edit." },
-              { icon: Tag, t: "Smart pricing", d: "Per-part and whole-car estimates from the photos." },
-              { icon: Store, t: "Your storefront", d: "A public page buyers can browse and share." },
+              { icon: ScanLine, t: "AI grading", d: "A/B/C condition grades with notes you can edit." },
+              { icon: Send, t: "Cross-post everywhere", d: "Auto-post to eBay; one-tap prep for Facebook, OfferUp & Craigslist." },
+              { icon: Tag, t: "Smart pricing", d: "Per-part and whole-car estimates from real market comps." },
               { icon: ShieldCheck, t: "Private by default", d: "VIN & mileage stay hidden until you choose to share." },
             ].map((f) => (
               <div key={f.t}>
@@ -117,7 +117,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
         <div style={{ maxWidth: 1080, margin: "0 auto", padding: "28px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <BrandChip size={28} />
           <span style={{ fontSize: 14, fontWeight: 700 }}>Ahlam</span>
-          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>The marketplace for cars &amp; parts — every listing measured, every spec verified.</span>
+          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Snap a photo. List every part everywhere — eBay, Facebook &amp; your own storefront.</span>
           <a href="/guides" style={{ ...navLink, marginLeft: "auto" }}>Guides</a>
           <button onClick={onSignIn} style={ghostBtn}>Sign in</button>
         </div>
