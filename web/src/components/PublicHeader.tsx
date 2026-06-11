@@ -17,6 +17,7 @@ export function PublicHeader() {
           <Link href="/#how" style={navLink} className="cs-hide-mobile">How it works</Link>
           <Link href="/#pricing" style={navLink} className="cs-hide-mobile">Pricing</Link>
           <Link href="/guides" style={navLink}>Guides</Link>
+          <Link href="/waitlist" style={navLink}>Waitlist</Link>
           <Link href="/" style={solidBtn}>Open Ahlam</Link>
         </nav>
       </div>
