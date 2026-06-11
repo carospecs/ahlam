@@ -66,6 +66,10 @@ export async function GET() {
           stockLocation: l.stock_location || "", barcode: l.barcode || "",
           warrantyDays: typeof c.warrantyDays === "number" ? c.warrantyDays : null,
           asIs: !!c.asIs,
+          // Surfaced for the Car-Part.com / URG export (CHN-1).
+          hollander: c.hollander || c.interchange || c.hollanderNumber || "",
+          oem: Array.isArray(c.oemNumbers) ? (c.oemNumbers[0] || "") : (c.oem || ""),
+          stockNumber: l.stock_number || "",
         };
       });
 
