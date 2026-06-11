@@ -37,6 +37,8 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
   const [vehDesc, setVehDesc] = React.useState<string>(v.description || "");
   const [vehMileage, setVehMileage] = React.useState<string>(v.mileage || "");
   const [vehPrice, setVehPrice] = React.useState<string>(v.askingPrice != null ? String(v.askingPrice) : "");
+  // What the yard paid for the car — private, drives the profit dashboard.
+  const [vehCost, setVehCost] = React.useState<string>(v.acquisitionCost != null ? String(v.acquisitionCost) : "");
   const [vehStatus, setVehStatus] = React.useState<string>(v.status || "Draft");
   const [savingVeh, setSavingVeh] = React.useState(false);
 
@@ -153,7 +155,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
     try {
       const r = await fetch("/api/listings", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vehicleId: v.id, title: vehTitle, description: vehDesc, mileage: vehMileage, askingPrice: vehPrice, status: vehStatus }),
+        body: JSON.stringify({ vehicleId: v.id, title: vehTitle, description: vehDesc, mileage: vehMileage, askingPrice: vehPrice, acquisitionCostCents: vehCost.trim() === "" ? "" : Math.round(Number(vehCost) * 100), status: vehStatus }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { csToast(d.error || "Couldn't save"); }
@@ -309,6 +311,10 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
               <div style={fieldLabel}>Mileage</div>
               <input value={vehMileage} onChange={(e) => setVehMileage(e.target.value)} placeholder="e.g. 92,400 mi" style={fieldInput} />
             </div>
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <div style={fieldLabel}>What you paid for this car ($) <span style={{ fontWeight: 400, color: "var(--muted)" }}>· private — used only for your profit tracking</span></div>
+            <input type="number" value={vehCost} onChange={(e) => setVehCost(e.target.value)} placeholder="e.g. 1200" className="tnum" style={fieldInput} />
           </div>
           {suggestions.filter((s) => !s.ok).length > 0 && (
             <div style={{ display: "grid", gap: 5, marginBottom: 14 }}>

@@ -242,6 +242,11 @@ export async function PATCH(req: Request) {
     const n = body.askingPrice === "" || body.askingPrice == null ? null : Number(body.askingPrice);
     vehUpdate.asking_price = Number.isFinite(n as number) ? n : null;
   }
+  // What the yard paid for the car (whole dollars from the UI → cents in the DB).
+  if (body.acquisitionCostCents !== undefined) {
+    const n = body.acquisitionCostCents === "" || body.acquisitionCostCents == null ? null : Math.round(Number(body.acquisitionCostCents));
+    vehUpdate.acquisition_cost_cents = n != null && Number.isFinite(n) && n >= 0 ? n : null;
+  }
 
   // New photo(s) for the vehicle — uploaded to the bucket and appended to the gallery.
   if (Array.isArray(body.photosBase64) && body.photosBase64.length) {
@@ -266,13 +271,15 @@ export async function PATCH(req: Request) {
   if (Object.keys(vehUpdate).length === 0) return NextResponse.json({ ok: true });
 
   let { error } = await db.from("vehicles").update(vehUpdate).eq("id", vehicleId).eq("shop_id", shopId);
-  // The `title` column may not exist yet (migration 0015). Retry without it.
-  if (error && "title" in vehUpdate && /title/i.test(error.message)) {
-    const { title, ...rest } = vehUpdate;
-    if (Object.keys(rest).length) {
-      ({ error } = await db.from("vehicles").update(rest).eq("id", vehicleId).eq("shop_id", shopId));
-    } else error = null as any;
-    if (!error) return NextResponse.json({ ok: true, titleSkipped: true });
+  // Some optional columns may not exist yet on older databases (title 0015,
+  // acquisition_cost_cents 0028). Drop whichever one the error names and retry,
+  // so saving the rest of the form never fails on a not-yet-applied migration.
+  for (const col of ["title", "acquisition_cost_cents"]) {
+    if (error && col in vehUpdate && new RegExp(col, "i").test(error.message)) {
+      delete (vehUpdate as Record<string, any>)[col];
+      if (Object.keys(vehUpdate).length === 0) { error = null as any; break; }
+      ({ error } = await db.from("vehicles").update(vehUpdate).eq("id", vehicleId).eq("shop_id", shopId));
+    }
   }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

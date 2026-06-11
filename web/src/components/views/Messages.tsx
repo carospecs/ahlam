@@ -48,6 +48,34 @@ function asksAboutCar(messages: any[]): boolean {
   return messages.some((m) => m.from !== "me" && /(whole car|the car\b|the vehicle\b|mileage|miles\b|odometer|how many miles)/i.test(m.text));
 }
 
+// The most recent message the buyer (not "me") sent — used to pick quick replies.
+function lastBuyerText(messages: LocalMsg[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) if (messages[i].from !== "me") return messages[i].text;
+  return "";
+}
+
+// Saved replies for the questions yards get over and over ("is this still
+// available?", "will it fit?", "what's your best price?"). One tap drops the
+// reply into the composer to review and send — no typing the same thing 20x/day.
+// Ordered so whatever the buyer just asked surfaces first, then sensible defaults.
+function quickReplies(part: string, messages: LocalMsg[]): { id: string; label: string; text: string }[] {
+  const p = part || "part";
+  const last = lastBuyerText(messages).toLowerCase();
+  const all = [
+    { id: "avail", label: "Still available", text: `Yes — the ${p} is still available. Want to come take a look, or should I set it aside for you?`, match: /still|available|you have|in stock|sold|gone|left/ },
+    { id: "fit", label: "Confirm fitment", text: `Happy to check fitment — what's the year, make, and model of your vehicle? The VIN is even better if you have it.`, match: /fit|work on|compatible|my car|my vehicle|vin|year|model|will it/ },
+    { id: "offer", label: "Respond to offer", text: `Thanks for the offer! The lowest I can do on the ${p} is $___ . Let me know and I'll hold it for you.`, match: /price|how much|offer|lowest|best|deal|\$|negotiat|cheaper|discount/ },
+    { id: "pickup", label: "Pickup & hours", text: `You're welcome to pick it up — we're open ___ . I'll have the ${p} pulled and ready when you get here.`, match: /pick ?up|where|located|location|address|come get|hours|open|directions/ },
+    { id: "ship", label: "Shipping", text: `I can ship the ${p} — send me your ZIP code and I'll get you an exact shipping quote.`, match: /ship|deliver|mail|send it|postage/ },
+  ];
+  const matched = all.filter((r) => r.match.test(last));
+  const defaults = all.filter((r) => r.id === "avail" || r.id === "fit");
+  return [...matched, ...defaults]
+    .filter((r, i, a) => a.findIndex((x) => x.id === r.id) === i)
+    .slice(0, 4)
+    .map(({ id, label, text }) => ({ id, label, text }));
+}
+
 export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => void; onVehicle?: (v: any) => void; showDeleted?: boolean }) {
   const { threads } = useData();
   const [activeId, setActiveId] = React.useState<string>("");
@@ -150,6 +178,10 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
   const msgs: LocalMsg[] = t ? [...t.messages, ...(localMsgs[t.id] || [])] : [];
   const hasMileageAttached = attachments.some((a) => a.mileage);
   const showMileageSuggestion = t ? asksAboutCar(msgs) && !dismissed[t.id] && !hasMileageAttached : false;
+  // Offer quick replies whenever the buyer sent the last message (i.e. it's the
+  // seller's turn) and the composer is empty, so they don't overwrite a draft.
+  const awaitingReply = !!t && msgs.length > 0 && msgs[msgs.length - 1].from !== "me";
+  const replies = t && awaitingReply && !draft.trim() ? quickReplies(t.part, msgs) : [];
 
   function addFiles(list: FileList | null) {
     const files = list ? Array.from(list) : [];
@@ -343,6 +375,19 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
                 {a.mileage ? <Gauge size={13} color="var(--signal)" /> : <Paperclip size={13} color="var(--muted)" />} {a.name}
                 <button onClick={() => removeAttachment(i)} style={{ border: "none", background: "transparent", display: "grid", placeItems: "center", cursor: "pointer", padding: 0 }}><X size={13} color="var(--muted)" /></button>
               </span>
+            ))}
+          </div>
+        )}
+
+        {/* Saved quick replies — one tap fills the composer to review and send */}
+        {replies.length > 0 && (
+          <div style={{ display: "flex", gap: 8, padding: "10px 14px 0", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 600 }}>Quick reply:</span>
+            {replies.map((r) => (
+              <button key={r.id} onClick={() => setDraft(r.text)} title={r.text}
+                style={{ padding: "5px 11px", borderRadius: 999, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                {r.label}
+              </button>
             ))}
           </div>
         )}

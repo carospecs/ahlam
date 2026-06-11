@@ -159,6 +159,10 @@ LEFT / RIGHT SIDES — READ CAREFULLY (this is where mistakes happen):
 6. NO DUPLICATES / NO GENERICS: never output a bare "Door"/"Front Door"/"Rear Door"/"Mirror" without its side, and never list the same physical part twice (e.g. don't return both "Rear Door" and "Rear Right Door" — that's one part, "Rear Right Door"). Each side part appears at most once per side.
 7. NEVER CONTRADICT YOURSELF: the side in the name MUST match what you wrote in "description"/"conditionNotes". If the description says "right (passenger side)", the side is RIGHT. If you truly can't tell the side of a side-part, still give your best single guess and set "confidence":"low" — do NOT fall back to a generic no-side name.
 
+WHEEL & TIRE CONSISTENCY (one car = one wheel size):
+- Every wheel on a single vehicle shares ONE rim diameter and ONE bolt pattern. NEVER report the left wheel as "18-inch" and the right wheel as "17-inch" — that is impossible on one car. Use the SAME diameter for every wheel and tire on this vehicle.
+- A tire's size encodes its rim diameter: the trailing number in a tire size (e.g. 215/50R17 → 17-inch rim) MUST match the diameter you state for the wheels. Cross-check before you answer so the wheels and their tires never disagree.
+
 CONDITION RUBRIC — grade each part as exactly "A", "B", or "C" (ARA-style), based solely on visible condition:
 - A: ${CONDITION_RUBRIC.A.detail}
 - B: ${CONDITION_RUBRIC.B.detail}
@@ -370,19 +374,31 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
       const sideUnknown = !center && !side && isLateralPart(baseName);
       if (sideUnknown) lowFields.add("partName");
 
+      const confidence: Confidence = sideUnknown ? "low" : p.confidence ?? "low";
+      // Conservative grading: the model skews generous (review §3 #5). The top
+      // "like new" grade is only credible when it's highly confident — otherwise
+      // drop A→B so a part it isn't sure about never posts as flawless.
+      let condition: ConditionGrade = ["A", "B", "C"].includes(p.condition ?? "") ? (p.condition as ConditionGrade) : "B";
+      if (condition === "A" && confidence !== "high") { condition = "B"; lowFields.add("condition"); }
+
       return {
         partName,
         partCategory: p.partCategory ?? "Uncategorized",
         fitment: Array.isArray(p.fitment) ? p.fitment : [],
-        condition: ["A","B","C"].includes(p.condition ?? "") ? (p.condition as ConditionGrade) : "B",
+        condition,
         conditionNotes: p.conditionNotes ?? "",
         damageCode: typeof p.damageCode === "string" ? p.damageCode.slice(0, 16) : "",
         description: p.description ?? "",
         suggestedPriceUsd: typeof p.suggestedPriceUsd === "number" ? p.suggestedPriceUsd : null,
-        confidence: sideUnknown ? "low" : p.confidence ?? "low",
+        confidence,
         lowConfidenceFields: Array.from(lowFields),
       };
     });
+
+    // One car = one wheel size. The model occasionally reports a left wheel at a
+    // different diameter than the right, or a tire whose rim contradicts the wheel.
+    // Reconcile every wheel/tire to a single consensus diameter before pricing.
+    reconcileWheelSpecs(data);
 
     // Live market pricing: when eBay is configured and we know the vehicle,
     // replace the model's guess with the median of real used comps (no undercut /
@@ -390,7 +406,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     if (livePricingEnabled() && vehicle && (vehicle.make || vehicle.model)) {
       await Promise.all(data.map(async (p) => {
         try {
-          const q = [vehicle.year, vehicle.make, vehicle.model, p.partName].filter(Boolean).join(" ");
+          const q = [vehicle.yearStart, vehicle.make, vehicle.model, p.partName].filter(Boolean).join(" ");
           const live = await livePartPrice(q);
           if (live && live > 0) {
             p.suggestedPriceUsd = live;
@@ -468,6 +484,75 @@ function lateralSide(front: VehicleFront, imageSide?: ImageSide): "Left" | "Righ
 const LATERAL_PART = /\b(door|mirror|fender|quarter|headlight|head light|tail ?light|fog|window|rocker|wheel|rim|tire|tyre)\b/i;
 function isLateralPart(name: string): boolean {
   return LATERAL_PART.test(name);
+}
+
+// --- Wheel/tire spec reconciliation -----------------------------------------
+// A vehicle has exactly one rim diameter. The model sometimes returns "Left Wheel
+// 18-inch" next to "Right Wheel 17-inch", or a tire whose molded rim size
+// contradicts the wheel. We detect the diameter on each wheel/tire part, pick the
+// consensus (tire markings win — they're authoritative), and rewrite the outliers.
+const WHEEL_TIRE = /\b(wheel|rim|tire|tyre)\b/i;
+
+// Realistic passenger/light-truck rim diameters; reject anything outside this band
+// so a stray number (a price, a part count) can't masquerade as a diameter.
+function clampDiameter(n: number): number | null {
+  return Number.isInteger(n) && n >= 12 && n <= 26 ? n : null;
+}
+
+// Pull a rim diameter (in inches) out of free text. Tire size like "215/50R17"
+// is checked first because its trailing number is the authoritative rim size.
+function detectDiameter(text: string): number | null {
+  const tire = /\b\d{3}\s*\/\s*\d{2}\s*[zr]?\s*(\d{2})\b/i.exec(text);
+  if (tire) return clampDiameter(+tire[1]);
+  const inch = /\b(\d{2})\s*(?:-|\s)?(?:inch(?:es)?|")/i.exec(text);
+  if (inch) return clampDiameter(+inch[1]);
+  const rcall = /\bR(\d{2})\b/.exec(text);
+  if (rcall) return clampDiameter(+rcall[1]);
+  return null;
+}
+
+// Rewrite the diameter call-outs in a WHEEL's text to the consensus value. We do
+// not touch tire dimensions here (that would fabricate a tire size that may not
+// exist) — conflicting tires are flagged for a human glance instead.
+function swapWheelDiameter(text: string, to: number): string {
+  return text
+    .replace(/\b\d{2}(\s*(?:-|\s)?(?:inch(?:es)?|"))/gi, (_m, tail) => `${to}${tail}`)
+    .replace(/\bR\d{2}\b/g, `R${to}`);
+}
+
+function reconcileWheelSpecs(parts: AIPartOutput[]): void {
+  const items = parts
+    .filter((p) => WHEEL_TIRE.test(p.partName))
+    .map((p) => ({
+      p,
+      isTire: /\b(tire|tyre)\b/i.test(p.partName),
+      dia: detectDiameter(`${p.partName} ${p.description} ${p.conditionNotes}`),
+    }))
+    .filter((w): w is { p: AIPartOutput; isTire: boolean; dia: number } => w.dia !== null);
+
+  // Nothing to reconcile unless ≥2 wheel/tire parts disagree on diameter.
+  if (items.length < 2 || new Set(items.map((w) => w.dia)).size < 2) return;
+
+  // Consensus diameter: weight tires double (their molded size is authoritative);
+  // break remaining ties toward the larger diameter.
+  const weight = new Map<number, number>();
+  for (const w of items) weight.set(w.dia, (weight.get(w.dia) ?? 0) + (w.isTire ? 2 : 1));
+  const consensus = [...weight.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
+
+  for (const w of items) {
+    if (w.dia === consensus) continue;
+    if (w.isTire) {
+      const note = `Listed elsewhere on this vehicle as a ${consensus}" rim — verify this tire's size before posting.`;
+      w.p.conditionNotes = w.p.conditionNotes ? `${w.p.conditionNotes} ${note}` : note;
+    } else {
+      w.p.description = swapWheelDiameter(w.p.description, consensus);
+      w.p.conditionNotes = swapWheelDiameter(w.p.conditionNotes, consensus);
+    }
+    w.p.confidence = "low";
+    const lf = new Set<keyof AIPartOutput>(w.p.lowConfidenceFields ?? []);
+    lf.add("description");
+    w.p.lowConfidenceFields = Array.from(lf);
+  }
 }
 
 // Single, centered parts that physically have no left/right variant.
