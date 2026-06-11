@@ -5,6 +5,7 @@ import { CreditCard, Mail, Trash2, LoaderCircle, Check, Plus, Shield, Crown, Eye
 import { Card } from "../UI";
 import { useData, csToast } from "../Dashboard";
 import { AddressAutocomplete, ZipField } from "../AddressAutocomplete";
+import { WARRANTY_DAYS } from "@/lib/warranty";
 
 function reloadData() { (window as any).csReloadData?.(); }
 
@@ -107,6 +108,8 @@ export function ShopProfile(_: ViewProps) {
         name: s.name || "", location: s.location || "", business_phone: s.business_phone || "",
         zip_code: s.zip_code || "",
         email: s.email || "", website: s.website || "", description: s.description || "", hours: s.hours || "",
+        default_warranty_days: typeof s.default_warranty_days === "number" ? s.default_warranty_days : 30,
+        returns_policy: s.returns_policy || "",
       });
     });
   }, []);
@@ -188,6 +191,27 @@ export function ShopProfile(_: ViewProps) {
         <Field label="About your shop">
           <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} placeholder="Family-owned salvage yard. Quality used OEM parts with a 30-day guarantee." style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} disabled={!canEdit} />
         </Field>
+
+        {/* Store policies (WAR-2 / TRU-2) — defaults that auto-apply to every listing. */}
+        <div style={{ borderTop: "1px solid var(--line)", paddingTop: 16, display: "grid", gap: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Store policies</div>
+          <Field label="Default warranty">
+            <div style={{ display: "flex", gap: 8 }}>
+              {WARRANTY_DAYS.map((d) => {
+                const on = Number(form.default_warranty_days) === d;
+                return (
+                  <button key={d} type="button" disabled={!canEdit} onClick={() => set("default_warranty_days", d as any)} style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`, background: on ? "var(--accent-tint)" : "transparent", color: on ? "var(--accent)" : "var(--muted)", fontSize: 13.5, fontWeight: 700, cursor: canEdit ? "pointer" : "default" }}>{d === 0 ? "None" : `${d} days`}</button>
+                );
+              })}
+            </div>
+            <span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6, display: "block" }}>Applies to any part that doesn&apos;t set its own warranty. Used parts standardly carry 30–90 days.</span>
+          </Field>
+          <Field label="Returns policy">
+            <textarea value={form.returns_policy} onChange={(e) => set("returns_policy", e.target.value)} rows={3} placeholder="e.g. Returns accepted within 30 days with receipt. Electrical parts must be tested on the vehicle before installation. Core charges refunded on return of the old unit." style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} disabled={!canEdit} />
+            <span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6, display: "block" }}>Shown on your storefront and on every listing so buyers know the terms before they buy.</span>
+          </Field>
+        </div>
+
         {canEdit ? (
           <button type="submit" disabled={busy} style={{ ...saveBtn, opacity: busy ? 0.6 : 1 }}>
             {busy ? <LoaderCircle size={16} style={{ animation: "spin 0.8s linear infinite" }} /> : saved ? <Check size={16} /> : null}

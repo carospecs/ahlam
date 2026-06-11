@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import { PublicHeader } from "@/components/PublicHeader";
 import { normalizeGrade, type Grade } from "@/lib/grade";
+import { effectiveWarranty, warrantyLabel } from "@/lib/warranty";
 
 // Public, no-auth, indexable page for a SINGLE part listing — the destination
 // Google/Facebook send shoppers to from the product feed, and the SEO landing the
@@ -43,8 +44,9 @@ async function loadListing(id: string) {
     const db = supabaseAdmin();
     const { data: l } = await db.from("listings").select("*").eq("id", id).eq("status", "active").single();
     if (!l) return null;
-    const { data: shop } = await db.from("shops").select("name, location, zip_code, business_phone, verified").eq("id", l.shop_id).single();
+    const { data: shop } = await db.from("shops").select("name, location, zip_code, business_phone, verified, default_warranty_days, returns_policy").eq("id", l.shop_id).single();
     const c = l.corrected || l.ai_output || {};
+    const warranty = effectiveWarranty({ warrantyDays: c.warrantyDays, asIs: c.asIs }, shop?.default_warranty_days);
     return {
       id: l.id as string,
       shopId: l.shop_id as string,
@@ -60,6 +62,10 @@ async function loadListing(id: string) {
       location: (shop?.zip_code || shop?.location || "") as string,
       phone: (shop?.business_phone || null) as string | null,
       verified: !!shop?.verified,
+      warrantyDays: warranty.days,
+      asIs: warranty.asIs,
+      warrantyText: warrantyLabel(warranty.days, warranty.asIs),
+      returnsPolicy: (shop?.returns_policy || "") as string,
     };
   } catch {
     return null;
@@ -144,6 +150,7 @@ export default async function ListingPage({ params }: Params) {
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
               <span style={{ fontSize: 12.5, fontWeight: 700, padding: "5px 11px", borderRadius: 999, background: "color-mix(in srgb, var(--accent) 14%, transparent)", color: "var(--accent)" }}>{GRADE_LABEL[l.grade]}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, padding: "5px 11px", borderRadius: 999, background: l.asIs ? "color-mix(in srgb, var(--muted) 14%, transparent)" : "color-mix(in srgb, var(--success) 16%, transparent)", color: l.asIs ? "var(--muted)" : "var(--success)" }}>{l.asIs ? "🛈 " : "✔ "}{l.warrantyText}</span>
               {l.category && <span style={{ fontSize: 12.5, fontWeight: 600, padding: "5px 11px", borderRadius: 999, border: "1px solid var(--line)", color: "var(--muted)" }}>{l.category}</span>}
               {l.location && <span style={{ fontSize: 12.5, fontWeight: 600, padding: "5px 11px", borderRadius: 999, border: "1px solid var(--line)", color: "var(--muted)" }}>📍 {l.location}</span>}
             </div>
@@ -154,7 +161,24 @@ export default async function ListingPage({ params }: Params) {
               </p>
             )}
 
-            <div style={{ marginTop: 22, padding: 16, borderRadius: 14, border: "1px solid var(--line)", background: "var(--surface)" }}>
+            {/* Warranty & returns (WAR-1/WAR-2) — buyers see the terms before buying. */}
+            <div style={{ marginTop: 20, padding: 14, borderRadius: 14, border: "1px solid var(--line)", background: "var(--surface)" }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 7 }}>
+                {l.asIs ? "🛈 Sold as-is" : `✔ ${l.warrantyText}`}
+              </div>
+              <div style={{ marginTop: 5, fontSize: 13, color: "var(--muted)", lineHeight: 1.55 }}>
+                {l.asIs
+                  ? "This part is sold as-is with no warranty or returns."
+                  : l.warrantyDays
+                    ? `Covered by a ${l.warrantyDays}-day warranty from ${l.shopName}.`
+                    : "No warranty offered on this part."}
+              </div>
+              {l.returnsPolicy && !l.asIs && (
+                <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--muted)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{l.returnsPolicy}</div>
+              )}
+            </div>
+
+            <div style={{ marginTop: 16, padding: 16, borderRadius: 14, border: "1px solid var(--line)", background: "var(--surface)" }}>
               <div style={{ fontSize: 13.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
                 {l.shopName}
                 {l.verified && <span style={{ fontSize: 11.5, color: "var(--accent)", fontWeight: 700 }}>✔ Verified</span>}

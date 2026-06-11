@@ -17,6 +17,7 @@ const isMobileDevice = () => typeof navigator !== "undefined" && /Android|iPhone
 import { Card, PhotoCell, ConditionBadge, SellModeBadge } from "../UI";
 import { buildListingText, buildVehicleText } from "../data";
 import { useData, csToast } from "../Dashboard";
+import { WARRANTY_DAYS, effectiveWarranty, warrantyLabel } from "@/lib/warranty";
 
 // Platforms with no listing API — we prepare the text + photos and open the
 // posting page so the seller just pastes and hits post.
@@ -483,9 +484,16 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
     note: entity.note || "",
     description: entity.desc || entity.description || "",
   });
+  // Warranty / returns terms (WAR-1/WAR-4). Seeded from the listing's own terms,
+  // falling back to the shop default. asIs always wins (no warranty).
+  const initWarranty = effectiveWarranty({ warrantyDays: entity.warrantyDays, asIs: entity.asIs }, shop?.defaultWarrantyDays);
+  const [warrantyDays, setWarrantyDays] = React.useState<number>(initWarranty.days);
+  const [asIs, setAsIs] = React.useState<boolean>(initWarranty.asIs);
   const [editOpen, setEditOpen] = React.useState(false);
   const [dirty, setDirty] = React.useState(false);
   const set = (k: string) => (v: string) => { setF((p) => ({ ...p, [k]: v })); setDirty(true); };
+  const setWarranty = (d: number) => { setWarrantyDays(d); setAsIs(false); setDirty(true); };
+  const toggleAsIs = () => { setAsIs((p) => !p); setDirty(true); };
   const [saving, setSaving] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
 
@@ -503,13 +511,13 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   // Live post text rebuilt from the edited fields (what gets pasted).
   const text = isCar
     ? buildVehicleText({ ...entity, description: f.description, askingPrice: Number(f.price) || 0, mileage: f.mileage, title: f.title } as any, shop)
-    : buildListingText({ ...entity, part: f.part, fitment: f.fitment, grade: f.grade, note: f.note, desc: f.description, price: Number(f.price) || 0 } as any, shop);
+    : buildListingText({ ...entity, part: f.part, fitment: f.fitment, grade: f.grade, note: f.note, desc: f.description, price: Number(f.price) || 0, warrantyDays, asIs } as any, shop);
 
   async function saveFields() {
     setSaving(true);
     const body = isCar
       ? { vehicleId: entity.id, title: f.title, description: f.description, mileage: f.mileage, askingPrice: f.price === "" ? "" : Number(f.price) }
-      : { listingId: entity.id, partName: f.part, fitment: f.fitment, condition: f.grade, priceUsd: f.price, description: f.description, conditionNotes: f.note };
+      : { listingId: entity.id, partName: f.part, fitment: f.fitment, condition: f.grade, priceUsd: f.price, description: f.description, conditionNotes: f.note, warrantyDays: asIs ? 0 : warrantyDays, asIs };
     try {
       const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (r.ok) { setDirty(false); csToast("Saved to your listing"); (window as any).csReloadData?.(); }
@@ -619,6 +627,7 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: 12.5, color: "var(--muted)" }}>
             {!isCar && <span style={{ fontWeight: 700, padding: "2px 9px", borderRadius: 6, color: f.grade === "A" ? "var(--success)" : f.grade === "B" ? "var(--signal)" : "var(--muted)", background: `color-mix(in srgb, ${f.grade === "A" ? "var(--success)" : f.grade === "B" ? "var(--signal)" : "var(--muted)"} 16%, transparent)` }}>Grade {f.grade}</span>}
+            {!isCar && <span style={{ fontWeight: 700, padding: "2px 9px", borderRadius: 6, color: asIs ? "var(--muted)" : "var(--success)", background: `color-mix(in srgb, ${asIs ? "var(--muted)" : "var(--success)"} 16%, transparent)` }}>{warrantyLabel(warrantyDays, asIs)}</span>}
             {isCar ? (f.mileage ? <span>{f.mileage}</span> : null) : (f.fitment ? <span>{f.fitment}</span> : null)}
           </div>
           <div style={{ fontSize: 13, color: "var(--foreground)", lineHeight: 1.5, maxHeight: 96, overflowY: "auto", whiteSpace: "pre-wrap" }}>
@@ -671,6 +680,21 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
                       <button key={g} onClick={() => set("grade")(g)} style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: `1px solid ${f.grade === g ? "var(--accent)" : "var(--line)"}`, background: f.grade === g ? "var(--accent-tint)" : "transparent", color: f.grade === g ? "var(--accent)" : "var(--muted)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{g}</button>
                     ))}
                   </div>
+                </div>
+                <div>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)" }}>Warranty</span>
+                  <div style={{ display: "flex", gap: 6, marginTop: 5 }}>
+                    {WARRANTY_DAYS.map((d) => {
+                      const on = !asIs && warrantyDays === d;
+                      return (
+                        <button key={d} type="button" onClick={() => setWarranty(d)} style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`, background: on ? "var(--accent-tint)" : "transparent", color: on ? "var(--accent)" : "var(--muted)", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{d === 0 ? "None" : `${d}d`}</button>
+                      );
+                    })}
+                  </div>
+                  <button type="button" onClick={toggleAsIs} style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 8, border: `1px solid ${asIs ? "var(--accent)" : "var(--line)"}`, background: asIs ? "var(--accent-tint)" : "transparent", color: asIs ? "var(--accent)" : "var(--muted)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    <Check size={12} style={{ opacity: asIs ? 1 : 0.25 }} /> Sold as-is — no returns
+                  </button>
+                  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Blank uses your shop default ({shop?.defaultWarrantyDays ? `${shop.defaultWarrantyDays}-day` : "no"} warranty).</div>
                 </div>
                 <CardField label="Note" value={f.note} onChange={set("note")} placeholder="e.g. light scratches on the chrome" />
                 <CardField label="Description" value={f.description} onChange={set("description")} placeholder="Condition notes, what's included, pickup details…" area />

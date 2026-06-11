@@ -5,7 +5,7 @@ import { geocode } from "@/lib/geocode";
 
 export const runtime = "nodejs";
 
-const EDITABLE = ["name", "location", "business_phone", "email", "website", "description", "hours", "logo_url", "cover_url", "zip_code"];
+const EDITABLE = ["name", "location", "business_phone", "email", "website", "description", "hours", "logo_url", "cover_url", "zip_code", "default_warranty_days", "returns_policy"];
 
 async function ctx() {
   const supabase = await supabaseServer();
@@ -41,6 +41,12 @@ export async function PATCH(req: NextRequest) {
   const patch: Record<string, any> = {};
   for (const k of EDITABLE) if (k in body) patch[k] = body[k];
   if (!Object.keys(patch).length) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+
+  // Default warranty is an int column; clamp to the allowed trade values.
+  if ("default_warranty_days" in patch) {
+    const d = Number(patch.default_warranty_days);
+    patch.default_warranty_days = [0, 30, 60, 90].includes(d) ? d : 30;
+  }
 
   // Geocode to lat/lng whenever the ZIP or location changes, so the marketplace
   // can sort by distance. Failure is non-fatal — the save still goes through.

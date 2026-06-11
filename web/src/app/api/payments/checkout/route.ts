@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { stripe, stripeConfigured, feeCentsFor, isStripeError } from "@/lib/stripe";
+import { effectiveWarranty } from "@/lib/warranty";
 
 export const runtime = "nodejs";
 
@@ -33,11 +34,14 @@ export async function POST(req: Request) {
   let amountCents = 0;
   let sellerShopId: string | null = null;
   let photoUrl: string | null = null;
+  // Warranty terms snapshotted onto the order (WAR-3). null for whole-car sales.
+  let listingWarranty: { warrantyDays?: number | null; asIs?: boolean } | null = null;
 
   if (listingId) {
     const { data: l } = await db.from("listings").select("*").eq("id", listingId).eq("status", "active").single();
     if (!l) return NextResponse.json({ error: "This part is no longer available" }, { status: 404 });
     const c = l.corrected || l.ai_output || {};
+    listingWarranty = { warrantyDays: c.warrantyDays, asIs: c.asIs };
     title = c.partName || c.part_name || "Used Part";
     const price = l.price_usd ?? c.priceUsd ?? c.suggestedPriceUsd ?? c.suggested_price ?? 0;
     amountCents = Math.round(Number(price) * 100);
@@ -64,13 +68,17 @@ export async function POST(req: Request) {
 
   // The seller must have finished payout onboarding before we can take money.
   const { data: shop } = sellerShopId
-    ? await db.from("shops").select("name, stripe_account_id, charges_enabled").eq("id", sellerShopId).single()
+    ? await db.from("shops").select("name, stripe_account_id, charges_enabled, default_warranty_days").eq("id", sellerShopId).single()
     : { data: null };
   if (!shop?.stripe_account_id || !shop?.charges_enabled) {
     return NextResponse.json({ error: "This seller hasn't enabled card payments yet — message them to arrange the sale." }, { status: 409 });
   }
 
   const feeCents = feeCentsFor(amountCents);
+
+  // Snapshot the effective warranty so the escrow/return window survives the
+  // listing being edited or removed after purchase (WAR-3).
+  const { days: warrantyDays } = effectiveWarranty(listingWarranty, shop?.default_warranty_days);
 
   // Create the pending order first so the webhook has a row to flip to "paid".
   const { data: order, error: orderErr } = await db
@@ -83,6 +91,7 @@ export async function POST(req: Request) {
       title,
       amount_cents: amountCents,
       fee_cents: feeCents,
+      warranty_days: warrantyDays,
       buyer_email: user.email || null,
       status: "pending",
     })
