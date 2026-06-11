@@ -77,6 +77,13 @@ export async function GET() {
         const v = l.vehicleId ? vMap.get(l.vehicleId) : null;
         if (v) { v.parts++; if (l.price > 0) v.value += l.price; if (l.status === "Posted" || l.status === "active") v.listed++; if (l.status === "Sold") { v.sold++; v.soldValue += l.price || 0; } }
         if (isHedge(l.fitment)) l.fitment = v ? vehLabel(v) : "";
+        // PHO-1: distinguish a part's OWN photo from a whole-car shot it inherited.
+        // A part with no dedicated photo falls back to the vehicle's hero image
+        // (see /api/listings creation), so a listing photo that matches one of the
+        // car's gallery images is a whole-car photo, not a picture of the part.
+        const carPhotos = v ? [v.image, ...(Array.isArray(v.images) ? v.images : [])].filter(Boolean) : [];
+        l.usesCarPhoto = !!(l.image && carPhotos.includes(l.image));
+        l.hasOwnPhoto = !!(l.image && !l.usesCarPhoto);
       }
 
       threads = (convRes.data || []).map((c: any) => ({
