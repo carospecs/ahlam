@@ -5,7 +5,7 @@ import { geocode } from "@/lib/geocode";
 
 export const runtime = "nodejs";
 
-const EDITABLE = ["name", "location", "business_phone", "email", "website", "description", "hours", "logo_url", "cover_url", "zip_code"];
+const EDITABLE = ["name", "location", "business_phone", "email", "website", "description", "hours", "logo_url", "cover_url", "zip_code", "nmvtis_id", "nmvtis_entity_name"];
 
 async function ctx() {
   const supabase = await supabaseServer();
