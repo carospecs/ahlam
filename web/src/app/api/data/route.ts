@@ -64,6 +64,10 @@ export async function GET() {
           note: c.conditionNotes || c.condition_notes || "", desc: c.description || "",
           sellerId: l.seller_id, ebayUrl: l.ebay_url || null, image: l.photo_url || null,
           stockLocation: l.stock_location || "", barcode: l.barcode || "",
+          // Surfaced for the Car-Part.com / URG export (CHN-1).
+          hollander: c.hollander || c.interchange || c.hollanderNumber || "",
+          oem: Array.isArray(c.oemNumbers) ? (c.oemNumbers[0] || "") : (c.oem || ""),
+          stockNumber: l.stock_number || "",
         };
       });
 

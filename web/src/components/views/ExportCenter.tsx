@@ -2,7 +2,7 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
-import { Send, Copy, Download, FileDown, ExternalLink, Info, CircleCheck, Share2, Tag, ShoppingBag, Globe, LoaderCircle, Link2, RefreshCw, ChevronDown, Car, X, AlertTriangle, Check, ImageDown } from "lucide-react";
+import { Send, Copy, Download, FileDown, ExternalLink, Info, CircleCheck, Share2, Tag, ShoppingBag, Globe, LoaderCircle, Link2, RefreshCw, ChevronDown, Car, X, AlertTriangle, Check, ImageDown, Boxes } from "lucide-react";
 
 // Render an overlay through the document body so its position:fixed always
 // covers the real viewport — a transformed ancestor (the scrolled content area)
@@ -176,6 +176,51 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
     if (withImg.length < ready.length) csToast(`Exported ${withImg.length} of ${ready.length} — ${ready.length - withImg.length} skipped (no photo)`);
   }
 
+  // Car-Part.com / URG inventory feed (CHN-1). This is the pro wholesale channel
+  // (repair shops + the wrecker network search it via their estimating software),
+  // and it's the highest-margin salvage channel Ahlam previously missed entirely.
+  // Columns follow the recycler-standard interchange inventory layout so it maps
+  // cleanly in Car-Part.com's upload tool (and URG-compatible YMS feeds): a yard
+  // sends Dealer/Stock/Year/Make/Model/PartType/Interchange(Hollander)/Grade/
+  // Price/Condition/Mileage/Location/Description/Phone/Image.
+  function exportCarPartCSV() {
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://ahlam.io";
+    const headers = [
+      "Dealer Name", "Stock Number", "Model Year", "Make", "Model", "Part Type",
+      "Interchange Number", "OEM Number", "Part Grade", "Price", "Condition", "Mileage",
+      "Location", "Description", "Phone", "Image URL",
+    ];
+    const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const condForGrade = (g: string) => g === "A" ? "A - Like New" : g === "C" ? "C - Core/Repairable" : "B - Used/Good";
+    const rows = ready.map((l: any) => {
+      const v = l.vehicleId ? vById.get(l.vehicleId) : null;
+      const stock = l.stockNumber || l.barcode || `AHLAM-${String(l.id).slice(0, 8)}`;
+      const link = l.image && /^https?:\/\//.test(l.image) ? l.image : "";
+      return [
+        shop?.name || "",
+        stock,
+        v?.year || "",
+        v?.make || "",
+        v?.model || "",
+        l.part || "",
+        l.hollander || "",
+        l.oem || "",
+        l.grade || "B",
+        Number(l.price) > 0 ? Number(l.price).toFixed(2) : "",
+        condForGrade(l.grade),
+        v?.mileage || "",
+        l.stockLocation || "",
+        (l.desc || l.description || l.note || "").slice(0, 2000),
+        shop?.phone || shop?.business_phone || "",
+        link,
+      ].map(esc).join(",");
+    });
+    if (!rows.length) { csToast("No parts to export yet"); return; }
+    downloadBlob([headers.join(","), ...rows].join("\n"), "car-part-urg-inventory.csv", "text/csv");
+    const noInter = ready.filter((l: any) => !l.hollander).length;
+    csToast(noInter ? `Exported ${rows.length} parts — ${noInter} have no interchange # yet (add one for best Car-Part.com matching)` : `Exported ${rows.length} parts`);
+  }
+
   return (
     <div style={{ maxWidth: 1000, display: "grid", gap: 18 }}>
       {/* eBay — the real integration */}
@@ -338,6 +383,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
         {advanced && (
           <>
             <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              <button onClick={exportCarPartCSV} disabled={!ready.length} style={advBtn}><Boxes size={16} color="var(--accent)" /> Car-Part.com / URG (CSV)</button>
               <button onClick={exportFacebookCSV} disabled={!ready.length} style={advBtn}><Share2 size={16} color="#1877f2" /> Facebook catalog (CSV)</button>
               <button onClick={exportCSV} disabled={!ready.length} style={advBtn}><FileDown size={16} /> Export CSV</button>
               <button onClick={exportJSON} disabled={!ready.length} style={advBtn}><Download size={16} /> Export JSON</button>
@@ -345,7 +391,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
             </div>
             <div style={{ display: "flex", gap: 8, fontSize: 12, color: "var(--muted)", lineHeight: 1.5, marginTop: 10 }}>
               <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span><strong>Facebook catalog</strong> is the free, official way to bulk-list on Facebook: in Commerce Manager, create a catalog → Data sources → Add items → <strong>Data feed</strong>, then upload this CSV. Only items with a public photo are included.</span>
+              <span><strong>Car-Part.com / URG</strong> is the pro wholesale channel — repair shops and the wrecker network search it from their estimating software. This is a recycler-standard interchange inventory CSV (Dealer, Stock #, Year/Make/Model, Part Type, <strong>Interchange/Hollander #</strong>, Grade, Price, Location…); upload it in Car-Part.com&apos;s inventory tool or map it into a URG-compatible feed. Add Hollander/interchange numbers to your parts for the best matching. <strong>Facebook catalog</strong> is the free way to bulk-list on Facebook (Commerce Manager → catalog → Data feed); only items with a public photo are included.</span>
             </div>
           </>
         )}
