@@ -26,7 +26,11 @@ end $do$;
 -- (escrow release), so a defective/wrong/fails-in-a-week dispute has a window
 -- to reference instead of escrow ending the moment receipt is confirmed.
 -- ---------------------------------------------------------------------------
+-- Guarded: the orders table only exists once the payments migration (0026) has
+-- been applied. Skip cleanly when it isn't, so warranty still installs on shops.
 do $do$ begin
-  alter table orders add column if not exists warranty_days int not null default 0;
-  alter table orders add column if not exists warranty_expires_at timestamptz;
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'orders') then
+    alter table orders add column if not exists warranty_days int not null default 0;
+    alter table orders add column if not exists warranty_expires_at timestamptz;
+  end if;
 end $do$;
