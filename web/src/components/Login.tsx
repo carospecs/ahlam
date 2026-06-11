@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowRight, LoaderCircle, Mail, Lock, ScanLine } from "lucide-react";
+import { ArrowRight, ArrowLeft, LoaderCircle, Mail, Lock, ScanLine } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { BrandChip } from "./BrandMark";
 
-function BrandPanel() {
+function BrandPanel({ onHome }: { onHome: () => void }) {
   return (
     <div className="grain login-panel" style={lx.panel}>
-      <a style={lx.brand} href="#">
+      <a style={lx.brand} href="/" onClick={(e) => { e.preventDefault(); onHome(); }}>
         <BrandChip size={34} />
         <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span>
       </a>
@@ -74,7 +74,10 @@ function Field({ label, icon, right, children }: { label: string; icon: string; 
   );
 }
 
-export function Login({ onLogin }: { onLogin: () => void }) {
+export function Login({ onLogin, onClose }: { onLogin: () => void; onClose?: () => void }) {
+  // Return to the marketing landing. onClose flips the parent back to <Landing>
+  // (SPA, keeps state); fall back to a hard nav to "/" if it isn't provided.
+  const goHome = () => { if (onClose) onClose(); else window.location.href = "/"; };
   const [mode, setMode] = useState<"signin" | "signup" | "forgot" | "recover">("signin");
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -168,11 +171,14 @@ export function Login({ onLogin }: { onLogin: () => void }) {
 
   return (
     <div style={lx.screen}>
+      <a href="/" onClick={(e) => { e.preventDefault(); goHome(); }} style={lx.back}>
+        <ArrowLeft size={15} /> Back to home
+      </a>
       <div style={lx.card} className="login-card">
-        <BrandPanel />
+        <BrandPanel onHome={goHome} />
         <div style={lx.formWrap}>
           <div style={lx.formInner} className="fade-up">
-            <a style={{ ...lx.brand, marginBottom: 4 }} href="#" data-mobile-brand>
+            <a style={{ ...lx.brand, marginBottom: 4 }} href="/" onClick={(e) => { e.preventDefault(); goHome(); }} data-mobile-brand>
               <BrandChip size={34} />
               <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span>
             </a>
@@ -256,7 +262,8 @@ export function Login({ onLogin }: { onLogin: () => void }) {
 }
 
 const lx: Record<string, React.CSSProperties> = {
-  screen: { minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 },
+  screen: { position: "relative", minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 },
+  back: { position: "absolute", top: 20, left: 20, zIndex: 5, display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 10, border: "1px solid var(--line)", background: "color-mix(in srgb, var(--surface) 70%, transparent)", backdropFilter: "blur(8px)", color: "var(--muted)", fontSize: 13, fontWeight: 600, textDecoration: "none" },
   card: { width: "min(880px, 100%)", display: "grid", gridTemplateColumns: "1fr 0.92fr", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-xl)", overflow: "hidden", boxShadow: "0 40px 80px -30px rgba(0,0,0,0.6)" },
   panel: { padding: 36, display: "flex", flexDirection: "column", gap: 24, justifyContent: "space-between", borderRight: "1px solid var(--line)", minHeight: 600 },
   brand: { display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "var(--foreground)" },

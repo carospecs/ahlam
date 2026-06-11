@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
-import { BrandChip } from "@/components/BrandMark";
+import { PublicHeader } from "@/components/PublicHeader";
 import { normalizeGrade, type Grade } from "@/lib/grade";
 
 // Public, no-auth, indexable page for a SINGLE part listing — the destination
@@ -123,13 +123,7 @@ export default async function ListingPage({ params }: Params) {
     <main style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)" }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      <div style={{ borderBottom: "1px solid var(--line)" }}>
-        <div style={{ maxWidth: 980, margin: "0 auto", padding: "20px 24px" }}>
-          <Link href="/" style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--muted)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>
-            <BrandChip size={24} /> Ahlam
-          </Link>
-        </div>
-      </div>
+      <PublicHeader />
 
       <div style={{ maxWidth: 980, margin: "0 auto", padding: "28px 24px 64px", display: "grid", gap: 28, gridTemplateColumns: "minmax(0, 1fr)" }}>
         <div style={{ display: "grid", gap: 24, gridTemplateColumns: "minmax(280px, 1.1fr) minmax(0, 1fr)", alignItems: "start" }} className="cs-listing-grid">

@@ -67,6 +67,6 @@ export default function Home() {
   }
 
   if (authed) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Dashboard onSignOut={() => { supabaseBrowser().auth.signOut(); closeLogin(); setAuthed(false); }} /></Suspense>;
-  if (showLogin) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Login onLogin={() => setAuthed(true)} /></Suspense>;
+  if (showLogin) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Login onLogin={() => setAuthed(true)} onClose={closeLogin} /></Suspense>;
   return <Landing onGetStarted={openLogin} onSignIn={openLogin} />;
 }

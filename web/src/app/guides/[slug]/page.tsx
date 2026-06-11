@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { BrandChip } from "@/components/BrandMark";
+import { PublicHeader } from "@/components/PublicHeader";
 import { GUIDES, getGuide } from "@/content/guides";
 
 type Params = { params: Promise<{ slug: string }> };
@@ -58,9 +58,10 @@ export default async function GuidePage({ params }: Params) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleLd) }} />
       {faqLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />}
 
+      <PublicHeader />
       <div className="grain" style={{ borderBottom: "1px solid var(--line)" }}>
         <div style={{ maxWidth: 760, margin: "0 auto", padding: "28px 24px" }}>
-          <Link href="/guides" style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--muted)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}><BrandChip size={24} /> Ahlam Guides</Link>
+          <Link href="/guides" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--muted)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>← All guides</Link>
           <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--muted)", margin: "20px 0 10px" }}>
             <span style={{ color: "var(--accent)", fontWeight: 700 }}>{g.category}</span>
             <span>·</span><span>{g.readMinutes} min read</span>

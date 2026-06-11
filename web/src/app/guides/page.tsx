@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { BrandChip } from "@/components/BrandMark";
+import { PublicHeader } from "@/components/PublicHeader";
 import { GUIDES } from "@/content/guides";
 
 export const metadata: Metadata = {
@@ -18,10 +18,10 @@ export const metadata: Metadata = {
 export default function GuidesIndex() {
   return (
     <main style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)" }}>
+      <PublicHeader />
       <div className="grain" style={{ borderBottom: "1px solid var(--line)" }}>
         <div style={{ maxWidth: 880, margin: "0 auto", padding: "28px 24px" }}>
-          <Link href="/" style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--muted)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}><BrandChip size={24} /> Ahlam</Link>
-          <h1 style={{ margin: "20px 0 8px", fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em" }}>Guides</h1>
+          <h1 style={{ margin: "0 0 8px", fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em" }}>Guides</h1>
           <p style={{ margin: 0, color: "var(--muted)", fontSize: 15, lineHeight: 1.6, maxWidth: 620 }}>
             Practical, no-fluff guides for small salvage yards and used-parts sellers — pricing, seasonality, and the software landscape.
           </p>

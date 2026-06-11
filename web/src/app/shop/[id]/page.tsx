@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
-import { BrandChip } from "@/components/BrandMark";
+import { PublicHeader } from "@/components/PublicHeader";
 import { normalizeGrade } from "@/lib/grade";
 
 export const dynamic = "force-dynamic";
@@ -88,11 +88,11 @@ export default async function ShopStorefront({ params }: Params) {
 
   return (
     <main style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)" }}>
+      <PublicHeader />
       {/* Header / cover */}
       <div className="grain" style={{ borderBottom: "1px solid var(--line)" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 24px" }}>
-          <Link href="/" style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--muted)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}><BrandChip size={24} /> Ahlam</Link>
-          <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 18, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
             {shop.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={shop.logo_url} alt={shop.name} style={{ width: 72, height: 72, borderRadius: 16, objectFit: "cover", border: "1px solid var(--line)" }} />
