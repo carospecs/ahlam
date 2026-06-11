@@ -38,6 +38,14 @@ export interface AIPartOutput {
   description: string;
   /** AI's suggested price in USD, if it can estimate one. Employee can override. */
   suggestedPriceUsd: number | null;
+  /**
+   * Warranty length in days the seller guarantees the part (0/30/60/90).
+   * null/undefined means "fall back to the shop default". When `asIs` is set
+   * the part carries no warranty regardless of this value.
+   */
+  warrantyDays?: number | null;
+  /** "Sold as-is, no returns" flag — for glass/body/cosmetic parts (WAR-4). */
+  asIs?: boolean;
   /** Per-field and overall confidence. Low => highlight + warn the user. */
   confidence: Confidence;
   /** Optional: fields the model was unsure about, for targeted highlighting. */

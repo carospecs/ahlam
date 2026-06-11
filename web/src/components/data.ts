@@ -1,3 +1,5 @@
+import { effectiveWarranty } from "@/lib/warranty";
+
 export const CONDITION_COLOR: Record<string, string> = { A: "#22C55E", B: "#84CC16", C: "#EAB308", D: "#F97316", F: "#EF4444" };
 
 export interface Vehicle {
@@ -16,6 +18,10 @@ export interface Listing {
   status: string; markets: string[]; views: number; photos: number;
   fitment: string; category: string; confidence: string;
   note: string; desc: string;
+  /** Warranty length in days (0/30/60/90); null = use the shop default. */
+  warrantyDays?: number | null;
+  /** Sold as-is, no returns (overrides warranty). */
+  asIs?: boolean;
 }
 
 export interface Thread {
@@ -75,6 +81,12 @@ export function buildListingText(l: Listing, shop = SHOP) {
   lines.push(`Condition: ${l.grade}${l.note ? ` — ${l.note}` : ""}`);
   if (l.desc) lines.push("", l.desc);
   if (l.price > 0) lines.push("", `Price: $${l.price}`);
+  // Warranty / returns terms (WAR-1/2/4): the listing's own, else the shop default.
+  const { days, asIs } = effectiveWarranty({ warrantyDays: l.warrantyDays, asIs: l.asIs }, (shop as any).defaultWarrantyDays);
+  if (asIs) lines.push("", "Sold as-is — no returns.");
+  else if (days) lines.push("", `Warranty: ${days}-day guarantee on this part.`);
+  const returnsPolicy = (shop as any).returnsPolicy;
+  if (returnsPolicy && !asIs) lines.push(String(returnsPolicy));
   const tail = [shop.name, shop.location, shop.phone].filter(Boolean).join(" • ");
   if (tail) lines.push("", `— ${tail}`);
   return lines.join("\n");

@@ -64,6 +64,8 @@ export async function GET() {
           note: c.conditionNotes || c.condition_notes || "", desc: c.description || "",
           sellerId: l.seller_id, ebayUrl: l.ebay_url || null, image: l.photo_url || null,
           stockLocation: l.stock_location || "", barcode: l.barcode || "",
+          warrantyDays: typeof c.warrantyDays === "number" ? c.warrantyDays : null,
+          asIs: !!c.asIs,
         };
       });
 
@@ -125,6 +127,8 @@ export async function GET() {
         phone: s.business_phone || "", email: s.email || "", website: s.website || "",
         description: s.description || "", hours: s.hours || "", logoUrl: s.logo_url || null,
         coverUrl: s.cover_url || null, members, plan: planName, trialDaysLeft: trialLeft,
+        defaultWarrantyDays: typeof s.default_warranty_days === "number" ? s.default_warranty_days : 30,
+        returnsPolicy: s.returns_policy || "",
       };
     }
   }

@@ -71,9 +71,26 @@ export async function POST(req: Request) {
       metadata: { order_id: order.id },
     });
 
+    // Confirming receipt releases escrow but opens the warranty/return window
+    // (WAR-3): the part stays covered for warranty_days against
+    // defective/wrong/fails-in-a-week claims — the most common used-part
+    // dispute — instead of protection ending the moment receipt is confirmed.
+    // We record when that window closes so the order view and dispute flow can
+    // reference it.
+    const completedAt = new Date();
+    const warrantyDays = Number(order.warranty_days) || 0;
+    const warrantyExpiry = warrantyDays
+      ? new Date(completedAt.getTime() + warrantyDays * 86400000).toISOString()
+      : null;
+
     await db
       .from("orders")
-      .update({ status: "completed", stripe_transfer_id: transfer.id, completed_at: new Date().toISOString() })
+      .update({
+        status: "completed",
+        stripe_transfer_id: transfer.id,
+        completed_at: completedAt.toISOString(),
+        warranty_expires_at: warrantyExpiry,
+      })
       .eq("id", orderId);
 
     // Mark the underlying part sold so it leaves the marketplace.
@@ -81,7 +98,7 @@ export async function POST(req: Request) {
       await db.from("listings").update({ status: "sold" }).eq("id", order.listing_id);
     }
 
-    return NextResponse.json({ ok: true, status: "completed" });
+    return NextResponse.json({ ok: true, status: "completed", warrantyDays, warrantyExpiresAt: warrantyExpiry });
   } catch (e) {
     if (isStripeError(e)) return NextResponse.json({ error: e.message }, { status: e.status });
     return NextResponse.json({ error: "Could not release payment" }, { status: 500 });

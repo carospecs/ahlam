@@ -171,7 +171,7 @@ export async function PATCH(req: Request) {
     }
     // Editable part fields merge into the corrected JSON so we don't clobber
     // other reviewed fields.
-    if (typeof body.description === "string" || typeof body.partName === "string" || typeof body.condition === "string" || typeof body.category === "string" || typeof body.fitment !== "undefined" || typeof body.conditionNotes === "string") {
+    if (typeof body.description === "string" || typeof body.partName === "string" || typeof body.condition === "string" || typeof body.category === "string" || typeof body.fitment !== "undefined" || typeof body.conditionNotes === "string" || typeof body.warrantyDays !== "undefined" || typeof body.asIs === "boolean") {
       const corrected = { ...(row.corrected || row.ai_output || {}) };
       if (typeof body.description === "string") corrected.description = body.description;
       if (typeof body.partName === "string" && body.partName.trim()) corrected.partName = body.partName.trim();
@@ -180,6 +180,12 @@ export async function PATCH(req: Request) {
       if (typeof body.conditionNotes === "string") corrected.conditionNotes = body.conditionNotes;
       if (typeof body.damageCode === "string") corrected.damageCode = body.damageCode.slice(0, 16);
       if (body.fitment !== undefined) corrected.fitment = body.fitment;
+      // Warranty terms (WAR-1/WAR-4): only 0/30/60/90 days; asIs forces no warranty.
+      if (typeof body.warrantyDays !== "undefined") {
+        const d = Number(body.warrantyDays);
+        corrected.warrantyDays = [0, 30, 60, 90].includes(d) ? d : null;
+      }
+      if (typeof body.asIs === "boolean") corrected.asIs = body.asIs;
       update.corrected = corrected;
     }
     // New photo(s): base64 JPEGs uploaded to the part-photos bucket; the first
