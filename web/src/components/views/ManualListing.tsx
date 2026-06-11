@@ -34,6 +34,10 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [price, setPrice] = React.useState("");
+  // AI pricing guidance (PRC-1/PRC-2): range, trim prompt, volatile-commodity flag.
+  const [priceRange, setPriceRange] = React.useState<{ min: number; max: number } | null>(null);
+  const [variantPrompt, setVariantPrompt] = React.useState("");
+  const [priceVolatile, setPriceVolatile] = React.useState(false);
   // Vehicle / fitment
   const [year, setYear] = React.useState("");
   const [make, setMake] = React.useState("");
@@ -101,7 +105,10 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
       if (d.title) setTitle(d.title);
       if (d.description) setDescription(d.description);
       if (d.suggestedPriceUsd != null && !price) setPrice(String(d.suggestedPriceUsd));
-      csToast("Drafted with AI — edit before posting");
+      setPriceRange(d.priceRange || null);
+      setVariantPrompt(d.needsVariant && d.variantPrompt ? d.variantPrompt : "");
+      setPriceVolatile(!!d.volatile);
+      csToast(d.needsVariant ? "Drafted — tell me the variant for a tighter price" : "Drafted with AI — edit before posting");
     } catch { csToast("AI assist failed"); }
     setBusy(null);
   }
@@ -272,13 +279,30 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" style={{ ...field, fontWeight: 600 }} />
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description — what it is, condition, fitment" rows={4} style={{ ...field, resize: "vertical", lineHeight: 1.5 }} />
             {isCar && <input value={mileage} onChange={(e) => setMileage(e.target.value)} placeholder="Mileage (optional, e.g. 112,480 mi)" style={field} />}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontSize: 13, color: "var(--muted)" }}>Price</span>
               <div style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 12px", flex: 1, maxWidth: 200 }}>
                 <span style={{ fontSize: 15, fontWeight: 700, color: Number(price) > 0 ? "var(--success)" : "var(--muted)" }}>$</span>
                 <input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" className="tnum" style={{ border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 16, fontWeight: 700, width: "100%" }} />
               </div>
+              {priceRange && (
+                <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
+                  AI range: <b style={{ color: "var(--foreground)" }}>${priceRange.min.toLocaleString()}–${priceRange.max.toLocaleString()}</b>
+                </span>
+              )}
             </div>
+            {variantPrompt && (
+              <div style={{ display: "flex", gap: 8, fontSize: 12.5, color: "var(--foreground)", lineHeight: 1.5, background: "color-mix(in srgb, var(--signal) 12%, transparent)", border: "1px solid var(--signal)", borderRadius: 10, padding: "9px 12px" }}>
+                <Info size={14} color="var(--signal)" style={{ flexShrink: 0, marginTop: 1 }} />
+                <span><b>This part is priced by variant.</b> {variantPrompt} Add it to the title/description and adjust the price — the range above spans the options.</span>
+              </div>
+            )}
+            {priceVolatile && (
+              <div style={{ display: "flex", gap: 8, fontSize: 12.5, color: "var(--foreground)", lineHeight: 1.5, background: "color-mix(in srgb, var(--signal) 12%, transparent)", border: "1px solid var(--signal)", borderRadius: 10, padding: "9px 12px" }}>
+                <Info size={14} color="var(--signal)" style={{ flexShrink: 0, marginTop: 1 }} />
+                <span><b>Volatile commodity.</b> This price moves with metal/core markets — verify with a current core buyer before quoting.</span>
+              </div>
+            )}
           </div>
         </div>
 

@@ -71,6 +71,16 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
   const [prepare, setPrepare] = React.useState<PrepareState | null>(null);
   // Fix-it sheet shown when an eBay publish fails, with tailored next steps.
   const [fix, setFix] = React.useState<{ raw: string; target: string; retry: () => void } | null>(null);
+  // Grade-C mechanical posting guard (PRC-3): a pending listing awaiting confirm.
+  const [gradeCConfirm, setGradeCConfirm] = React.useState<any | null>(null);
+
+  // A Grade-C MECHANICAL/electrical part is a return magnet — gate posting it
+  // live behind a confirm (and tell the seller it goes up sold-as-is). Body /
+  // glass / cosmetic parts legitimately sell rough, so they're exempt.
+  function publishPartGuarded(l: any) {
+    if (needsGradeCConfirm(l)) { setGradeCConfirm(l); return; }
+    ebayPublish(`part:${l.id}`, { listingId: l.id }, "Listed on eBay 🎉");
+  }
 
   const loadEbay = React.useCallback(() => {
     fetch("/api/ebay/status").then((r) => r.json()).then((d) => d.ok && setEbay(d)).catch(() => setEbay(null));
@@ -360,7 +370,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
                       {l.ebayUrl ? (
                         <a href={l.ebayUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--success)", textDecoration: "none" }}><CircleCheck size={14} /> On eBay</a>
                       ) : ebay?.connected ? (
-                        <button onClick={() => ebayPublish(`part:${l.id}`, { listingId: l.id }, "Listed on eBay 🎉")} disabled={!!busy} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: busy && busy !== `part:${l.id}` ? 0.5 : 1 }}>
+                        <button onClick={() => publishPartGuarded(l)} disabled={!!busy} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: busy && busy !== `part:${l.id}` ? 0.5 : 1 }}>
                           {busy === `part:${l.id}` ? <LoaderCircle size={14} className="spin" /> : <ShoppingBag size={14} />} List on eBay
                         </button>
                       ) : null}
@@ -404,7 +414,44 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
       {fix && (
         <FixPanel raw={fix.raw} target={fix.target} connected={!!ebay?.connected} go={go} onRetry={() => { const r = fix.retry; setFix(null); r(); }} onClose={() => setFix(null)} />
       )}
+      {gradeCConfirm && (
+        <GradeCConfirm
+          listing={gradeCConfirm}
+          onCancel={() => setGradeCConfirm(null)}
+          onConfirm={() => { const l = gradeCConfirm; setGradeCConfirm(null); ebayPublish(`part:${l.id}`, { listingId: l.id, asIs: true }, "Listed as-is on eBay 🎉"); }}
+        />
+      )}
     </div>
+  );
+}
+
+// PRC-3: a Grade-C mechanical/electrical part is a return magnet. Body, glass,
+// wheels and cosmetic parts legitimately sell rough, so they don't need the gate.
+const GRADE_C_EXEMPT = /bumper|hood|fender|door|grille|grill|mirror|glass|windshield|window|trim|molding|spoiler|wheel|rim|tire|seat|carpet|bed liner|tailgate|liftgate|panel|emblem|cover|body|exterior|interior|lighting|headlight|taillight|lamp|light|console|dash/i;
+function needsGradeCConfirm(l: any): boolean {
+  if (l?.grade !== "C") return false;
+  const s = `${l.part || ""} ${l.category || ""}`;
+  return !GRADE_C_EXEMPT.test(s);
+}
+
+// Confirmation before a Grade-C mechanical part goes live (PRC-3).
+function GradeCConfirm({ listing, onCancel, onConfirm }: { listing: any; onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <Portal><div onClick={onCancel} style={{ position: "fixed", inset: 0, zIndex: 210, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="fade-up" style={{ width: "min(420px, 100%)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16, boxShadow: "0 40px 80px -30px rgba(0,0,0,0.6)", padding: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <span style={{ width: 36, height: 36, borderRadius: 9, background: "color-mix(in srgb, var(--signal) 16%, transparent)", display: "grid", placeItems: "center", flexShrink: 0 }}><AlertTriangle size={18} color="var(--signal)" /></span>
+          <div style={{ fontSize: 15.5, fontWeight: 700 }}>Post this Grade-C part as-is?</div>
+        </div>
+        <p style={{ margin: "0 0 14px", fontSize: 13.5, color: "var(--muted)", lineHeight: 1.55 }}>
+          <b style={{ color: "var(--foreground)" }}>{listing.part}</b> is graded <b style={{ color: "var(--foreground)" }}>C (rough / non-functional)</b>. Mechanical and electrical parts at this grade are a common source of returns and disputes. It will be listed <b style={{ color: "var(--foreground)" }}>sold as-is, no returns</b> — make sure the description says exactly what works and what doesn&apos;t.
+        </p>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onCancel} style={{ padding: "9px 16px", borderRadius: 10, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+          <button onClick={onConfirm} style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--signal)", color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>List as-is</button>
+        </div>
+      </div>
+    </div></Portal>
   );
 }
 
