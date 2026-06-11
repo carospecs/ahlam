@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Wrench, Car, Send, EllipsisVertical, ChevronRight, CirclePlus, Upload, Tag, X, LoaderCircle, FileSpreadsheet } from "lucide-react";
+import { Wrench, Car, Send, EllipsisVertical, ChevronRight, CirclePlus, Upload, Tag, X, LoaderCircle, FileSpreadsheet, ImageOff } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge, MarketChip, StatusBadge } from "../UI";
 import { useData, csToast } from "../Dashboard";
 
@@ -104,7 +104,7 @@ export function Parts({ go }: { go: (id: string) => void; onVehicle?: (v: any) =
               <div key={l.id} onClick={() => (window as any).csOpenExport?.(l)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", cursor: "pointer", borderBottom: i < rows.length - 1 ? "1px solid var(--line)" : "none" }}>
                 <PhotoCell icon="Wrench" url={l.image} style={{ width: 48, height: 40, flexShrink: 0 }} iconSize={17} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>{l.part}{!l.hasOwnPhoto && <NoPartPhotoBadge />}</div>
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>{carTitle(l)}</div>
                 </div>
                 <span style={{ width: 90 }}><ConditionBadge grade={l.grade} size="sm" /></span>
@@ -146,7 +146,7 @@ export function Parts({ go }: { go: (id: string) => void; onVehicle?: (v: any) =
                   <div key={l.id} onClick={() => (window as any).csOpenExport?.(l)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", cursor: "pointer", borderWidth: 0, borderBottomWidth: i < vParts.length - 1 ? 1 : 0, borderStyle: "solid", borderColor: "var(--line)" }}>
                     <PhotoCell icon="Wrench" url={l.image} style={{ width: 48, height: 40, flexShrink: 0 }} iconSize={17} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>{l.part}{!l.hasOwnPhoto && <NoPartPhotoBadge />}</div>
                       <div style={{ fontSize: 12, color: "var(--muted)" }}>{l.category || carTitle(l)}</div>
                     </div>
                     <span style={{ width: 90 }}><ConditionBadge grade={l.grade} size="sm" /></span>
@@ -164,6 +164,16 @@ export function Parts({ go }: { go: (id: string) => void; onVehicle?: (v: any) =
         </div>
       )}
     </div>
+  );
+}
+
+// PHO-1: flag a part whose only image is a whole-car shot (no close-up of the
+// actual item). Buyers and eBay's listing-quality score penalize these.
+function NoPartPhotoBadge() {
+  return (
+    <span title="No photo of the actual part — add a close-up before posting" style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 700, color: "var(--signal)", background: "color-mix(in srgb, var(--signal) 14%, transparent)", borderRadius: 6, padding: "1px 6px", flexShrink: 0 }}>
+      <ImageOff size={11} /> No part photo
+    </span>
   );
 }
 

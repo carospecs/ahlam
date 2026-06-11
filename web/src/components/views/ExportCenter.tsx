@@ -450,6 +450,9 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   const [uploading, setUploading] = React.useState(false);
   const upRef = React.useRef<HTMLInputElement>(null);
   const valid = [...photos.filter((u) => u && /^https?:\/\//.test(u)), ...extraPhotos];
+  // PHO-2: warn when a part is about to be posted with only a whole-car photo
+  // (no close-up of the actual item). Clears once the seller adds one here.
+  const partPhotoMissing = !isCar && !entity.hasOwnPhoto && extraPhotos.length === 0;
 
   // Upload picture(s) to this listing (part or whole car) right from the export sheet.
   async function uploadPhotos(files: FileList) {
@@ -619,6 +622,15 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
             </button>
           )}
         </div>
+
+        {partPhotoMissing && (
+          <div style={{ margin: "10px 16px 0", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--signal)", background: "color-mix(in srgb, var(--signal) 12%, transparent)", display: "flex", alignItems: "flex-start", gap: 9 }}>
+            <AlertTriangle size={16} color="var(--signal)" style={{ flexShrink: 0, marginTop: 1 }} />
+            <div style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+              <b>This is a whole-car photo, not the part.</b> Listings with a close-up of the actual item convert better and score higher on eBay. Tap <b>“Click to upload a photo”</b> above to add one.
+            </div>
+          </div>
+        )}
 
         <div style={{ padding: "12px 16px 4px", display: "grid", gap: 8 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
