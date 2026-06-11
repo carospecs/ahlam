@@ -87,6 +87,10 @@ interface InterchangeResult {
   aftermarket: string[];
   cautions: string[];
   marketMatches?: unknown;
+  /** Set when the automated lookup couldn't complete and we returned a
+   *  verify-manually fallback instead of a hard error (INT-1). */
+  lowConfidence?: boolean;
+  degraded?: boolean;
 }
 
 // Service-role client (bypasses RLS) for the interchange cache + catalog.
@@ -165,15 +169,66 @@ Rules:
 }`;
 }
 
-async function callGemini(prompt: string): Promise<string | undefined> {
+async function callGemini(prompt: string, signal?: AbortSignal): Promise<string | undefined> {
   const res = await geminiGenerate(GEMINI_MODEL, {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.3, responseMimeType: "application/json" },
-  });
+  }, { signal });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const json = await res.json();
   const parts = json.candidates?.[0]?.content?.parts;
   return Array.isArray(parts) ? parts.map((p: any) => p.text ?? "").join("") : undefined;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Call Gemini with a per-attempt timeout and one retry with backoff (INT-1).
+// Complex/electronic-module lookups used to stall ~30-40s and then hard-fail;
+// here each attempt is capped (so the request never hangs the counter), and a
+// transient timeout/5xx gets a second shot before we degrade gracefully.
+// PER_ATTEMPT_MS * attempts stays under the route's maxDuration.
+async function callGeminiResilient(prompt: string): Promise<string | undefined> {
+  const ATTEMPTS = 2;
+  const PER_ATTEMPT_MS = 22_000;
+  let lastErr: unknown;
+  for (let i = 0; i < ATTEMPTS; i++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), PER_ATTEMPT_MS);
+    try {
+      return await callGemini(prompt, ctrl.signal);
+    } catch (err) {
+      lastErr = err;
+    } finally {
+      clearTimeout(timer);
+    }
+    if (i < ATTEMPTS - 1) await sleep(600 * (i + 1)); // 600ms, then 1.2s backoff
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Interchange lookup timed out");
+}
+
+// Graceful "low-confidence — verify manually" fallback returned (with HTTP 200)
+// when the automated lookup can't complete, instead of the old hard error. The
+// yard still gets the part/vehicle echoed back plus explicit verify-manually
+// cautions, and the caller still cross-references live marketplace stock.
+function degradedResult(part: string, make: string, model: string, year: string, variant: string): InterchangeResult {
+  const vehicle = [year, make, model, variant].filter(Boolean).join(" ") || "the specified vehicle";
+  const cautions = [
+    "Automated interchange was unavailable or low-confidence for this part — do not quote fitment off this result alone.",
+    "Verify the OEM/Hollander number stamped on the part against both the donor and the target vehicle.",
+  ];
+  if (variant) cautions.push(`Electronic/trim-specific modules (${variant}) often differ by options and may need programming or coding to the target car.`);
+  return {
+    part,
+    vehicle,
+    summary: "We couldn't complete an automated interchange lookup right now — this is most common on complex electronic modules, where matches must be confirmed by part number anyway. Treat this as low-confidence and verify fitment manually before quoting.",
+    compatibleVehicles: [],
+    bestSuggestions: [],
+    oemNumbers: [],
+    aftermarket: [],
+    cautions,
+    lowConfidence: true,
+    degraded: true,
+  };
 }
 
 export async function POST(req: Request) {
@@ -200,30 +255,48 @@ export async function POST(req: Request) {
     // 1. Serve from our own catalog if we've answered this before (free + instant).
     let result = await cacheGet(ckey).catch(() => null);
     const cached = !!result;
+    let degraded = false;
 
-    // 2. Otherwise ask the AI, then store it (and seed the structured catalog).
+    // 2. Otherwise ask the AI (with timeout + retry), then store it. If the AI
+    //    can't complete or returns unparseable data, degrade to a graceful
+    //    "verify manually" result instead of hard-failing (INT-1). We do NOT
+    //    cache a degraded result, so a later retry can still succeed.
     if (!result) {
-      const raw = await callGemini(buildPrompt(part, make, model, year, variant));
-      if (!raw) return NextResponse.json({ ok: false, error: "No interchange data returned. Try again." }, { status: 502 });
-      let parsed: InterchangeResult;
-      try { parsed = JSON.parse(raw); } catch { return NextResponse.json({ ok: false, error: "Could not read interchange data." }, { status: 502 }); }
-      // normalize arrays so the UI never crashes on a missing field
-      result = {
-        part: parsed.part || part,
-        vehicle: parsed.vehicle || [year, make, model, variant].filter(Boolean).join(" "),
-        summary: parsed.summary || "",
-        compatibleVehicles: Array.isArray(parsed.compatibleVehicles) ? parsed.compatibleVehicles.filter((v) => v && v.make) : [],
-        bestSuggestions: Array.isArray(parsed.bestSuggestions)
-          ? parsed.bestSuggestions.filter((s) => s && s.label).slice(0, 5).map((s) => ({ label: s.label, partNumber: s.partNumber || "", confidence: (["high", "medium", "low"].includes(s.confidence) ? s.confidence : "medium") as InterchangeSuggestion["confidence"], reason: s.reason || "" }))
-          : [],
-        oemNumbers: Array.isArray(parsed.oemNumbers) ? parsed.oemNumbers.filter(Boolean) : [],
-        aftermarket: Array.isArray(parsed.aftermarket) ? parsed.aftermarket.filter(Boolean) : [],
-        cautions: Array.isArray(parsed.cautions) ? parsed.cautions.filter(Boolean) : [],
-      };
-      await cachePut(ckey, { part, make, model, year, variant }, result).catch(() => {});
+      let raw: string | undefined;
+      try {
+        raw = await callGeminiResilient(buildPrompt(part, make, model, year, variant));
+      } catch (err) {
+        console.error("[interchange] AI lookup failed:", err instanceof Error ? err.message : err);
+        raw = undefined;
+      }
+
+      let parsed: InterchangeResult | null = null;
+      if (raw) { try { parsed = JSON.parse(raw); } catch { parsed = null; } }
+
+      if (parsed) {
+        // normalize arrays so the UI never crashes on a missing field
+        result = {
+          part: parsed.part || part,
+          vehicle: parsed.vehicle || [year, make, model, variant].filter(Boolean).join(" "),
+          summary: parsed.summary || "",
+          compatibleVehicles: Array.isArray(parsed.compatibleVehicles) ? parsed.compatibleVehicles.filter((v) => v && v.make) : [],
+          bestSuggestions: Array.isArray(parsed.bestSuggestions)
+            ? parsed.bestSuggestions.filter((s) => s && s.label).slice(0, 5).map((s) => ({ label: s.label, partNumber: s.partNumber || "", confidence: (["high", "medium", "low"].includes(s.confidence) ? s.confidence : "medium") as InterchangeSuggestion["confidence"], reason: s.reason || "" }))
+            : [],
+          oemNumbers: Array.isArray(parsed.oemNumbers) ? parsed.oemNumbers.filter(Boolean) : [],
+          aftermarket: Array.isArray(parsed.aftermarket) ? parsed.aftermarket.filter(Boolean) : [],
+          cautions: Array.isArray(parsed.cautions) ? parsed.cautions.filter(Boolean) : [],
+        };
+        await cachePut(ckey, { part, make, model, year, variant }, result).catch(() => {});
+      } else {
+        result = degradedResult(part, make, model, year, variant);
+        degraded = true;
+      }
     }
 
     // 3. Cross-reference our live marketplace fresh every time (don't cache stock).
+    //    Still runs on a degraded result — at minimum the yard sees its own stock
+    //    for the searched vehicle even when the AI cross-ref was unavailable.
     const lookupVehicles = [
       { make, model },
       ...result.compatibleVehicles.map((v) => ({ make: v.make, model: v.model })),
@@ -231,11 +304,14 @@ export async function POST(req: Request) {
     let marketMatches: MarketMatch[] = [];
     try { marketMatches = await findMarketMatches(result.part, lookupVehicles); } catch { marketMatches = []; }
 
-    return NextResponse.json({ ok: true, cached, result: { ...result, marketMatches } });
+    return NextResponse.json({ ok: true, cached, degraded, result: { ...result, marketMatches } });
   } catch (err) {
-    // Surface the real cause (e.g. Gemini 429/quota) in the server logs — the
-    // user still gets a friendly message.
+    // Last-resort guard: even an unexpected error degrades to a verify-manually
+    // result (HTTP 200) rather than a hard failure that strands the counter.
     console.error("[interchange] lookup failed:", err instanceof Error ? err.message : err);
-    return NextResponse.json({ ok: false, error: "Interchange lookup failed. Try again." }, { status: 500 });
+    const result = degradedResult(part, make, model, year, variant);
+    let marketMatches: MarketMatch[] = [];
+    try { marketMatches = await findMarketMatches(part, [{ make, model }].filter((v) => v.make)); } catch { marketMatches = []; }
+    return NextResponse.json({ ok: true, cached: false, degraded: true, result: { ...result, marketMatches } });
   }
 }

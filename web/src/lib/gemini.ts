@@ -15,6 +15,7 @@ export function getFallbackKey(): string | undefined {
 export async function geminiGenerate(
   model: string,
   body: Record<string, unknown>,
+  init?: { signal?: AbortSignal },
 ): Promise<Response> {
   const keys = [getPrimaryKey(), getFallbackKey()].filter(Boolean) as string[];
   if (!keys.length) throw new Error("GEMINI_API_KEY missing");
@@ -26,6 +27,7 @@ export async function geminiGenerate(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: init?.signal,
     });
     if (res.ok) return res;
     const isQuota = [402, 403, 429].includes(res.status);

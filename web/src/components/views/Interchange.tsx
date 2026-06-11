@@ -48,6 +48,8 @@ interface IcResult {
   part: string; vehicle: string; summary: string;
   compatibleVehicles: IcVehicle[]; bestSuggestions?: IcSuggestion[]; oemNumbers: string[]; aftermarket: string[]; cautions: string[];
   marketMatches?: MarketMatch[];
+  /** Set when the lookup degraded to a verify-manually fallback (INT-1). */
+  lowConfidence?: boolean; degraded?: boolean;
 }
 
 export function Interchange(_: { go: (id: string) => void }) {
@@ -300,8 +302,19 @@ export function Interchange(_: { go: (id: string) => void }) {
 function Results({ result, cached }: { result: IcResult; cached?: boolean }) {
   const suggestions = result.bestSuggestions || [];
   const confColor = (c: string) => c === "high" ? "var(--success)" : c === "low" ? "var(--danger)" : "var(--signal)";
+  const lowConfidence = !!(result.lowConfidence || result.degraded);
   return (
     <div style={{ display: "grid", gap: 16 }}>
+      {/* Low-confidence / verify-manually banner (INT-1) — shown when the
+          automated lookup degraded instead of hard-failing. */}
+      {lowConfidence && (
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", borderRadius: 12, border: "1px solid var(--signal)", background: "color-mix(in srgb, var(--signal) 12%, transparent)" }}>
+          <AlertTriangle size={18} color="var(--signal)" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontSize: 13, lineHeight: 1.55 }}>
+            <b>Low confidence — verify manually.</b> We couldn&apos;t complete an automated interchange for this part (common on complex electronic modules). Confirm fitment by part number before quoting. Any marketplace matches below are from your own stock for the searched vehicle.
+          </div>
+        </div>
+      )}
       {/* Summary */}
       <Card pad={18}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
@@ -310,9 +323,11 @@ function Results({ result, cached }: { result: IcResult; cached?: boolean }) {
             <div style={{ fontSize: 15, fontWeight: 700 }}>{result.part}</div>
             <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{result.vehicle}</div>
           </div>
+          {!lowConfidence && (
           <span title={cached ? "Served from your interchange catalog — no AI call" : "Freshly looked up and saved to your catalog"} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: cached ? "var(--success)" : "var(--accent)", background: cached ? "var(--success-bg, color-mix(in srgb, var(--success) 14%, transparent))" : "var(--accent-tint)", borderRadius: 7, padding: "3px 8px", flexShrink: 0 }}>
             {cached ? "From your catalog" : "New · saved to catalog"}
           </span>
+          )}
         </div>
         {result.summary && <p style={{ margin: 0, fontSize: 13.5, color: "var(--foreground)", lineHeight: 1.6 }}>{result.summary}</p>}
       </Card>
