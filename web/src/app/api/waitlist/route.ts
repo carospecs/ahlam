@@ -92,10 +92,14 @@ async function sendConfirmation(email: string) {
     subject: "Welcome to the Ahlam waitlist 🚗",
     text:
       "Thanks for joining the Ahlam waitlist!\n\n" +
-      "We're building the fastest way to photograph an auto part, identify it, " +
-      "grade its condition, and list it — without needing a parts expert on staff.\n\n" +
+      "We aim to modernize the automotive sector by building the fastest way to " +
+      "photograph cars, identify parts, grade condition, and list across multiple " +
+      "platforms with one button — without needing a parts expert on staff.\n\n" +
       "You'll be among the first invited to the free pilot. Reply to this email and " +
       "tell us how many parts you list a day — it helps us prioritize.\n\n" +
-      "— Mohammad & the Ahlam team",
+      "Pilot participants will receive free perks. Referrals to other yards will " +
+      "extend these free perks.\n\n" +
+      "Warm regards,\n" +
+      "The Ahlam Team",
   });
 }
