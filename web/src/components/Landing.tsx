@@ -18,6 +18,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
             <a href="#how" style={navLink}>How it works</a>
             <a href="#pricing" style={navLink}>Pricing</a>
             <a href="/guides" style={navLink}>Guides</a>
+            <a href="/waitlist" style={navLink}>Waitlist</a>
             <ThemeToggle size={36} />
             <button onClick={onSignIn} style={ghostBtn}>Sign in</button>
             <button onClick={onGetStarted} style={solidBtn}>Get started</button>
@@ -119,6 +120,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
           <span style={{ fontSize: 14, fontWeight: 700 }}>Ahlam</span>
           <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Snap a photo. List every part everywhere — eBay, Facebook &amp; your own storefront.</span>
           <a href="/guides" style={{ ...navLink, marginLeft: "auto" }}>Guides</a>
+          <a href="/waitlist" style={navLink}>Waitlist</a>
           <button onClick={onSignIn} style={ghostBtn}>Sign in</button>
         </div>
       </footer>
