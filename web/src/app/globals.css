@@ -244,7 +244,25 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
 @media (max-width: 860px) {
   /* Waitlist hero: stack the copy + sign-up card on narrow screens. */
   .cs-waitlist-hero { grid-template-columns: 1fr !important; gap: 28px !important; }
+  .cs-feature-grid { grid-template-columns: 1fr !important; }
 }
+
+/* Waitlist form inputs — themed to the dark/light tokens (Tailwind's /alpha
+   modifier can't apply to our var() colors, so style them explicitly). */
+.cs-wl-input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface2);
+  color: var(--foreground);
+  padding: 13px 15px;
+  font-size: 14.5px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.cs-wl-input::placeholder { color: var(--muted); opacity: 1; }
+.cs-wl-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
 
 @media (max-width: 760px) {
   .cs-topbar { padding: 12px 16px !important; gap: 10px !important; }

@@ -87,9 +87,9 @@ export default function WaitlistPage() {
       </section>
 
       {/* Feature grid */}
-      <section style={{ maxWidth: 1000, margin: "0 auto", padding: "44px 24px 8px" }}>
+      <section style={{ maxWidth: 820, margin: "0 auto", padding: "44px 24px 8px" }}>
         <h2 style={{ margin: "0 0 28px", fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em", textAlign: "center" }}>Built for real salvage yards</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16 }} className="cs-feature-grid">
           {FEATURES.map((f) => (
             <div key={f.title} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16, padding: 22 }} className="cs-hover-card">
               <span style={{ width: 38, height: 38, borderRadius: 11, background: "var(--accent-tint)", display: "grid", placeItems: "center", marginBottom: 12 }}><f.icon size={19} color="var(--accent)" /></span>
