@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
+
+// SMTP runs on Node APIs (net/tls), not the Edge runtime.
+export const runtime = "nodejs";
 
 /**
  * POST /api/waitlist
  * Body: { email, shopName?, location?, partsPerDay? }
- * Stores the signup and (optionally) sends a confirmation email via Resend.
+ * Stores the signup and (optionally) sends a welcome email via Google Workspace SMTP.
  */
 export async function POST(req: Request) {
   let body: Record<string, unknown>;
@@ -50,7 +53,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // Welcome email (no-op if RESEND_API_KEY / WAITLIST_FROM_EMAIL aren't set).
+  // Welcome email (no-op if GMAIL_USER / GMAIL_APP_PASSWORD aren't set).
   await sendConfirmation(email).catch((e) =>
     console.error("confirmation email failed", e)
   );
@@ -59,9 +62,12 @@ export async function POST(req: Request) {
 }
 
 async function sendConfirmation(email: string) {
-  const key = process.env.RESEND_API_KEY;
-  const from = process.env.WAITLIST_FROM_EMAIL;
-  if (!key || !from) return; // not configured yet — skip silently
+  // Sends through Google Workspace (Gmail) SMTP using an App Password.
+  // GMAIL_USER authenticates; WAITLIST_FROM_EMAIL is the visible From.
+  const user = process.env.GMAIL_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD;
+  const from = process.env.WAITLIST_FROM_EMAIL ?? user;
+  if (!user || !pass) return; // not configured yet — skip silently
 
   // Optionally CC an internal address (e.g. a founder) so the team is looped
   // in on every signup. Supports a comma-separated list.
@@ -70,8 +76,15 @@ async function sendConfirmation(email: string) {
     : undefined;
   const replyTo = process.env.WAITLIST_REPLY_TO ?? undefined;
 
-  const resend = new Resend(key);
-  const { error } = await resend.emails.send({
+  const transport = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    auth: { user, pass },
+  });
+
+  // Throws on SMTP failure — caller logs it.
+  await transport.sendMail({
     from,
     to: email,
     ...(cc ? { cc } : {}),
@@ -85,7 +98,4 @@ async function sendConfirmation(email: string) {
       "tell us how many parts you list a day — it helps us prioritize.\n\n" +
       "— Mohammad & the Ahlam team",
   });
-  // Resend returns errors in the response body rather than throwing — surface
-  // them so a misconfigured domain doesn't fail silently.
-  if (error) throw new Error(`${error.name}: ${error.message}`);
 }

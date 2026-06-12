@@ -591,17 +591,23 @@ function busyResult(internalError: string): AIResult {
 }
 
 async function alertTeam(detail: string) {
-  const key = process.env.RESEND_API_KEY;
-  const from = process.env.WAITLIST_FROM_EMAIL;
+  const user = process.env.GMAIL_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD;
+  const from = process.env.WAITLIST_FROM_EMAIL ?? user;
   const to = process.env.ALERT_EMAIL;
-  if (!key || !from || !to) {
+  if (!user || !pass || !to) {
     console.error("[ALERT] (email not configured):", detail);
     return;
   }
   try {
-    const { Resend } = await import("resend");
-    const resend = new Resend(key);
-    await resend.emails.send({
+    const { default: nodemailer } = await import("nodemailer");
+    const transport = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: { user, pass },
+    });
+    await transport.sendMail({
       from,
       to,
       subject: "⚠️ Ahlam AI identify failure",
