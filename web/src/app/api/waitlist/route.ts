@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // Optional confirmation email (no-op if RESEND_API_KEY isn't set yet).
+  // Welcome email (no-op if RESEND_API_KEY / WAITLIST_FROM_EMAIL aren't set).
   await sendConfirmation(email).catch((e) =>
     console.error("confirmation email failed", e)
   );
@@ -62,17 +62,30 @@ async function sendConfirmation(email: string) {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.WAITLIST_FROM_EMAIL;
   if (!key || !from) return; // not configured yet — skip silently
+
+  // Optionally CC an internal address (e.g. a founder) so the team is looped
+  // in on every signup. Supports a comma-separated list.
+  const cc = process.env.WAITLIST_CC_EMAIL
+    ? process.env.WAITLIST_CC_EMAIL.split(",").map((s) => s.trim()).filter(Boolean)
+    : undefined;
+  const replyTo = process.env.WAITLIST_REPLY_TO ?? undefined;
+
   const resend = new Resend(key);
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from,
     to: email,
-    subject: "You're on the Ahlam waitlist 🚗",
+    ...(cc ? { cc } : {}),
+    ...(replyTo ? { replyTo } : {}),
+    subject: "Welcome to the Ahlam waitlist 🚗",
     text:
       "Thanks for joining the Ahlam waitlist!\n\n" +
       "We're building the fastest way to photograph an auto part, identify it, " +
       "grade its condition, and list it — without needing a parts expert on staff.\n\n" +
       "You'll be among the first invited to the free pilot. Reply to this email and " +
       "tell us how many parts you list a day — it helps us prioritize.\n\n" +
-      "— The Ahlam team",
+      "— Mohammad & the Ahlam team",
   });
+  // Resend returns errors in the response body rather than throwing — surface
+  // them so a misconfigured domain doesn't fail silently.
+  if (error) throw new Error(`${error.name}: ${error.message}`);
 }
