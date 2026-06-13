@@ -280,7 +280,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                   </p>
                   <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 26 }}>
                     <a href={CAL_DEMO_URL} target="_blank" rel="noopener noreferrer" className="cs-raise" style={{ ...solidBtn, padding: "13px 24px", fontSize: 15 }}><CalendarCheck size={17} /> Book a demo</a>
-                    <a href={GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question")} target="_blank" rel="noopener noreferrer" style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15 }}><Mail size={16} /> Contact us</a>
+                    <a href={GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question")} style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15 }}><Mail size={16} /> Contact us</a>
                     <a href="#how" style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15 }}><Compass size={16} /> Explore the product</a>
                   </div>
                   <div style={{ marginTop: 22, paddingTop: 20, borderTop: "1px solid var(--line)", fontSize: 14, color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
