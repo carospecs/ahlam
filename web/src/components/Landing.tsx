@@ -280,12 +280,12 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                   </p>
                   <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 26 }}>
                     <a href={CAL_DEMO_URL} target="_blank" rel="noopener noreferrer" className="cs-raise" style={{ ...solidBtn, padding: "13px 24px", fontSize: 15 }}><CalendarCheck size={17} /> Book a demo</a>
-                    <a href={GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question")} style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15 }}><Mail size={16} /> Contact us</a>
+                    <button onClick={() => window.location.href = GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question")} style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15, cursor: "pointer" }}><Mail size={16} /> Contact us</button>
                     <a href="#how" style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15 }}><Compass size={16} /> Explore the product</a>
                   </div>
                   <div style={{ marginTop: 22, paddingTop: 20, borderTop: "1px solid var(--line)", fontSize: 14, color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
                     <MessageSquare size={15} color="var(--accent)" /> Have feedback or a feature request?
-                    <a href={`mailto:${CONTACT_RECIPIENTS}?subject=${encodeURIComponent("Ahlam feedback")}`} style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>Tell us what you think</a>
+                    <button onClick={() => window.location.href = GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam feedback")} style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600, cursor: "pointer", background: "none", border: "none", fontSize: 14, fontFamily: "inherit", padding: 0 }}>Tell us what you think</button>
                   </div>
                 </div>
               </Reveal>
@@ -302,14 +302,27 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
               {[
                 { h: "Product", links: [["How it works", "#how"], ["Pricing", "#pricing"], ["The brain", "#faq"], ["Get started", "#"]] },
                 { h: "Resources", links: [["Guides", "/guides"], ["FAQ", "#faq"], ["Waitlist", "/waitlist"]] },
-                { h: "Company", links: [["Book a demo", CAL_DEMO_URL], ["Contact us", GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question")], ["Feedback", `mailto:${CONTACT_RECIPIENTS}?subject=${encodeURIComponent("Ahlam feedback")}`]] },
+                { h: "Company", links: [
+                  ["Book a demo", CAL_DEMO_URL, true],
+                  ["Contact us", null, false, () => window.location.href = GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question")],
+                  ["Feedback", null, false, () => window.location.href = GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam feedback")],
+                ]},
               ].map((col) => (
                 <div key={col.h}>
                   <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>{col.h}</div>
                   <div style={{ display: "grid", gap: 10 }}>
-                    {col.links.map(([label, href]) => (
-                      <a key={label} href={href} style={{ fontSize: 13.5, color: "var(--foreground)", textDecoration: "none", opacity: 0.82, width: "fit-content" }}>{label}</a>
-                    ))}
+                    {col.links.map((link) => {
+                      const [label, href, external, onClick] = link;
+                      if (onClick) return (
+                        <button key={label} onClick={onClick} style={{ fontSize: 13.5, color: "var(--foreground)", textDecoration: "none", opacity: 0.82, background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit", padding: 0, width: "fit-content" }}>{label}</button>
+                      );
+                      if (external) return (
+                        <a key={label} href={href} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13.5, color: "var(--foreground)", textDecoration: "none", opacity: 0.82, width: "fit-content" }}>{label}</a>
+                      );
+                      return (
+                        <a key={label} href={href} style={{ fontSize: 13.5, color: "var(--foreground)", textDecoration: "none", opacity: 0.82, width: "fit-content" }}>{label}</a>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
