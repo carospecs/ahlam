@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { livePartPrice, livePricingEnabled } from "@/lib/pricing";
+import { groundedMedianPrice } from "@/lib/pricing";
+import { clampToBand, bandsPromptBlock } from "@/lib/price-bands";
+import { loadSoldListings, ownSoldComps, type SoldRow } from "@/lib/own-comps";
+import { getCachedPrice, setCachedPrice } from "@/lib/price-cache";
 import { geminiGenerate } from "@/lib/gemini";
-import { anthropicGenerate } from "@/lib/anthropic";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Up to 50 parts × a grounded sold-price search each (in bounded batches) can run
+// well past the old 60s cap, so give the function more headroom.
+export const maxDuration = 300;
 
 // --- Inlined from @ahlam/shared (monorepo dep that Vercel can't resolve) ---
 
@@ -24,6 +28,11 @@ export interface PricingInsight {
   suggestedPrice: number;
   priceRange: { min: number; max: number };
   similarCount: number;
+  // Which layer produced this price (useful while experimenting):
+  // "shop" = the shop's own past sold comps (L3, strongest), "grounded" = live
+  // grounded sold-price web search (L3), "model" = AI estimate clamped to the
+  // sold-price bands (L2).
+  source?: "shop" | "grounded" | "model";
 }
 
 export interface AIPartOutput {
@@ -97,7 +106,7 @@ You MUST return ONLY a JSON object, no prose, with this shape:
 
 MULTI-PART DETECTION:
 - Identify ALL clearly-visible, individually-sellable parts in the image.
-- Return one array element per part. Return up to 12 of the most clearly-visible, sellable parts.
+- Return one array element per part. Return up to 50 of the clearly-visible, sellable parts (most photos have far fewer — that is just the ceiling, never a target).
 - Do NOT invent parts you cannot actually see. If something is not visible, simply omit it — never guess.
 - If only 1–2 parts are visible, return only 1–2 parts. Do not pad the list.
 
@@ -128,12 +137,8 @@ PRICING GUIDANCE (applies to both "suggestedWholeCarPriceUsd" and each part's "s
 - "Good" condition = mid-to-upper market range; "Poor" = priced as a core/repairable (clearly below range, but still realistic).
 - For the whole car: think used-car comps for that year/make/model/mileage and trim, at typical private-party value (only discount for genuine salvage/parts-car condition).
 - Use realistic round numbers. If you genuinely have no basis for a price, use null rather than guessing — but prefer a market-based estimate.
-- TYPICAL USED-OEM PRICE BANDS (a modern, popular vehicle in "Good" condition — anchor near the MIDDLE of these; a single mainstream-car part is rarely worth under ~$150):
-  - Door (shell): $500–$1,200 · Hood: $250–$700 · Fender: $200–$500 · Bumper cover: $200–$700 · Quarter panel: $400–$900
-  - Headlight assembly: $150–$500 (LED/HID higher) · Tail light: $80–$300 · Side mirror: $120–$350 (left & right are usually within ~20% of each other — don't price them wildly differently)
-  - Wheel/Rim: $120–$400 each · Tire: $40–$150 each · Windshield/glass: $150–$500
-  - Engine: $1,000–$4,000 · Transmission: $700–$2,500 · Alternator/Starter: $80–$250 · AC Compressor: $120–$350
-  These are ballparks for popular models — adjust up for luxury/low-supply, down only for genuine damage ("Poor"). NEVER undercut the bottom of the band for a "Good" part.
+- ${bandsPromptBlock()}
+  (Left & right of a paired part are usually within ~20% of each other — don't price them wildly differently. Wheel/Rim and Tire are priced each.)
 
 NO INFERRED / GUESSED PARTS:
 - Catalog ONLY what you can actually see in the photo. If a part is not visible, do NOT list it — never infer, guess, or assume.
@@ -214,38 +219,6 @@ async function callGemini(base64: string, mime: string, userText: string): Promi
   return Array.isArray(parts) ? parts.map((p: any) => p.text ?? "").join("") || undefined : undefined;
 }
 
-const CLAUDE_MODELS: Record<string, string> = {
-  sonnet: "claude-sonnet-4-6",
-  haiku: "claude-haiku-4-5-20251001",
-};
-
-async function callAnthropic(base64: string, mime: string, userText: string, modelKey: string): Promise<string | undefined> {
-  const model = CLAUDE_MODELS[modelKey];
-  if (!model) throw new Error(`Unknown Anthropic model: ${modelKey}`);
-
-  const res = await anthropicGenerate(model, VISION_SYSTEM_PROMPT, [
-    {
-      role: "user",
-      content: [
-        { type: "text", text: userText },
-        { type: "image", source: { type: "base64", media_type: mime, data: base64 } },
-      ],
-    },
-  ]);
-  const body = await res.text();
-  if (!res.ok) {
-    const short = body.slice(0, 300);
-    if (res.status === 402 || res.status === 429) throw new Error(`Anthropic ${modelKey} billing/credit error ${res.status}: ${short}`);
-    throw new Error(`Anthropic ${modelKey} ${res.status}: ${short}`);
-  }
-  const json = JSON.parse(body);
-  let text = json.content?.[0]?.text;
-  if (typeof text === "string") {
-    text = text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "");
-  }
-  return typeof text === "string" ? text : undefined;
-}
-
 // CORS — the native mobile app and the Chrome extension call this endpoint from
 // origins that aren't ahlam.io, so browsers issue a preflight and enforce these
 // headers. Allow the credentials-less Bearer-token flow the app uses.
@@ -286,14 +259,12 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     return NextResponse.json({ ok: false, userMessage: "Sign in required", internalError: "no auth" }, { status: 401 });
   }
 
-  let body: { imageBase64?: string; imageUrl?: string; provider?: string; photoContext?: string; vin?: { make?: string; model?: string; year?: number } };
+  let body: { imageBase64?: string; imageUrl?: string; photoContext?: string; vin?: { make?: string; model?: string; year?: number } };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json(busyResult("bad request body"), { status: 400 });
   }
-
-  const provider = body.provider ?? "gemini";
 
   const imageUrl =
     body.imageUrl ??
@@ -319,15 +290,10 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
   const userText = VISION_USER_INSTRUCTION + (body.vin ? vinContext(body.vin) : "") + photoContext;
 
   try {
-    let content: string | undefined;
-    if (provider === "sonnet" || provider === "haiku") {
-      content = await callAnthropic(rawBase64, mime, userText, provider);
-    } else {
-      content = await callGemini(rawBase64, mime, userText);
-    }
+    const content = await callGemini(rawBase64, mime, userText);
 
     if (!content) {
-      await alertTeam(`${provider} returned empty content`);
+      await alertTeam("Gemini returned empty content");
       return NextResponse.json(busyResult("empty completion"), { status: 503 });
     }
 
@@ -400,52 +366,75 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     // Reconcile every wheel/tire to a single consensus diameter before pricing.
     reconcileWheelSpecs(data);
 
-    // Live market pricing: when eBay is configured and we know the vehicle,
-    // replace the model's guess with the median of real used comps (no undercut /
-    // no exaggeration). Non-fatal — falls back to the model estimate.
-    if (livePricingEnabled() && vehicle && (vehicle.make || vehicle.model)) {
-      await Promise.all(data.map(async (p) => {
-        try {
-          const q = [vehicle.yearStart, vehicle.make, vehicle.model, p.partName].filter(Boolean).join(" ");
-          const live = await livePartPrice(q);
-          if (live && live > 0) {
-            p.suggestedPriceUsd = live;
-            p.pricingInsight = { suggestedPrice: live, priceRange: { min: live, max: live }, similarCount: 0 };
-          }
-        } catch { /* keep model estimate */ }
-      }));
+    // ── PRICING PIPELINE ───────────────────────────────────────────────────
+    // Resolve each PART price through a layered waterfall. Whole-car pricing
+    // (vehicle.suggestedWholeCarPriceUsd) stays Layer 2 only — the model is the
+    // sole source there, as it has no per-part comps.
+    //
+    //   Layer 1  Sold-price bands, recalibrated periodically from scraped eBay
+    //            SOLD listings (scripts/recalibrate-bands.mjs). Baked into the
+    //            clamp below and into the model's prompt.
+    //   Layer 2  AI model estimate, clamped into those bands. The always-present
+    //            baseline and the price when the live layer finds nothing.
+    //   Layer 3  Live SOLD signal, in priority order per part:
+    //              (a) the SHOP'S OWN past sold prices — strongest, proprietary;
+    //              (b) a grounded sold-price web search (Gemini), cached so repeat
+    //                  lookups are free + stable.
+    //            Overrides L2 when a reliable number is found. (We don't fetch eBay
+    //            sold comps per-request: the Insights API is closed and scraping is
+    //            blocked from serverless — that signal lives in the Layer 1 bands.)
+    //
+    // The bands floor every part (Layer 2 clamp) so nothing posts below market.
+
+    // Layer 2: clamp the model's per-part estimate into its band, and seed the
+    // pricingInsight so every part carries a price + provenance even if L3 bails.
+    for (const p of data) {
+      p.suggestedPriceUsd = clampToBand(p.suggestedPriceUsd, p.partName);
+      p.pricingInsight = p.suggestedPriceUsd != null
+        ? { suggestedPrice: p.suggestedPriceUsd, priceRange: { min: p.suggestedPriceUsd, max: p.suggestedPriceUsd }, similarCount: 0, source: "model" }
+        : undefined;
     }
 
-    const db = supabaseAdmin();
+    // Load the shop's own SOLD listings once (its strongest comp), so per-part
+    // matching below is in-memory rather than a query per part.
+    let soldRows: SoldRow[] = [];
+    try {
+      const { data: profile } = await supabaseAdmin().from("profiles").select("shop_id").eq("id", user.id).single();
+      if (profile?.shop_id) soldRows = await loadSoldListings(profile.shop_id as string);
+    } catch { /* no own comps — fall back to grounded */ }
 
-    const { data: allListings } = await db
-      .from("listings")
-      .select("price_usd, ai_output, corrected")
-      .eq("status", "active");
-
-    for (const part of data) {
-      const searchTerm = part.partName.toLowerCase();
-      const prices: number[] = (allListings || [])
-        .filter((r: any) => {
-          const c = r.corrected || r.ai_output || {};
-          const name = (c.partName || c.part_name || "").toLowerCase();
-          return name.includes(searchTerm);
-        })
-        .map((r: any) => r.price_usd)
-        .filter((p: any) => p != null && p > 0);
-
-      if (prices.length > 0) {
-        const sorted = [...prices].sort((a, b) => a - b);
-        const min = sorted[0];
-        const max = sorted[sorted.length - 1];
-        const median = sorted.length % 2 === 0
-          ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
-          : sorted[Math.floor(sorted.length / 2)];
-        part.pricingInsight = {
-          suggestedPrice: Math.round(median),
-          priceRange: { min, max },
-          similarCount: prices.length,
-        };
+    // Layer 3: per part, override the Layer 2 estimate with real market data when
+    // we know the vehicle. Priority: (1) the shop's OWN sold comps; (2) a grounded
+    // sold-price web search, cache-first. Non-fatal — any miss keeps the L2 price.
+    // Run in bounded batches: with up to 50 parts, firing every grounded search at
+    // once would trip Gemini rate limits — GROUNDED_CONCURRENCY caps in-flight.
+    if (vehicle && (vehicle.make || vehicle.model)) {
+      const GROUNDED_CONCURRENCY = 6;
+      for (let i = 0; i < data.length; i += GROUNDED_CONCURRENCY) {
+        const batch = data.slice(i, i + GROUNDED_CONCURRENCY);
+        await Promise.all(batch.map(async (p) => {
+          // (1) Shop's own sold comps — real money real buyers paid this shop.
+          const own = ownSoldComps(soldRows, p.partName);
+          if (own) {
+            p.suggestedPriceUsd = own.median;
+            p.pricingInsight = { suggestedPrice: own.median, priceRange: { min: own.min, max: own.max }, similarCount: own.count, source: "shop" };
+            return;
+          }
+          // (2) Grounded sold-price web search, cache-first (free + stable on repeat).
+          const q = [vehicle.yearStart, vehicle.make, vehicle.model, p.partName].filter(Boolean).join(" ");
+          try {
+            let grounded = await getCachedPrice(q);
+            if (grounded == null) {
+              grounded = await groundedMedianPrice(q, p.partName);
+              if (grounded && grounded > 0) await setCachedPrice(q, grounded, "grounded");
+            }
+            if (grounded && grounded > 0) {
+              p.suggestedPriceUsd = grounded;
+              p.pricingInsight = { suggestedPrice: grounded, priceRange: { min: grounded, max: grounded }, similarCount: 0, source: "grounded" };
+            }
+            // else: keep the Layer 2 band-clamped model estimate set above.
+          } catch { /* keep Layer 2 estimate */ }
+        }));
       }
     }
 
@@ -453,14 +442,6 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await alertTeam(`identify route threw: ${msg}`);
-    const isAnthropicCredit = /anthropic.*(402|billing|credit|insufficient|quota|limit)/i.test(msg);
-    if (isAnthropicCredit) {
-      return NextResponse.json({
-        ok: false,
-        userMessage: "Your Claude API account doesn't have enough credits. Add funds at https://console.anthropic.com/settings/billing then try again.",
-        internalError: msg,
-      }, { status: 402 });
-    }
     return NextResponse.json(busyResult(msg), { status: 503 });
   }
 }

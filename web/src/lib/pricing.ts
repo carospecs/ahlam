@@ -1,12 +1,23 @@
-// Live used-part pricing from eBay's Browse API (current market listings), so
-// suggested prices come from real comps instead of the model's memory. Uses an
-// application token (client-credentials) — only needs EBAY_CLIENT_ID/SECRET, not
-// seller OAuth. No-ops cleanly (returns null) when eBay isn't configured.
+// Live used-part pricing. The target signal is SOLD prices — what buyers actually
+// paid — not active asking prices, which skew high because overpriced listings
+// sit unsold. eBay's sold-price API (Marketplace Insights) is closed to new
+// developers, so the pipeline gets sold data two free ways:
+//
+//   • Layer 1 (band recalibration) scrapes eBay's PUBLIC sold-listings pages —
+//     see scripts/recalibrate-bands.mjs. Run periodically from a non-cloud IP
+//     (your machine / a cron box); eBay tends to block datacenter IPs.
+//   • Per-request, the live signal is a Gemini GROUNDED WEB SEARCH for sold
+//     prices (groundedMedianPrice) — reliable from Vercel, where scraping isn't.
+//
+// The eBay Browse API (active listings) is retained only for leaf-category
+// lookup during listing. No-ops cleanly (returns []/null) when unconfigured.
+import { geminiGenerate } from "./gemini";
+import { isSanePrice } from "./price-bands";
+
 const ENV = (process.env.EBAY_ENV || "production").toLowerCase() === "sandbox" ? "sandbox" : "production";
 const API = ENV === "sandbox" ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
 
-// Pricing only needs the app keys (Browse API uses a client-credentials token) —
-// NOT the seller-OAuth redirect URI that listing requires.
+// Browse uses a client-credentials app token — only needs EBAY_CLIENT_ID/SECRET.
 function pricingConfigured(): boolean {
   return !!(process.env.EBAY_CLIENT_ID && process.env.EBAY_CLIENT_SECRET);
 }
@@ -36,33 +47,77 @@ function median(nums: number[]): number {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-// Median asking price of comparable USED listings for `query` (e.g.
-// "2018 Honda Civic Left Front Door"). Returns null if eBay is unconfigured or
-// there aren't enough comps to be trustworthy.
-export async function livePartPrice(query: string): Promise<number | null> {
-  const token = await getAppToken();
-  if (!token) return null;
+// Minimum comps for a median to be trustworthy (used by callers pooling prices).
+export const MIN_COMPS = 4;
+
+// Outlier-trimmed median: drop the extreme 15% on each end (mispriced / wrong-item
+// listings), then take the median. Returns null if empty.
+export function trimmedMedian(prices: number[]): number | null {
+  if (!prices.length) return null;
+  const sorted = [...prices].sort((a, b) => a - b);
+  const cut = Math.floor(sorted.length * 0.15);
+  const trimmed = sorted.slice(cut, sorted.length - cut);
+  return Math.round(median(trimmed.length ? trimmed : sorted));
+}
+
+// Per-request LIVE price signal — a grounded web search for the median SOLD price.
+// Gemini (with Google Search grounding) reads real sold listings off the web, so
+// it works from serverless where scraping eBay would be blocked. `partName` is
+// used only to sanity-check the answer against the band. Returns null if grounding
+// is unavailable, finds no number, or the value is implausible — the caller then
+// falls back to the Layer 2 model estimate.
+export async function groundedMedianPrice(query: string, partName: string): Promise<number | null> {
   try {
-    const url = `${API}/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=40`
-      + `&filter=${encodeURIComponent("conditions:{USED},buyingOptions:{FIXED_PRICE}")}`;
-    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" } });
-    if (!r.ok) return null;
-    const j = await r.json();
-    let prices: number[] = (j.itemSummaries || [])
-      .map((i: any) => parseFloat(i.price?.value))
-      .filter((n: number) => Number.isFinite(n) && n > 0);
-    if (prices.length < 4) return null; // not enough comps to trust
-    // Trim the extreme 15% on each end (drops mispriced/wrong-item outliers), then median.
-    prices.sort((a, b) => a - b);
-    const cut = Math.floor(prices.length * 0.15);
-    const trimmed = prices.slice(cut, prices.length - cut);
-    const m = median(trimmed.length ? trimmed : prices);
-    return Math.round(m);
+    const res = await geminiGenerate("gemini-2.5-flash", {
+      contents: [{ role: "user", parts: [{ text:
+        `Use Google to find what this used auto part ACTUALLY SOLD FOR recently: "${query}". ` +
+        `Cross-check several sources — eBay SOLD/completed listings, Google Shopping, car-part.com, Facebook Marketplace, OfferUp — and corroborate the figure across them. ` +
+        `Strongly prefer COMPLETED / SOLD prices over current asking prices: sold prices are true market value, asking prices skew high. ` +
+        `Estimate the MEDIAN sold price in US dollars for the part in good used condition.\n\n` +
+        `Reply with ONLY the number (e.g. "385") — no currency sign, no words, no range. ` +
+        `If you cannot corroborate at least a few real sold comps, reply with exactly "NONE".`,
+      } ] }],
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature: 0 },
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    const text: string = (j.candidates?.[0]?.content?.parts || [])
+      .map((p: any) => p.text ?? "").join("");
+    if (/\bNONE\b/i.test(text)) return null;
+    const m = text.replace(/[$,]/g, "").match(/\d+(?:\.\d+)?/);
+    if (!m) return null;
+    const price = Math.round(parseFloat(m[0]));
+    return isSanePrice(price, partName) ? price : null; // reject implausible grounding
   } catch { return null; }
+}
+
+// Convenience wrapper used by the PricingToggle UI's "live comp" lookup: a single
+// median sold price for a free-form query. Backed by the grounded sold search.
+export async function livePartPrice(query: string): Promise<number | null> {
+  return groundedMedianPrice(query, query);
 }
 
 export function livePricingEnabled(): boolean {
   return pricingConfigured();
+}
+
+// Active ASKING prices of USED, fixed-price listings (Browse API). Asking prices
+// skew high, so this is NOT in the default sold-price pipeline — kept only as an
+// optional helper.
+export async function ebayUsedPrices(query: string): Promise<number[]> {
+  const token = await getAppToken();
+  if (!token) return [];
+  try {
+    const url = `${API}/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=40`
+      + `&filter=${encodeURIComponent("conditions:{USED},buyingOptions:{FIXED_PRICE}")}`;
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" } });
+    if (!r.ok) return [];
+    const j = await r.json();
+    return (j.itemSummaries || [])
+      .map((i: any) => parseFloat(i.price?.value))
+      .filter((n: number) => Number.isFinite(n) && n > 0);
+  } catch { return []; }
 }
 
 // Resolve the eBay LEAF category a part should be listed in by reading the

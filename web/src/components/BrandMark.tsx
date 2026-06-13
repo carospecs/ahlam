@@ -23,12 +23,20 @@ export function BrandMark({
   );
 }
 
-// The mark inside the standard midnight badge ("Badge · Primary") — gold aperture
-// on midnight navy, reads in both light and dark themes.
+// Theme-aware brand chip. Dark theme: the gold aperture on the midnight badge
+// ("Badge · Primary"). Light theme: the flat "ink" mark — navy aperture, no badge
+// box ("Flat · Ink") — which reads cleanly on a light ground. Only one renders at
+// a time, toggled by CSS on :root[data-theme="light"] (see globals.css), so it's
+// still a pure server/client component with no theme flash.
 export function BrandChip({ size = 34 }: { size?: number }) {
   return (
-    <span style={{ width: size, height: size, borderRadius: size * 0.29, background: "#101A2C", display: "grid", placeItems: "center", flexShrink: 0 }}>
-      <BrandMark size={Math.round(size * 0.74)} />
+    <span className="brand-chip" style={{ width: size, height: size, flexShrink: 0, display: "inline-grid", placeItems: "center" }}>
+      <span className="brand-chip__dark" style={{ width: size, height: size, borderRadius: size * 0.29, background: "#101A2C", placeItems: "center" }}>
+        <BrandMark size={Math.round(size * 0.74)} />
+      </span>
+      <span className="brand-chip__light" style={{ width: size, height: size, placeItems: "center" }}>
+        <BrandMark size={size} gold="#101A2C" goldDark="#1E2A40" ring="#101A2C" iris="#D8392E" />
+      </span>
     </span>
   );
 }

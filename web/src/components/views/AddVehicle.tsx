@@ -28,11 +28,9 @@ interface VehicleEstimate {
 }
 type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; vehicleFront?: string } | { ok: false; userMessage: string; internalError: string };
 
-const PROVIDERS = [
-  { id: "gemini", name: "Gemini 2.5 Pro", brand: "Google", tone: "var(--signal)", desc: "Best-in-class vision with the most accurate part ID and pricing.", speed: "~15–20s" },
-  { id: "sonnet", name: "Claude Sonnet 4.6", brand: "Anthropic", tone: "#d4a574", desc: "Top-tier vision reasoning for the most accurate part identification.", speed: "~15–20s" },
-  { id: "haiku", name: "Claude Haiku 4.5", brand: "Anthropic", tone: "#d4a574", desc: "Fast, lightweight Claude for quick scans with solid accuracy.", speed: "~8–12s" },
-];
+// Accent color used across the scan flow (spinner, report card). The scan engine
+// is fixed and never surfaced to the seller.
+const SCAN_TONE = "var(--signal)";
 
 // Pick the single best whole-car price + label from per-photo AI estimates.
 function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { label: string; sub: string; suggestedPrice: number | null; mileage: string | null; make: string; model: string; year: string; body: string } | null {
@@ -125,7 +123,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const [mainPhoto, setMainPhoto] = React.useState<string | null>(null);
   const [sellMode, setSellMode] = React.useState("parts");
   const [mode, setMode] = React.useState<null | "ai" | "manualCar" | "manualPart">(null);
-  const [provider, setProvider] = React.useState<string>("gemini");
   const [photos, setPhotos] = React.useState<UploadedPhoto[]>([]);
   const [dragging, setDragging] = React.useState(false);
   const [carPrice, setCarPrice] = React.useState<string>("");
@@ -146,7 +143,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const sellable = parts.filter((p) => (p.suggestedPriceUsd || 0) > 0).length;
   const flagged = parts.filter((p) => p.confidence === "low");
   const goodCount = parts.filter((p) => p.condition === "Good").length;
-  const chosen = PROVIDERS.find((p) => p.id === provider) || PROVIDERS[0];
   const photoCount = photos.length;
 
   // One box — drop everything in (HEIC, JPG, PNG, anything). The AI figures out
@@ -154,11 +150,11 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   async function addFiles(list: FileList | null) {
     if (!list) return;
     const imgs = Array.from(list).filter(looksLikeImage);
-    if (!imgs.length) { csToast("Those files weren't images — add JPG, PNG or HEIC photos"); return; }
+    if (!imgs.length) { csToast("Those files weren't images. Add JPG, PNG or HEIC photos"); return; }
     const room = MAX_PHOTOS - photos.length;
     if (room <= 0) { csToast(`You can add up to ${MAX_PHOTOS} photos`); return; }
     const take = imgs.slice(0, room);
-    if (take.length < imgs.length) csToast(`Added ${take.length} — ${MAX_PHOTOS}-photo limit reached`);
+    if (take.length < imgs.length) csToast(`Added ${take.length}. ${MAX_PHOTOS}-photo limit reached`);
     const mapped = await Promise.all(take.map(async (f) => {
       const file = await normalizeImageFile(f); // HEIC → JPEG; others pass through
       return { url: URL.createObjectURL(file), name: f.name, file };
@@ -177,7 +173,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   // Send every photo to /api/identify; the AI defines what it can pull from each.
   async function runAnalysis() {
     setPhase("analyzing"); setError(null);
-    const prov = provider;
     try {
       const results = await Promise.all(
         photos.map(async (photo) => {
@@ -185,7 +180,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
           const res = await fetch("/api/identify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ imageBase64: dataUrl, provider: prov }),
+            body: JSON.stringify({ imageBase64: dataUrl }),
           });
           return { result: (await res.json()) as AIResult, photo };
         })
@@ -323,15 +318,15 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       };
       const res = await fetch("/api/listings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const d = await res.json();
-      if (!res.ok) { csToast(d.error || "Couldn't save — try again"); setSaving(false); setSavingKind(null); return; }
+      if (!res.ok) { csToast(d.error || "Couldn't save. Try again"); setSaving(false); setSavingKind(null); return; }
       const dest = sellMode === "whole" ? "vehicles" : "parts";
       csToast(draft
-        ? "Saved as draft — not posted yet"
-        : sellMode === "whole" ? "Vehicle saved & posted to the market" : `Saved — ${d.listings} part${d.listings === 1 ? "" : "s"} posted`);
+        ? "Saved as draft, not posted yet"
+        : sellMode === "whole" ? "Vehicle saved and posted to the market" : `Saved. ${d.listings} part${d.listings === 1 ? "" : "s"} posted`);
       (window as any).csReloadData?.();
       go(dest);
     } catch {
-      csToast("Couldn't save — check your connection");
+      csToast("Couldn't save. Check your connection");
       setSaving(false);
       setSavingKind(null);
     }
@@ -374,9 +369,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             <div style={{ fontSize: 15, fontWeight: 600 }}>{dragging ? "Drop your photos here" : "Drag & drop all your photos, or click to upload"}</div>
             <div style={{ fontSize: 13, color: "var(--muted)", maxWidth: 480, textAlign: "center", lineHeight: 1.55 }}>Add up to {MAX_PHOTOS} photos. <strong style={{ color: "var(--foreground)" }}>More angles = more parts found and a truer market price.</strong> The AI reads each photo and pulls the vehicle, parts, and mileage.</div>
             <ul style={{ margin: "2px 0 0", padding: 0, listStyle: "none", maxWidth: 480, fontSize: 12.5, color: "var(--muted)", lineHeight: 1.6, display: "grid", gap: 3 }}>
-              <li>📸 Clear, well-lit, slightly <strong style={{ color: "var(--foreground)" }}>angled</strong> shots of <strong style={{ color: "var(--foreground)" }}>every side</strong> — front, rear, both sides, engine bay, interior, dashboard.</li>
-              <li>⚠️ Only photographing one side? The AI prices just that side — show the <strong style={{ color: "var(--foreground)" }}>whole car</strong> for full value.</li>
-              <li>🔢 Include the <strong style={{ color: "var(--foreground)" }}>VIN plate</strong> if you can — it locks in exact fitment and better prices.</li>
+              <li>📸 Clear, well-lit, slightly <strong style={{ color: "var(--foreground)" }}>angled</strong> shots of <strong style={{ color: "var(--foreground)" }}>every side</strong>: front, rear, both sides, engine bay, interior, dashboard.</li>
+              <li>⚠️ Only photographing one side? The AI prices just that side, so show the <strong style={{ color: "var(--foreground)" }}>whole car</strong> for full value.</li>
+              <li>🔢 Include the <strong style={{ color: "var(--foreground)" }}>VIN plate</strong> if you can. It locks in exact fitment and better prices.</li>
             </ul>
             <div style={{ display: "flex", gap: 10, marginTop: 2, flexWrap: "wrap", justifyContent: "center" }}>
               <button className="cs-raise" disabled={atPhotoLimit} onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 11, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600, opacity: atPhotoLimit ? 0.5 : 1, cursor: atPhotoLimit ? "not-allowed" : "pointer" }}><Upload size={16} /> Upload photos</button>
@@ -397,28 +392,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             </div>
           )}
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 0" }}>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--muted)" }}>AI model:</span>
-            {PROVIDERS.map((p) => {
-              const on = provider === p.id;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => setProvider(p.id)}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    padding: "6px 12px", borderRadius: 999, border: `1.5px solid ${on ? p.tone : "var(--line)"}`,
-                    background: on ? `color-mix(in srgb, ${p.tone} 14%, transparent)` : "transparent",
-                    color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-                  }}
-                  title={p.desc}
-                >
-                  {on && <Check size={13} />}
-                  {p.name}
-                  <span style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 500 }}>{p.brand}</span>
-                </button>
-              );
-            })}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "10px 0", fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 }}>
+            <Info size={14} style={{ marginTop: 1, flexShrink: 0 }} />
+            <span>Add clear photos of the car and the parts you want to sell. Cover each angle, open the hood for engine-bay parts, and include the dashboard if you want the mileage read. More angles mean a more accurate listing.</span>
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
@@ -431,16 +407,16 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       {phase === "analyzing" && (
         <Card pad={44} style={{ display: "grid", placeItems: "center", gap: 18, textAlign: "center" }}>
           <div style={{ position: "relative", width: 72, height: 72 }}>
-            <div style={{ position: "absolute", inset: 0, borderRadius: 999, border: "3px solid var(--surface2)", borderTopColor: chosen.tone, animation: "spin 0.9s linear infinite" }} />
+            <div style={{ position: "absolute", inset: 0, borderRadius: 999, border: "3px solid var(--surface2)", borderTopColor: SCAN_TONE, animation: "spin 0.9s linear infinite" }} />
             <div style={{ position: "absolute", inset: 8, borderRadius: 999, border: "2px solid var(--surface2)", borderBottomColor: "var(--accent)", animation: "spin 1.4s linear infinite reverse" }} />
-            <ScanLine size={26} color={chosen.tone} style={{ position: "absolute", inset: 0, margin: "auto" }} />
+            <ScanLine size={26} color={SCAN_TONE} style={{ position: "absolute", inset: 0, margin: "auto" }} />
           </div>
           <div>
             <div style={{ fontSize: 17, fontWeight: 700 }}>Scanning your car…</div>
-            <div style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 420, marginTop: 6, lineHeight: 1.5 }}>Reading your photos to identify the vehicle and every sellable part — including the VIN or stock number if they show in a picture.</div>
+            <div style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 420, marginTop: 6, lineHeight: 1.5 }}>Reading your photos to identify the vehicle and every sellable part, including the VIN or stock number if they show in a picture.</div>
           </div>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: "var(--signal)", background: "var(--signal-bg)", border: "1px solid color-mix(in srgb, var(--signal) 35%, transparent)", borderRadius: 999, padding: "7px 14px" }}>
-            <Info size={14} /> This might take up to 30 seconds — hang tight.
+            <Info size={14} /> This might take up to 30 seconds. Hang tight.
           </div>
         </Card>
       )}
@@ -462,12 +438,12 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       {phase === "results" && (
         <>
           {/* AI analysis report — built entirely from the model's actual output */}
-          <Card pad={18} style={{ display: "grid", gap: 14, borderColor: `color-mix(in srgb, ${chosen.tone} 35%, var(--line))` }}>
+          <Card pad={18} style={{ display: "grid", gap: 14, borderColor: `color-mix(in srgb, ${SCAN_TONE} 35%, var(--line))` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center", background: `color-mix(in srgb, ${chosen.tone} 16%, transparent)` }}><FileText size={17} color={chosen.tone} /></span>
+              <span style={{ width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center", background: `color-mix(in srgb, ${SCAN_TONE} 16%, transparent)` }}><FileText size={17} color={SCAN_TONE} /></span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>AI analysis report</div>
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>Generated by {chosen.name} · {chosen.brand} · {photoCount} photo{photoCount === 1 ? "" : "s"}</div>
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>Analyzed from {photoCount} photo{photoCount === 1 ? "" : "s"}</div>
               </div>
               <button onClick={() => setPhase("upload")} style={{ ...navBtn, padding: "7px 12px", fontSize: 12.5 }}><ArrowLeft size={14} /> Re-run / edit photos</button>
             </div>
@@ -476,17 +452,17 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               {vehicle
                 ? <>Source vehicle identified as a <strong>{vehicle.sub.split(" · ")[0] ? `${vehicle.sub.split(" · ")[0]} ` : ""}{vehicle.label}</strong>. </>
                 : <>Couldn't confidently identify the source vehicle from these photos. </>}
-              Cataloged <strong>{parts.length} part{parts.length === 1 ? "" : "s"}</strong> — {goodCount} graded Good, {sellable} with a suggested price, {flagged.length} flagged low-confidence.
+              Cataloged <strong>{parts.length} part{parts.length === 1 ? "" : "s"}</strong>: {goodCount} graded Good, {sellable} with a suggested price, {flagged.length} flagged low-confidence.
             </div>
 
             <div style={{ display: "grid", gap: 7 }}>
-              {vehicle && <ReportLine icon={<Car size={14} color="var(--success)" />} text={`Identified ${vehicle.label} — ${vehicle.sub}.`} />}
-              {suggestedCarPrice && <ReportLine icon={<Sparkles size={14} color="var(--signal)" />} text={`AI estimates a whole-car market value around $${suggestedCarPrice.toLocaleString()} (standalone — not the sum of parts).`} />}
+              {vehicle && <ReportLine icon={<Car size={14} color="var(--success)" />} text={`Identified ${vehicle.label}, ${vehicle.sub}.`} />}
+              {suggestedCarPrice && <ReportLine icon={<Sparkles size={14} color="var(--signal)" />} text={`AI estimates a whole-car market value around $${suggestedCarPrice.toLocaleString()} (standalone, not the sum of parts).`} />}
               <ReportLine icon={<Wrench size={14} color="var(--success)" />} text={`${sellable} of ${parts.length} part${parts.length === 1 ? "" : "s"} returned a suggested price${partsTotal > 0 ? ` (total $${partsTotal.toLocaleString()})` : ""}.`} />
               {flagged.length > 0
                 ? <ReportLine icon={<TriangleAlert size={14} color="var(--signal)" />} text={`${flagged.length} part${flagged.length > 1 ? "s" : ""} flagged for review: ${flagged.map((f) => f.partName).join(", ")}.`} />
-                : <ReportLine icon={<CircleCheck size={14} color="var(--success)" />} text="No low-confidence parts — every item came back clean." />}
-              {mileage && <ReportLine icon={<Lock size={14} color="var(--muted)" />} text={`Mileage read from dashboard: ${mileage} — kept private, never shown on listings. You can share it in chat if a buyer asks.`} />}
+                : <ReportLine icon={<CircleCheck size={14} color="var(--success)" />} text="No low-confidence parts. Every item came back clean." />}
+              {mileage && <ReportLine icon={<Lock size={14} color="var(--muted)" />} text={`Mileage read from dashboard: ${mileage}. Kept private, never shown on listings. You can share it in chat if a buyer asks.`} />}
             </div>
           </Card>
 
@@ -500,12 +476,12 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 17, fontWeight: 700 }}>{vehicle.label}</div>
                 <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 3 }}>{vehicle.sub}</div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>Identified by AI — confirm before posting.</div>
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>Identified by AI. Confirm before posting.</div>
               </div>
               <div style={{ display: "grid", gap: 5, minWidth: 240 }}>
                 <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><ScanLine size={13} color="var(--accent)" /> VIN / plate <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, opacity: 0.8 }}>· optional</span></label>
-                <input value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} placeholder="Read from your photos — confirm or add" maxLength={17} style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, letterSpacing: "0.04em", fontFamily: "var(--font-sans)" }} />
-                <span style={{ fontSize: 11, color: "var(--muted)" }}>Kept private — never shown on public listings.</span>
+                <input value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} placeholder="Read from your photos. Confirm or add" maxLength={17} style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, letterSpacing: "0.04em", fontFamily: "var(--font-sans)" }} />
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>Kept private, never shown on public listings.</span>
                 <label style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><Tag size={13} color="var(--accent)" /> Stock # <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, opacity: 0.8 }}>· optional</span></label>
                 <input value={stockNumber} onChange={(e) => setStockNumber(e.target.value)} placeholder="Your yard inventory code" style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, fontFamily: "var(--font-sans)" }} />
                 {vehicle && (
@@ -553,7 +529,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                 <span style={{ width: 30, height: 30, borderRadius: 8, display: "grid", placeItems: "center", background: "color-mix(in srgb, var(--signal) 16%, transparent)" }}><Car size={16} color="var(--signal)" /></span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>Whole-car price</div>
-                  <div style={{ fontSize: 12, color: "var(--muted)" }}>AI's estimate from the make, model, year, body style, and visible condition in your photos — a typical-market ballpark, not live local comps. Standalone value, separate from the parts below. Check against comparable listings and edit freely.</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>AI's estimate from the make, model, year, body style, and visible condition in your photos. A typical-market ballpark, not live local comps. Standalone value, separate from the parts below. Check against comparable listings and edit freely.</div>
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
@@ -570,14 +546,14 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                   </div>
                 ) : (
                   <div style={{ fontSize: 12.5, color: "var(--muted)", maxWidth: 320 }}>
-                    The AI couldn't estimate a whole-car price from these photos — set your asking price against comparable local listings.
+                    The AI couldn't estimate a whole-car price from these photos. Set your asking price against comparable local listings.
                   </div>
                 )}
               </div>
               {sellMode === "both" && (
                 <div style={{ display: "flex", gap: 8, fontSize: 12, color: "var(--muted)", lineHeight: 1.5, background: "var(--surface2)", borderRadius: 10, padding: "10px 12px" }}>
                   <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                  <span>This is your asking price for the whole car. Inside the post, the parts below appear as <strong style={{ color: "var(--foreground)" }}>suggested</strong> prices — buyers can take the car or pick parts. The two prices are independent.</span>
+                  <span>This is your asking price for the whole car. Inside the post, the parts below appear as <strong style={{ color: "var(--foreground)" }}>suggested</strong> prices, so buyers can take the car or pick parts. The two prices are independent.</span>
                 </div>
               )}
             </Card>
@@ -622,7 +598,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                           <input value={p.partName} placeholder="Part name" onChange={(e) => setPartName(p._id!, e.target.value)} style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", borderBottom: "1px solid transparent", padding: "1px 0" }} onFocus={(e) => (e.target.style.borderBottomColor = "var(--line)")} onBlur={(e) => (e.target.style.borderBottomColor = "transparent")} />
                           {warn && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 700, color: "var(--signal)", background: "var(--signal-bg)", borderRadius: 6, padding: "2px 7px", flexShrink: 0 }}><TriangleAlert size={11} /> Review</span>}
                         </div>
-                        <textarea value={p.description || ""} placeholder="Description — AI fills this in; tap to edit" rows={2} onChange={(e) => setPartDesc(p._id!, e.target.value)} style={{ width: "100%", marginTop: 4, fontSize: 12.5, color: "var(--muted)", border: "1px solid transparent", outline: "none", background: "transparent", resize: "vertical", fontFamily: "var(--font-sans)", lineHeight: 1.45, borderRadius: 8, padding: "4px 6px" }} onFocus={(e) => { e.target.style.borderColor = "var(--line)"; e.target.style.color = "var(--foreground)"; }} onBlur={(e) => { e.target.style.borderColor = "transparent"; e.target.style.color = "var(--muted)"; }} />
+                        <textarea value={p.description || ""} placeholder="Description (AI fills this in; tap to edit)" rows={2} onChange={(e) => setPartDesc(p._id!, e.target.value)} style={{ width: "100%", marginTop: 4, fontSize: 12.5, color: "var(--muted)", border: "1px solid transparent", outline: "none", background: "transparent", resize: "vertical", fontFamily: "var(--font-sans)", lineHeight: 1.45, borderRadius: 8, padding: "4px 6px" }} onFocus={(e) => { e.target.style.borderColor = "var(--line)"; e.target.style.color = "var(--foreground)"; }} onBlur={(e) => { e.target.style.borderColor = "transparent"; e.target.style.color = "var(--muted)"; }} />
                       </div>
                       <ConditionBadge grade={p.condition} size="sm" />
                       <div style={{ width: 110, display: "grid", gap: 2, justifyItems: "end" }}>
@@ -645,7 +621,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               {showCar && (
                 <div>
                   <div style={{ fontSize: 12.5, color: "var(--muted)" }}>Whole-car asking price</div>
-                  <div className="tnum" style={{ fontSize: 22, fontWeight: 800, color: carPriceNum > 0 ? "var(--success)" : "var(--muted)" }}>{carPriceNum > 0 ? `$${carPriceNum.toLocaleString()}` : "—"}</div>
+                  <div className="tnum" style={{ fontSize: 22, fontWeight: 800, color: carPriceNum > 0 ? "var(--success)" : "var(--muted)" }}>{carPriceNum > 0 ? `$${carPriceNum.toLocaleString()}` : "Not set"}</div>
                 </div>
               )}
               {showParts && (
@@ -783,7 +759,7 @@ function Step({ n, label, on, done }: { n: number; label: string; on: boolean; d
 // Entry choice: AI scan vs. manual car vs. manual part.
 function ModePicker({ onPick }: { onPick: (m: "ai" | "manualCar" | "manualPart") => void }) {
   const tiles = [
-    { id: "ai", icon: Sparkles, title: "Scan with AI", desc: "Upload photos — AI finds the car, every part, condition, and prices.", fast: true },
+    { id: "ai", icon: Sparkles, title: "Scan with AI", desc: "Upload photos and AI finds the car, every part, condition, and prices.", fast: true },
     { id: "manualCar", icon: Car, title: "List a car manually", desc: "Type it in yourself. Photos optional. AI can help write & price." },
     { id: "manualPart", icon: Wrench, title: "List a part manually", desc: "Post a single part (e.g. an engine). Photos optional." },
   ] as const;
