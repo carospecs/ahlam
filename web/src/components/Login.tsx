@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { ArrowRight, ArrowLeft, LoaderCircle, Mail, Lock, ScanLine } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { BrandChip } from "./BrandMark";
+
+const EASE = [0.22, 0.8, 0.26, 1] as const;
 
 function BrandPanel({ onHome }: { onHome: () => void }) {
   return (
@@ -171,10 +174,18 @@ export function Login({ onLogin, onClose }: { onLogin: () => void; onClose?: () 
 
   return (
     <div style={lx.screen}>
-      <a href="/" onClick={(e) => { e.preventDefault(); goHome(); }} style={lx.back}>
+      <motion.a
+        href="/" onClick={(e) => { e.preventDefault(); goHome(); }} style={lx.back}
+        initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }}
+      >
         <ArrowLeft size={15} /> Back to home
-      </a>
-      <div style={lx.card} className="login-card">
+      </motion.a>
+      <motion.div
+        style={lx.card} className="login-card"
+        initial={{ opacity: 0, y: 20, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.55, ease: EASE }}
+      >
         <BrandPanel onHome={goHome} />
         <div style={lx.formWrap}>
           <div style={lx.formInner} className="fade-up">
@@ -256,7 +267,7 @@ export function Login({ onLogin, onClose }: { onLogin: () => void; onClose?: () 
             ) : null}
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

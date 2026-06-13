@@ -1,20 +1,31 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans, Poppins, Space_Mono } from "next/font/google";
+import { Inter, Space_Grotesk, Space_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
-const sans = Plus_Jakarta_Sans({
+const sans = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-sans",
   display: "swap",
 });
 
-// Brand display face — headlines, wordmark, names.
-const display = Poppins({
+// Brand display face — headlines, wordmark, names. Space Grotesk gives a distinct,
+// technical wordmark (intentionally different from the typical geometric sans).
+const display = Space_Grotesk({
   subsets: ["latin"],
   weight: ["500", "600", "700"],
   variable: "--font-display",
+  display: "swap",
+});
+
+// Editorial serif for large marketing display headings (landing + guides only,
+// applied via the .cs-display class so the app/dashboard keep the Poppins brand).
+const serif = Fraunces({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-serif",
   display: "swap",
 });
 
@@ -56,7 +67,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${sans.variable} ${display.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${sans.variable} ${display.variable} ${serif.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         {/* Apply the saved theme before paint to avoid a flash of the wrong theme. */}
         <script

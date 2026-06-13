@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { ArrowLeft, ArrowRight, ArrowUpRight } from "lucide-react";
 import { PublicHeader } from "@/components/PublicHeader";
+import { Reveal, RevealStagger, RevealItem } from "@/components/Reveal";
 import { GUIDES, getGuide } from "@/content/guides";
 
 type Params = { params: Promise<{ slug: string }> };
@@ -54,78 +56,102 @@ export default async function GuidePage({ params }: Params) {
   const related = GUIDES.filter((x) => x.slug !== g.slug).slice(0, 2);
 
   return (
-    <main style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)" }}>
+    <main style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)", position: "relative" }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleLd) }} />
       {faqLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />}
 
-      <PublicHeader />
-      <div className="grain" style={{ borderBottom: "1px solid var(--line)" }}>
-        <div style={{ maxWidth: 760, margin: "0 auto", padding: "28px 24px" }}>
-          <Link href="/guides" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--muted)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>← All guides</Link>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--muted)", margin: "20px 0 10px" }}>
-            <span style={{ color: "var(--accent)", fontWeight: 700 }}>{g.category}</span>
-            <span>·</span><span>{g.readMinutes} min read</span>
-            <span>·</span><span>Updated {new Date(g.updated).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
-          </div>
-          <h1 style={{ margin: 0, fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{g.title}</h1>
-        </div>
+      <div className="aurora" aria-hidden="true">
+        <div className="aurora-blob aurora-1" />
+        <div className="aurora-blob aurora-2" />
       </div>
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <PublicHeader />
 
-      <article style={{ maxWidth: 760, margin: "0 auto", padding: "28px 24px 64px" }}>
-        <p style={{ fontSize: 17, lineHeight: 1.7, color: "var(--foreground)", opacity: 0.95, marginTop: 0 }}>{g.intro}</p>
-
-        {g.sections.map((s, i) => (
-          <section key={i} style={{ marginTop: 32 }}>
-            <h2 style={{ fontSize: 21, fontWeight: 700, margin: "0 0 12px", letterSpacing: "-0.01em" }}>{s.heading}</h2>
-            {s.paragraphs.map((p, j) => (
-              <p key={j} style={{ fontSize: 15.5, lineHeight: 1.75, color: "var(--foreground)", opacity: 0.9, margin: "0 0 14px" }}>{p}</p>
-            ))}
-            {s.bullets && (
-              <ul style={{ margin: "4px 0 0", paddingLeft: 22, display: "grid", gap: 8 }}>
-                {s.bullets.map((b, k) => (
-                  <li key={k} style={{ fontSize: 15.5, lineHeight: 1.7, color: "var(--foreground)", opacity: 0.9 }}>{b}</li>
-                ))}
-              </ul>
-            )}
-          </section>
-        ))}
-
-        {g.faqs && g.faqs.length > 0 && (
-          <section style={{ marginTop: 40 }}>
-            <h2 style={{ fontSize: 21, fontWeight: 700, margin: "0 0 14px" }}>Frequently asked</h2>
-            <div style={{ display: "grid", gap: 14 }}>
-              {g.faqs.map((f, i) => (
-                <div key={i} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: 18 }}>
-                  <div style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 6 }}>{f.q}</div>
-                  <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "var(--muted)" }}>{f.a}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <div style={{ marginTop: 40, padding: 22, borderRadius: 16, border: "1px solid var(--line)", background: "var(--surface)", textAlign: "center" }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>Price and list this part in seconds</div>
-          <p style={{ margin: "8px 0 14px", color: "var(--muted)", fontSize: 14 }}>Ahlam photographs the part, grades it, suggests a price from live comps, and posts it for you.</p>
-          <Link href="/" style={{ display: "inline-flex", padding: "11px 22px", borderRadius: 12, background: "var(--accent)", color: "#fff", textDecoration: "none", fontSize: 14, fontWeight: 600 }}>Try Ahlam free</Link>
-        </div>
-
-        {related.length > 0 && (
-          <div style={{ marginTop: 40 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Keep reading</div>
-            <div style={{ display: "grid", gap: 12 }}>
-              {related.map((r) => (
-                <Link key={r.slug} href={`/guides/${r.slug}`} style={{ textDecoration: "none", color: "inherit" }}>
-                  <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: 16 }} className="cs-hover-card">
-                    <div style={{ fontSize: 15, fontWeight: 600 }}>{r.title}</div>
-                    <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>{r.description}</div>
-                  </div>
-                </Link>
-              ))}
-            </div>
+        {/* Header */}
+        <section style={{ borderBottom: "1px solid var(--line)" }}>
+          <div style={{ maxWidth: 760, margin: "0 auto", padding: "44px 24px 36px" }}>
+            <Reveal>
+              <Link href="/guides" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--muted)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}><ArrowLeft size={14} /> All guides</Link>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--muted)", margin: "22px 0 12px" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent)", background: "var(--accent-tint)", borderRadius: 999, padding: "4px 10px" }}>{g.category}</span>
+                <span>{g.readMinutes} min read</span>
+                <span>·</span><span>Updated {new Date(g.updated).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
+              </div>
+              <h1 className="cs-display" style={{ margin: 0, fontSize: "clamp(34px, 4.6vw, 44px)", fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.15 }}>{g.title}</h1>
+            </Reveal>
           </div>
-        )}
-      </article>
+        </section>
+
+        <article style={{ maxWidth: 720, margin: "0 auto", padding: "36px 24px 72px" }}>
+          <Reveal>
+            <p style={{ fontSize: 19, lineHeight: 1.7, color: "var(--foreground)", opacity: 0.95, marginTop: 0, fontWeight: 500 }}>{g.intro}</p>
+          </Reveal>
+
+          {g.sections.map((s, i) => (
+            <Reveal key={i}>
+              <section style={{ marginTop: 38 }}>
+                <h2 className="cs-display" style={{ fontSize: 25, fontWeight: 600, margin: "0 0 14px", letterSpacing: "-0.015em", paddingBottom: 10, borderBottom: "1px solid var(--line)" }}>{s.heading}</h2>
+                {s.paragraphs.map((p, j) => (
+                  <p key={j} style={{ fontSize: 16, lineHeight: 1.78, color: "var(--foreground)", opacity: 0.88, margin: "0 0 14px" }}>{p}</p>
+                ))}
+                {s.bullets && (
+                  <ul style={{ margin: "6px 0 0", padding: 0, listStyle: "none", display: "grid", gap: 10 }}>
+                    {s.bullets.map((b, k) => (
+                      <li key={k} style={{ position: "relative", paddingLeft: 24, fontSize: 16, lineHeight: 1.7, color: "var(--foreground)", opacity: 0.88 }}>
+                        <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 9, width: 7, height: 7, borderRadius: 999, background: "var(--accent)" }} />
+                        {b}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </Reveal>
+          ))}
+
+          {g.faqs && g.faqs.length > 0 && (
+            <section style={{ marginTop: 48 }}>
+              <Reveal><h2 className="cs-display" style={{ fontSize: 25, fontWeight: 600, margin: "0 0 16px" }}>Frequently asked</h2></Reveal>
+              <RevealStagger style={{ display: "grid", gap: 12 }}>
+                {g.faqs.map((f, i) => (
+                  <RevealItem key={i}>
+                    <div className="cs-glass" style={{ borderRadius: "var(--radius-md)", padding: 18 }}>
+                      <div style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 6 }}>{f.q}</div>
+                      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "var(--muted)" }}>{f.a}</p>
+                    </div>
+                  </RevealItem>
+                ))}
+              </RevealStagger>
+            </section>
+          )}
+
+          <Reveal>
+            <div className="cs-glass" style={{ marginTop: 48, padding: 30, borderRadius: "var(--radius-xl)", textAlign: "center", border: "1.5px solid color-mix(in srgb, var(--accent) 40%, var(--line))" }}>
+              <h2 className="cs-display" style={{ margin: "0 0 8px", fontSize: 24, fontWeight: 600 }}>Price and list this part in seconds</h2>
+              <p style={{ margin: "0 0 18px", color: "var(--muted)", fontSize: 14.5 }}>Ahlam photographs the part, grades it, suggests a price from live comps, and posts it for you.</p>
+              <Link href="/" className="cs-raise" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 24px", borderRadius: 12, background: "var(--accent)", color: "#fff", textDecoration: "none", fontSize: 14.5, fontWeight: 600 }}>Try Ahlam free <ArrowRight size={16} /></Link>
+            </div>
+          </Reveal>
+
+          {related.length > 0 && (
+            <div style={{ marginTop: 48 }}>
+              <Reveal><div className="cs-eyebrow" style={{ marginBottom: 14 }}>Keep reading</div></Reveal>
+              <RevealStagger style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
+                {related.map((r) => (
+                  <RevealItem key={r.slug} style={{ height: "100%" }}>
+                    <Link href={`/guides/${r.slug}`} style={{ textDecoration: "none", color: "inherit", display: "block", height: "100%" }}>
+                      <div className="cs-glass cs-hover-card" style={{ borderRadius: "var(--radius-md)", padding: 18, height: "100%", display: "flex", flexDirection: "column" }}>
+                        <div className="cs-display" style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.25 }}>{r.title}</div>
+                        <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 6, flex: 1 }}>{r.description}</div>
+                        <span style={{ marginTop: 12, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 600, color: "var(--accent)" }}>Read <ArrowUpRight size={14} /></span>
+                      </div>
+                    </Link>
+                  </RevealItem>
+                ))}
+              </RevealStagger>
+            </div>
+          )}
+        </article>
+      </div>
     </main>
   );
 }

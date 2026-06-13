@@ -18,7 +18,10 @@ export default function Home() {
     const url = new URL(window.location.href);
     if (!url.searchParams.has("signin")) {
       url.searchParams.set("signin", "1");
-      window.history.replaceState({}, "", url);
+      // pushState (not replaceState) so the sign-in screen is its OWN history
+      // entry — pressing browser "back" pops it and returns to the homepage,
+      // never to whatever page (e.g. /waitlist) preceded it.
+      window.history.pushState({ signin: true }, "", url);
     }
   };
 
@@ -55,7 +58,15 @@ export default function Home() {
       setAuthed(!!session);
     });
 
-    return () => subscription.unsubscribe();
+    // Keep the login view in sync with browser history: pressing "back" from the
+    // sign-in screen pops the pushed entry (no ?signin) → close login → homepage.
+    const onPop = () => setShowLogin(new URLSearchParams(window.location.search).has("signin"));
+    window.addEventListener("popstate", onPop);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("popstate", onPop);
+    };
   }, []);
 
   if (authed === null) {

@@ -1,9 +1,13 @@
 "use client";
 
 import React from "react";
+import { motion, type Variants } from "framer-motion";
 import { TrendingUp, ArrowRight, Car, Wrench, Tag, DollarSign, ScanLine, TriangleAlert, MessageSquare, CircleCheck, Send, CirclePlus, Store, Circle } from "lucide-react";
 import { Card, PhotoCell } from "../UI";
 import { useData } from "../Dashboard";
+
+const statContainer: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } };
+const statItem: Variants = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 0.8, 0.26, 1] } } };
 
 export function Overview({ go, onVehicle }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
   const { vehicles, listings, activity, user, shop } = useData();
@@ -29,14 +33,14 @@ export function Overview({ go, onVehicle }: { go: (id: string) => void; onVehicl
 
   return (
     <div style={{ display: "grid", gap: 20, maxWidth: 1180 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }} className="cs-grid4">
+      <motion.div variants={statContainer} initial="hidden" animate="show" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }} className="cs-grid4">
         {stats.map((s) => {
           const IconComp = s.icon;
           return (
-            <button key={s.label} onClick={() => go(s.nav)} className="cs-card-btn" style={{ all: "unset", cursor: "pointer", display: "block" }} title={`Go to ${s.label}`}>
-              <Card pad={18} style={{ display: "grid", gap: 14 }}>
+            <motion.button key={s.label} variants={statItem} onClick={() => go(s.nav)} className="cs-card-btn" style={{ all: "unset", cursor: "pointer", display: "block" }} title={`Go to ${s.label}`}>
+              <Card pad={18} style={{ display: "grid", gap: 14, background: `linear-gradient(158deg, color-mix(in srgb, ${s.tone} 9%, var(--surface)) 0%, var(--surface) 58%)`, boxShadow: `inset 0 1px 0 color-mix(in srgb, var(--foreground) 6%, transparent)` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in srgb, ${s.tone} 15%, transparent)`, display: "grid", placeItems: "center" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in srgb, ${s.tone} 18%, transparent)`, border: `1px solid color-mix(in srgb, ${s.tone} 28%, transparent)`, display: "grid", placeItems: "center" }}>
                     <IconComp size={19} color={s.tone} />
                   </div>
                   {s.delta
@@ -44,21 +48,21 @@ export function Overview({ go, onVehicle }: { go: (id: string) => void; onVehicl
                     : <ArrowRight size={15} color="var(--muted)" />}
                 </div>
                 <div>
-                  <div className="tnum" style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em" }}>{s.value}</div>
-                  <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{s.label}</div>
+                  <div className="tnum" style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.025em", lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 5 }}>{s.label}</div>
                 </div>
               </Card>
-            </button>
+            </motion.button>
           );
         })}
-      </div>
+      </motion.div>
       {demandAlerts.length > 0 && (
         <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
           {demandAlerts.map((a: any, i: number) => (
             <Card key={i} style={{ display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap", flexShrink: 0 }}>
               <span style={{ fontSize: 18 }}>🔥</span>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>Trending — {a.searches} searches for {a.part} this week</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Trending: {a.searches} searches for {a.part} this week</div>
                 {a.category && <div style={{ fontSize: 12, color: "var(--muted)" }}>{a.category}</div>}
               </div>
             </Card>
@@ -100,7 +104,7 @@ export function Overview({ go, onVehicle }: { go: (id: string) => void; onVehicl
           <div style={{ padding: "4px 18px 14px" }}>
             {activity.length === 0 && (
               <div style={{ padding: "22px 0", textAlign: "center", fontSize: 13, color: "var(--muted)" }}>
-                No activity yet — it'll show up here as you add and post listings.
+                No activity yet. It will show up here as you add and post listings.
               </div>
             )}
              {activity.map((a: any, i: number) => {
@@ -134,7 +138,7 @@ function GettingStarted({ go, firstName, shopName, hasVehicle, hasListing, hasPo
 }) {
   const steps = [
     { done: true, label: "Create your shop", sub: shopName ? `${shopName} is set up` : "Workspace ready", nav: "shop" },
-    { done: hasVehicle, label: "Add your first vehicle", sub: "Snap or upload up to 8 photos — AI grades the parts", nav: "add" },
+    { done: hasVehicle, label: "Add your first vehicle", sub: "Snap or upload up to 8 photos, and AI grades the parts", nav: "add" },
     { done: hasListing, label: "Review your AI-graded parts", sub: "Check names, fitment, and suggested prices", nav: "parts" },
     { done: hasPosted, label: "Post a listing", sub: "Copy the text and cross-post everywhere you sell", nav: "export" },
   ];

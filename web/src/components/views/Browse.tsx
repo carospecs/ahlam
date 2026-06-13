@@ -322,7 +322,7 @@ export function Browse() {
                     <PhotoCell icon="Wrench" url={l.photoUrl} style={{ height: 150, borderRadius: 0 }} iconSize={40} />
                     <div style={{ position: "absolute", top: 10, left: 10 }}><ConditionBadge grade={l.grade} size="sm" /></div>
                   </div>
-                  <div style={{ padding: 14, display: "grid", gap: 4 }}>
+                  <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
                     <div className="tnum" style={{ fontSize: 19, fontWeight: 800, color: "var(--success)" }}>${l.price}</div>
                     <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.part}</div>
                     {l.fitment && <div style={{ fontSize: 12, color: "var(--muted)" }}>Fits {l.fitment}</div>}
@@ -350,7 +350,7 @@ export function Browse() {
                   <PhotoCell icon="Wrench" url={l.photoUrl} style={{ height: 150, borderRadius: 0 }} iconSize={40} />
                   <div style={{ position: "absolute", top: 10, left: 10 }}><ConditionBadge grade={l.grade} size="sm" /></div>
                 </div>
-                <div style={{ padding: 14, display: "grid", gap: 4 }}>
+                <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
                   <div className="tnum" style={{ fontSize: 19, fontWeight: 800, color: "var(--success)" }}>${l.price}</div>
                   <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.part}</div>
                   {l.fitment && <div style={{ fontSize: 12, color: "var(--muted)" }}>Fits {l.fitment}</div>}
@@ -381,7 +381,7 @@ export function Browse() {
                 <div style={{ position: "relative" }}>
                   <PhotoCell icon="Car" url={v.photoUrl} style={{ height: 168, borderRadius: 0 }} iconSize={46} />
                 </div>
-                <div style={{ padding: 14, display: "grid", gap: 4 }}>
+                <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
                   {v.askingPrice ? <div className="tnum" style={{ fontSize: 20, fontWeight: 800 }}>${v.askingPrice.toLocaleString()}</div> : <div style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>Contact for price</div>}
                   <div style={{ fontSize: 14, fontWeight: 600 }}>{v.year} {v.make} {v.model} {v.trim}</div>
                   <div style={{ fontSize: 12.5, color: "var(--muted)", display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -662,8 +662,10 @@ function LoadMore({ onClick, remaining }: { onClick: () => void; remaining: numb
   );
 }
 
-const card: React.CSSProperties = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden" };
-const contactBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 8, padding: "9px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%" };
+// Full-height flex column so cards in a row match height and the "Message seller"
+// button can be pushed to a shared baseline (marginTop:auto on the button).
+const card: React.CSSProperties = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", display: "flex", flexDirection: "column", height: "100%" };
+const contactBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, marginTop: "auto", padding: "9px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%" };
 const ov: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 160, background: "rgba(7,11,22,0.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 24 };
 const modal: React.CSSProperties = { width: "min(440px, 100%)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-xl)", padding: 20, display: "grid", gap: 10, boxShadow: "0 40px 90px -30px rgba(0,0,0,0.8)" };
 const detailModal: React.CSSProperties = { position: "relative", width: "min(480px, 100%)", maxHeight: "90vh", overflowY: "auto", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-xl)", boxShadow: "0 40px 90px -30px rgba(0,0,0,0.8)" };

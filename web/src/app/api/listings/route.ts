@@ -157,7 +157,7 @@ export async function PATCH(req: Request) {
   // ── Edit a single part listing (price / status / description) ──────────────
   if (body.listingId) {
     const { data: row, error: getErr } = await db
-      .from("listings").select("corrected, ai_output").eq("id", body.listingId).eq("shop_id", shopId).single();
+      .from("listings").select("corrected, ai_output, price_usd").eq("id", body.listingId).eq("shop_id", shopId).single();
     if (getErr || !row) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
 
     const update: Record<string, any> = {};
@@ -168,6 +168,13 @@ export async function PATCH(req: Request) {
       const enumStatus = STATUS_TO_ENUM[body.status] || (["draft", "active", "sold", "removed"].includes(body.status) ? body.status : null);
       if (!enumStatus) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
       update.status = enumStatus;
+      // Capture the sale price + time so the pricing pipeline can learn from the
+      // shop's own real sales (its strongest comp). Defaults to the listing's
+      // current price when not explicitly provided. (Needs migration 0031.)
+      if (enumStatus === "sold") {
+        update.sold_at = new Date().toISOString();
+        update.sold_price = update.price_usd ?? row.price_usd ?? null;
+      }
     }
     // Editable part fields merge into the corrected JSON so we don't clobber
     // other reviewed fields.
@@ -217,7 +224,11 @@ export async function PATCH(req: Request) {
     const ids: string[] = Array.isArray(body.listingIds) ? body.listingIds : [];
     if (!ids.length) return NextResponse.json({ error: "No listing IDs provided" }, { status: 400 });
 
-    const { error } = await db.from("listings").update({ status: enumStatus }).in("id", ids).eq("shop_id", shopId);
+    // On bulk-sold, stamp sold_at. We don't snapshot sold_price here (own-comps
+    // falls back to the listing's price_usd when sold_price is null). (Mig. 0031.)
+    const bulk: Record<string, any> = { status: enumStatus };
+    if (enumStatus === "sold") bulk.sold_at = new Date().toISOString();
+    const { error } = await db.from("listings").update(bulk).in("id", ids).eq("shop_id", shopId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, updated: ids.length });
   }

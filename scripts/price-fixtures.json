@@ -1,0 +1,15 @@
+{
+  "_README": "REPLACE these with REAL recent sold prices you trust (your own sales, or eBay SOLD listings). 'query' = what the app searches (year make model part); 'soldPrice' = the known true sold price in USD. The accuracy number is only meaningful once these are real — the values below are PLACEHOLDERS just so the harness runs.",
+  "fixtures": [
+    { "query": "2021 Toyota Camry headlight assembly", "soldPrice": 230 },
+    { "query": "2022 Honda Civic front bumper cover", "soldPrice": 285 },
+    { "query": "2021 Ford F-150 tail light", "soldPrice": 160 },
+    { "query": "2022 Toyota RAV4 side mirror", "soldPrice": 145 },
+    { "query": "2021 Honda CR-V hood", "soldPrice": 410 },
+    { "query": "2022 Nissan Altima alternator", "soldPrice": 95 },
+    { "query": "2021 Chevrolet Silverado front door", "soldPrice": 520 },
+    { "query": "2022 Toyota Corolla windshield", "soldPrice": 240 },
+    { "query": "2021 Toyota Camry wheel rim", "soldPrice": 175 },
+    { "query": "2022 Honda Civic ac compressor", "soldPrice": 130 }
+  ]
+}
