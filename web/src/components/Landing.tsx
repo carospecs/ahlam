@@ -15,8 +15,11 @@ const EASE = [0.22, 0.8, 0.26, 1] as const;
 // Contact inbox for the demo/contact/feedback buttons. Swap for a real shared
 // inbox or a booking link (Calendly, Cal.com) when ready.
 const CONTACT_EMAIL = "mohammadabbas@ahlam.io";
-// Mail goes to both founders (mailto supports comma-separated recipients).
+// Mail goes to both founders (comma-separated for mailto; separate params for Gmail).
 const CONTACT_RECIPIENTS = "mohammadabbas@ahlam.io,andygarcia@ahlam.io";
+// Gmail compose URL (opens in browser instead of default mail client).
+const GMAIL_COMPOSE = (to: string, subject: string) =>
+  `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}`;
 // "Book a demo" opens the Cal.com team scheduling page.
 const CAL_DEMO_URL = "https://cal.com/team/ahlam-team";
 
@@ -277,7 +280,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                   </p>
                   <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 26 }}>
                     <a href={CAL_DEMO_URL} target="_blank" rel="noopener noreferrer" className="cs-raise" style={{ ...solidBtn, padding: "13px 24px", fontSize: 15 }}><CalendarCheck size={17} /> Book a demo</a>
-                    <a href={`mailto:${CONTACT_RECIPIENTS}?subject=${encodeURIComponent("Ahlam question")}`} style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15 }}><Mail size={16} /> Contact us</a>
+                    <a href={GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question")} target="_blank" rel="noopener noreferrer" style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15 }}><Mail size={16} /> Contact us</a>
                     <a href="#how" style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15 }}><Compass size={16} /> Explore the product</a>
                   </div>
                   <div style={{ marginTop: 22, paddingTop: 20, borderTop: "1px solid var(--line)", fontSize: 14, color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
@@ -299,7 +302,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
               {[
                 { h: "Product", links: [["How it works", "#how"], ["Pricing", "#pricing"], ["The brain", "#faq"], ["Get started", "#"]] },
                 { h: "Resources", links: [["Guides", "/guides"], ["FAQ", "#faq"], ["Waitlist", "/waitlist"]] },
-                { h: "Company", links: [["Book a demo", CAL_DEMO_URL], ["Contact us", `mailto:${CONTACT_RECIPIENTS}`], ["Feedback", `mailto:${CONTACT_RECIPIENTS}?subject=${encodeURIComponent("Ahlam feedback")}`]] },
+                { h: "Company", links: [["Book a demo", CAL_DEMO_URL], ["Contact us", GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question")], ["Feedback", `mailto:${CONTACT_RECIPIENTS}?subject=${encodeURIComponent("Ahlam feedback")}`]] },
               ].map((col) => (
                 <div key={col.h}>
                   <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>{col.h}</div>
