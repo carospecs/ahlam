@@ -280,12 +280,12 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                   </p>
                   <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 26 }}>
                     <a href={CAL_DEMO_URL} target="_blank" rel="noopener noreferrer" className="cs-raise" style={{ ...solidBtn, padding: "13px 24px", fontSize: 15 }}><CalendarCheck size={17} /> Book a demo</a>
-                    <button onClick={() => window.location.href = GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question")} style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15, cursor: "pointer" }}><Mail size={16} /> Contact us</button>
+                    <button onClick={() => window.open(GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question"), "_blank", "noopener")} style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15, cursor: "pointer" }}><Mail size={16} /> Contact us</button>
                     <a href="#how" style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15 }}><Compass size={16} /> Explore the product</a>
                   </div>
                   <div style={{ marginTop: 22, paddingTop: 20, borderTop: "1px solid var(--line)", fontSize: 14, color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
                     <MessageSquare size={15} color="var(--accent)" /> Have feedback or a feature request?
-                    <button onClick={() => window.location.href = GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam feedback")} style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600, cursor: "pointer", background: "none", border: "none", fontSize: 14, fontFamily: "inherit", padding: 0 }}>Tell us what you think</button>
+                    <button onClick={() => window.open(GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam feedback"), "_blank", "noopener")} style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600, cursor: "pointer", background: "none", border: "none", fontSize: 14, fontFamily: "inherit", padding: 0 }}>Tell us what you think</button>
                   </div>
                 </div>
               </Reveal>
@@ -304,8 +304,8 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                 { h: "Resources", links: [["Guides", "/guides"], ["FAQ", "#faq"], ["Waitlist", "/waitlist"]] },
                 { h: "Company", links: [
                   ["Book a demo", CAL_DEMO_URL, true],
-                  ["Contact us", null, false, () => window.location.href = GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question")],
-                  ["Feedback", null, false, () => window.location.href = GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam feedback")],
+                  ["Contact us", null, false, () => window.open(GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question"), "_blank", "noopener")],
+                  ["Feedback", null, false, () => window.open(GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam feedback"), "_blank", "noopener")],
                 ]},
               ].map((col) => (
                 <div key={col.h}>
