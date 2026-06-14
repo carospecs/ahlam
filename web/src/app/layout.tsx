@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Space_Grotesk, Space_Mono, Fraunces } from "next/font/google";
+import { Inter, Space_Grotesk, Space_Mono, Fraunces, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
@@ -26,6 +26,16 @@ const serif = Fraunces({
   weight: ["400", "500", "600"],
   style: ["normal", "italic"],
   variable: "--font-serif",
+  display: "swap",
+});
+
+// Brand marketing display face — a contemporary grotesque with real character.
+// Deliberately NOT a Times-like serif, to give the landing page its own identity
+// distinct from finance-template look-alikes. Drives .cs-display on the landing.
+const brand = Bricolage_Grotesque({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-brand",
   display: "swap",
 });
 
@@ -67,7 +77,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${sans.variable} ${display.variable} ${serif.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${sans.variable} ${display.variable} ${serif.variable} ${brand.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         {/* Apply the saved theme before paint to avoid a flash of the wrong theme. */}
         <script

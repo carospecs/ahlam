@@ -74,7 +74,7 @@ export async function groundedMedianPrice(query: string, partName: string): Prom
         `Cross-check several sources — eBay SOLD/completed listings, Google Shopping, car-part.com, Facebook Marketplace, OfferUp — and corroborate the figure across them. ` +
         `Strongly prefer COMPLETED / SOLD prices over current asking prices: sold prices are true market value, asking prices skew high. ` +
         `Estimate the MEDIAN sold price in US dollars for the part in good used condition.\n\n` +
-        `Reply with ONLY the number (e.g. "385") — no currency sign, no words, no range. ` +
+        `Reply with ONLY the dollar amount, prefixed with "$" (e.g. "$385") — no year, no part name, no words, no range. ` +
         `If you cannot corroborate at least a few real sold comps, reply with exactly "NONE".`,
       } ] }],
       tools: [{ google_search: {} }],
@@ -84,12 +84,24 @@ export async function groundedMedianPrice(query: string, partName: string): Prom
     const j = await res.json();
     const text: string = (j.candidates?.[0]?.content?.parts || [])
       .map((p: any) => p.text ?? "").join("");
-    if (/\bNONE\b/i.test(text)) return null;
-    const m = text.replace(/[$,]/g, "").match(/\d+(?:\.\d+)?/);
-    if (!m) return null;
-    const price = Math.round(parseFloat(m[0]));
+    const price = parseGroundedPrice(text);
+    if (price == null) return null;
     return isSanePrice(price, partName) ? price : null; // reject implausible grounding
   } catch { return null; }
+}
+
+// Pull a USD price out of the grounded model's free-text reply. The model often
+// echoes the query, so a naive "first number" grabs the YEAR (e.g. 2017) instead
+// of the price. So: bail on NONE, prefer an explicit $-prefixed amount, and
+// otherwise strip 4-digit year tokens (1900–2099) before taking the first number.
+export function parseGroundedPrice(text: string): number | null {
+  if (!text || /\bNONE\b/i.test(text)) return null;
+  const cleaned = text.replace(/,/g, "");
+  const dollar = cleaned.match(/\$\s?(\d{1,6}(?:\.\d+)?)/);
+  if (dollar) return Math.round(parseFloat(dollar[1]));
+  const noYears = cleaned.replace(/\b(?:19|20)\d{2}\b/g, " ");
+  const m = noYears.match(/\d{1,6}(?:\.\d+)?/);
+  return m ? Math.round(parseFloat(m[0])) : null;
 }
 
 // Convenience wrapper used by the PricingToggle UI's "live comp" lookup: a single
@@ -118,6 +130,34 @@ export async function ebayUsedPrices(query: string): Promise<number[]> {
       .map((i: any) => parseFloat(i.price?.value))
       .filter((n: number) => Number.isFinite(n) && n > 0);
   } catch { return []; }
+}
+
+// Pricing ladder — condition adjustment. Market comps (own/grounded/asking) reflect
+// a part in GOOD used condition (~Grade B). Adjust the comp price to the part's
+// actual grade so a clean Grade A part isn't underpriced and a worn Grade C isn't
+// overpriced. (The Layer-2 model estimate is already condition-aware, so it is NOT
+// re-multiplied.)
+export const CONDITION_MULTIPLIER: Record<"A" | "B" | "C", number> = { A: 1.15, B: 1.0, C: 0.78 };
+export function applyCondition(price: number, grade: "A" | "B" | "C"): number {
+  return Math.round(price * (CONDITION_MULTIPLIER[grade] ?? 1));
+}
+
+// Asking-price → sold-price discount. Active asking prices skew high (overpriced
+// listings sit unsold), so a sold approximation discounts the asking median.
+export const ASKING_TO_SOLD = 0.82;
+
+// Ladder rung 3 (between live SOLD comps and the band floor): approximate a sold
+// price from ACTIVE ASKING prices when no sold comps are found. Needs at least
+// MIN_COMPS asking listings, takes their outlier-trimmed median, discounts it, and
+// only returns a band-sane result. Returns null if eBay is unconfigured, there are
+// too few listings, or the result is implausible — caller then falls to the band.
+export async function askingApproxPrice(query: string, partName: string): Promise<number | null> {
+  const asking = await ebayUsedPrices(query);
+  if (asking.length < MIN_COMPS) return null;
+  const med = trimmedMedian(asking);
+  if (med == null) return null;
+  const approx = Math.round(med * ASKING_TO_SOLD);
+  return isSanePrice(approx, partName) ? approx : null;
 }
 
 // Resolve the eBay LEAF category a part should be listed in by reading the
