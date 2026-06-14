@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { groundedMedianPrice } from "@/lib/pricing";
+import { groundedMedianPrice, askingApproxPrice, applyCondition } from "@/lib/pricing";
 import { clampToBand, bandsPromptBlock } from "@/lib/price-bands";
 import { loadSoldListings, ownSoldComps, type SoldRow } from "@/lib/own-comps";
 import { getCachedPrice, setCachedPrice } from "@/lib/price-cache";
@@ -28,11 +28,14 @@ export interface PricingInsight {
   suggestedPrice: number;
   priceRange: { min: number; max: number };
   similarCount: number;
-  // Which layer produced this price (useful while experimenting):
-  // "shop" = the shop's own past sold comps (L3, strongest), "grounded" = live
-  // grounded sold-price web search (L3), "model" = AI estimate clamped to the
-  // sold-price bands (L2).
-  source?: "shop" | "grounded" | "model";
+  // Which rung of the pricing ladder produced this price (best → fallback):
+  // "shop" = the shop's own past sold comps (strongest), "grounded" = live grounded
+  // sold-price web search, "asking" = discounted active asking prices, "model" =
+  // AI estimate clamped to the sold-price bands (last-resort floor).
+  source?: "shop" | "grounded" | "asking" | "model";
+  // How trustworthy the price is, derived from the rung: real sold data is high,
+  // discounted asking is medium, the band/model estimate is low. Surfaced in the UI.
+  confidence?: "high" | "medium" | "low";
 }
 
 export interface AIPartOutput {
@@ -386,12 +389,14 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     //
     // The bands floor every part (Layer 2 clamp) so nothing posts below market.
 
-    // Layer 2: clamp the model's per-part estimate into its band, and seed the
-    // pricingInsight so every part carries a price + provenance even if L3 bails.
+    // Ladder rung 4 (last-resort floor): clamp the model's per-part estimate into
+    // its band and seed the pricingInsight, so every part carries a price + low
+    // confidence even if the higher rungs bail. (The model estimate is already
+    // condition-aware, so it is NOT re-multiplied by the grade below.)
     for (const p of data) {
       p.suggestedPriceUsd = clampToBand(p.suggestedPriceUsd, p.partName);
       p.pricingInsight = p.suggestedPriceUsd != null
-        ? { suggestedPrice: p.suggestedPriceUsd, priceRange: { min: p.suggestedPriceUsd, max: p.suggestedPriceUsd }, similarCount: 0, source: "model" }
+        ? { suggestedPrice: p.suggestedPriceUsd, priceRange: { min: p.suggestedPriceUsd, max: p.suggestedPriceUsd }, similarCount: 0, source: "model", confidence: "low" }
         : undefined;
     }
 
@@ -403,37 +408,62 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
       if (profile?.shop_id) soldRows = await loadSoldListings(profile.shop_id as string);
     } catch { /* no own comps — fall back to grounded */ }
 
-    // Layer 3: per part, override the Layer 2 estimate with real market data when
-    // we know the vehicle. Priority: (1) the shop's OWN sold comps; (2) a grounded
-    // sold-price web search, cache-first. Non-fatal — any miss keeps the L2 price.
-    // Run in bounded batches: with up to 50 parts, firing every grounded search at
-    // once would trip Gemini rate limits — GROUNDED_CONCURRENCY caps in-flight.
+    // Pricing ladder: per part, walk best → fallback and stop at the first rung
+    // with real data, so a part almost always lands on a real-data rung and the
+    // rest are honestly marked low confidence (never a silent "no comps"):
+    //   (1) shop's own sold comps   → high   (2) grounded sold-price search → high
+    //   (3) discounted active asking → medium (4) band/model estimate (seeded) → low
+    // Market rungs (1–3) are condition-adjusted to the part's A/B/C grade. Runs in
+    // bounded batches so up to 50 parts don't trip Gemini/eBay rate limits.
     if (vehicle && (vehicle.make || vehicle.model)) {
       const GROUNDED_CONCURRENCY = 6;
       for (let i = 0; i < data.length; i += GROUNDED_CONCURRENCY) {
         const batch = data.slice(i, i + GROUNDED_CONCURRENCY);
         await Promise.all(batch.map(async (p) => {
+          const grade: ConditionGrade = (["A", "B", "C"] as const).includes(p.condition) ? p.condition : "B";
+          // A market comp reflects ~good (Grade B) condition; adjust to this part's grade.
+          const setMarket = (
+            raw: number,
+            source: "shop" | "grounded" | "asking",
+            confidence: "high" | "medium",
+            range?: { min: number; max: number },
+            count = 0,
+          ) => {
+            const adj = applyCondition(raw, grade);
+            p.suggestedPriceUsd = adj;
+            p.pricingInsight = {
+              suggestedPrice: adj,
+              priceRange: range ? { min: applyCondition(range.min, grade), max: applyCondition(range.max, grade) } : { min: adj, max: adj },
+              similarCount: count,
+              source,
+              confidence,
+            };
+          };
+
           // (1) Shop's own sold comps — real money real buyers paid this shop.
           const own = ownSoldComps(soldRows, p.partName);
-          if (own) {
-            p.suggestedPriceUsd = own.median;
-            p.pricingInsight = { suggestedPrice: own.median, priceRange: { min: own.min, max: own.max }, similarCount: own.count, source: "shop" };
-            return;
-          }
-          // (2) Grounded sold-price web search, cache-first (free + stable on repeat).
+          if (own) { setMarket(own.median, "shop", "high", { min: own.min, max: own.max }, own.count); return; }
+
           const q = [vehicle.yearStart, vehicle.make, vehicle.model, p.partName].filter(Boolean).join(" ");
+
+          // (2) Grounded sold-price web search, cache-first (free + stable on repeat).
           try {
             let grounded = await getCachedPrice(q);
             if (grounded == null) {
               grounded = await groundedMedianPrice(q, p.partName);
               if (grounded && grounded > 0) await setCachedPrice(q, grounded, "grounded");
             }
-            if (grounded && grounded > 0) {
-              p.suggestedPriceUsd = grounded;
-              p.pricingInsight = { suggestedPrice: grounded, priceRange: { min: grounded, max: grounded }, similarCount: 0, source: "grounded" };
-            }
-            // else: keep the Layer 2 band-clamped model estimate set above.
-          } catch { /* keep Layer 2 estimate */ }
+            if (grounded && grounded > 0) { setMarket(grounded, "grounded", "high"); return; }
+          } catch { /* fall to the next rung */ }
+
+          // (3) Discounted active asking prices — fills the gap when no sold comps
+          // are found, instead of dropping straight to the band estimate.
+          try {
+            const asking = await askingApproxPrice(q, p.partName);
+            if (asking && asking > 0) { setMarket(asking, "asking", "medium"); return; }
+          } catch { /* fall to the band estimate */ }
+
+          // (4) else: keep the Layer-2 band/model estimate (already seeded, low confidence).
         }));
       }
     }

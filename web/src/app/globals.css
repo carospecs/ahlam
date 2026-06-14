@@ -7,7 +7,7 @@
   --foreground: #F8FAFC;
   --surface: #1B2336;
   --surface2: #272F42;
-  --muted: #94A3B8;
+  --muted: #B2BECF;               /* brighter secondary text — legible on navy + aurora */
   --line: #334155;
   --accent: #D8392E;             /* Signal Red — brand */
   --accent-hover: #B92D24;
@@ -348,13 +348,22 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
   box-shadow: 0 18px 44px -26px rgba(0,0,0,0.6);
 }
 
-/* Editorial serif display for marketing headings (landing + guides). Scoped to
-   this class so the app keeps its Poppins brand voice. */
+/* Brand grotesque display for marketing headings (landing + guides). A
+   contemporary grotesque (Bricolage) gives the page its own identity instead of
+   the finance-template editorial serif. Scoped to this class so the app keeps
+   its Poppins brand voice. */
 .cs-display {
-  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  font-family: var(--font-brand), var(--font-display), "Segoe UI", sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.022em;
   font-optical-sizing: auto;
+}
+/* Accent fragment inside a display heading — the brand's signal color, set in
+   the same grotesque (no italic serif) so headings read as one distinct voice. */
+.cs-display .accent {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 700;
 }
 
 /* Gold eyebrow label (uppercase, letter-spaced) above section headings. */
@@ -363,6 +372,12 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
   color: var(--sand);
 }
 :root[data-theme="light"] .cs-eyebrow { color: #9a7b3f; }
+
+/* Quiet secondary hero link: underline grows + arrow nudges on hover. */
+.cs-textlink { position: relative; transition: opacity 0.2s ease; }
+.cs-textlink::after { content: ""; position: absolute; left: 0; bottom: -3px; height: 1.5px; width: 0; background: var(--accent); transition: width 0.25s ease; }
+.cs-textlink:hover::after { width: calc(100% - 22px); }
+.cs-textlink:hover { opacity: 0.92; }
 
 /* Animated aurora: slow-drifting blurred brand-color blobs, GPU-friendly
    (transform/opacity only). Disabled automatically by prefers-reduced-motion. */
@@ -407,7 +422,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
 }
 
 /* Big number stat for the stats band. */
-.cs-stat-num { font-family: var(--font-serif), Georgia, serif; font-weight: 600; font-size: clamp(34px, 4.4vw, 50px); letter-spacing: -0.02em; line-height: 1; color: var(--foreground); }
+.cs-stat-num { font-family: var(--font-brand), var(--font-display), sans-serif; font-weight: 700; font-size: clamp(34px, 4.4vw, 50px); letter-spacing: -0.03em; line-height: 1; color: var(--foreground); }
 
 /* Gentle float for the hero preview card. */
 @keyframes cs-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }

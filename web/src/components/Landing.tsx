@@ -5,6 +5,7 @@ import { motion, AnimatePresence, MotionConfig, useScroll, useMotionValueEvent, 
 import { ScanLine, Sparkles, Send, ArrowRight, Tag, ShieldCheck, Check, ChevronDown, CalendarCheck, Mail, MessageSquare, Compass, Wrench, DollarSign, Brain, Download, ShoppingBag, BarChart3, Users, Building2, X } from "lucide-react";
 import { BrandChip, BrandMark } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
+import { CONDITION_COLOR } from "./data";
 
 // Public marketing page shown to unauthenticated visitors, so the product
 // explains itself before asking anyone to sign up. Motion is gated behind
@@ -32,6 +33,18 @@ const FAQS = [
   { q: "What does it cost to start?", a: "Nothing. Start free with no card. The Pro plan is one flat monthly price with everything included." },
 ];
 
+// Sample marketplace listings for the public landing — varied vehicles and a
+// deliberate mix of A/B/C grades so the grade system is visible at a glance.
+// Demo data only; the real grid is powered by live listings in the app.
+const MARKET_SAMPLE: { part: string; side?: string; vehicle: string; grade: "A" | "B" | "C"; price: number; views: number; loc: string }[] = [
+  { part: "Front Bumper Cover", vehicle: "2018 Honda Civic", grade: "A", price: 240, views: 142, loc: "Long Beach, CA" },
+  { part: "Tailgate Assembly", vehicle: "2013 Ford F-150", grade: "B", price: 410, views: 318, loc: "Phoenix, AZ" },
+  { part: "Hood", vehicle: "2016 Chevy Silverado", grade: "C", price: 120, views: 73, loc: "Houston, TX" },
+  { part: "Headlight Assembly", side: "Right", vehicle: "2019 Toyota RAV4", grade: "A", price: 185, views: 96, loc: "Dallas, TX" },
+  { part: "Alloy Wheel — Set of 4", vehicle: "2017 Toyota Camry", grade: "B", price: 300, views: 204, loc: "Atlanta, GA" },
+  { part: "Engine 2.4L", vehicle: "2015 Nissan Altima", grade: "C", price: 880, views: 58, loc: "Denver, CO" },
+];
+
 // Real marketplace logo glyphs (single-path, rendered monochrome) for the
 // "works with" strip. Brand marks shown only to indicate integrations.
 const LOGO_GOOGLE = "M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z";
@@ -51,14 +64,16 @@ function LogoImg({ src, alt, h = 24 }: { src: string; alt: string; h?: number })
 }
 
 const reveal: Variants = {
-  hidden: { opacity: 0, y: 28, filter: "blur(6px)" },
-  show: (i = 0) => ({ opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.7, ease: EASE, delay: i * 0.09 } }),
+  hidden: { opacity: 0, y: 16, filter: "blur(2px)" },
+  show: (i = 0) => ({ opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.5, ease: EASE, delay: i * 0.07 } }),
 };
 
-// Scroll-reveal wrapper: soft blur + lift into view once.
+// Scroll-reveal wrapper: a gentle lift into view once. Trigger margin is positive
+// so a section starts animating slightly BEFORE its top reaches the viewport,
+// which keeps content from ever reading as an empty/blurred void while scrolling.
 function Reveal({ children, i = 0, style, className }: { children: React.ReactNode; i?: number; style?: React.CSSProperties; className?: string }) {
   return (
-    <motion.div variants={reveal} custom={i} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} style={style} className={className}>
+    <motion.div variants={reveal} custom={i} initial="hidden" whileInView="show" viewport={{ once: true, margin: "120px 0px" }} style={style} className={className}>
       {children}
     </motion.div>
   );
@@ -95,6 +110,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
               <span style={navDivider} className="cs-pill-links" />
               <nav className="cs-pill-links" style={{ display: "flex", alignItems: "center", gap: 2 }}>
                 <a href="#how" style={navLink}>How it works</a>
+                <a href="#marketplace" style={navLink}>Marketplace</a>
                 <a href="#pricing" style={navLink}>Pricing</a>
                 <a href="/guides" style={navLink}>Guides</a>
                 <a href="/waitlist" style={navLink}>Waitlist</a>
@@ -113,16 +129,16 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                 <motion.span variants={reveal} custom={0} initial="hidden" animate="show" className="cs-eyebrow" style={{ display: "inline-block" }}>
                   For salvage yards, mechanics, and individual sellers
                 </motion.span>
-                <motion.h1 className="cs-display" variants={reveal} custom={1} initial="hidden" animate="show" style={{ margin: "20px 0 0", fontSize: "clamp(38px, 4.6vw, 56px)", fontWeight: 600, lineHeight: 1.05, letterSpacing: "-0.025em" }}>
+                <motion.h1 className="cs-display" variants={reveal} custom={1} initial="hidden" animate="show" style={{ margin: "20px 0 0", fontSize: "clamp(40px, 4.9vw, 60px)", fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em" }}>
                   Photograph a car.<br />
-                  <span style={{ color: "var(--accent)", fontStyle: "italic", fontWeight: 500 }}>List every part in seconds.</span>
+                  <span className="accent">List every part in seconds.</span>
                 </motion.h1>
                 <motion.p variants={reveal} custom={2} initial="hidden" animate="show" style={{ margin: "22px 0 0", fontSize: 17, color: "var(--muted)", lineHeight: 1.6, maxWidth: 520 }}>
                   Ahlam&apos;s AI identifies every part, grades its condition, and prices it straight from your photos. Then it posts to eBay and preps Facebook, OfferUp, and Craigslist. The hours you spend cataloging and typing listings are gone.
                 </motion.p>
-                <motion.div variants={reveal} custom={3} initial="hidden" animate="show" style={{ display: "flex", gap: 12, marginTop: 30, flexWrap: "wrap" }}>
-                  <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtn, padding: "13px 24px", fontSize: 15 }}>Start free <ArrowRight size={17} /></button>
-                  <a href="#how" style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15 }}>See how it works</a>
+                <motion.div variants={reveal} custom={3} initial="hidden" animate="show" style={{ display: "flex", gap: 20, marginTop: 32, flexWrap: "wrap", alignItems: "center" }}>
+                  <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtn, padding: "14px 26px", fontSize: 15.5 }}>Start free <ArrowRight size={17} /></button>
+                  <a href="#how" className="cs-textlink" style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 15, fontWeight: 600, color: "var(--foreground)", textDecoration: "none" }}>See how it works <ArrowRight size={15} style={{ opacity: 0.6 }} /></a>
                 </motion.div>
                 <motion.div variants={reveal} custom={4} initial="hidden" animate="show" style={{ marginTop: 20, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
                   <PoweredByGoogle />
@@ -202,6 +218,74 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                   </motion.div>
                 ))}
               </div>
+            </div>
+          </section>
+
+          {/* Marketplace — the two-sided buy & sell side of Ahlam */}
+          <section id="marketplace" style={{ borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)" }}>
+            <div style={{ maxWidth: 1080, margin: "0 auto", padding: "78px 24px" }}>
+              <Reveal style={{ textAlign: "center", maxWidth: 680, margin: "0 auto 14px" }}>
+                <div className="cs-eyebrow">Marketplace</div>
+                <h2 className="cs-display" style={h2}>A marketplace that works <span className="accent">both ways</span></h2>
+                <p style={{ color: "var(--muted)", fontSize: 16, marginTop: 12, lineHeight: 1.6 }}>
+                  Sellers list parts in seconds with the AI. Buyers search every yard&apos;s inventory in one place and message the seller direct — no middleman, no off-platform hand-off.
+                </p>
+              </Reveal>
+
+              {/* Buyer / seller split pills */}
+              <Reveal i={1} style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", margin: "0 0 34px" }}>
+                <div className="cs-glass" style={{ display: "inline-flex", alignItems: "center", gap: 9, borderRadius: 999, padding: "9px 16px", fontSize: 13.5, fontWeight: 600 }}>
+                  <Compass size={16} color="var(--accent)" /> For buyers — find the exact part
+                </div>
+                <div className="cs-glass" style={{ display: "inline-flex", alignItems: "center", gap: 9, borderRadius: 999, padding: "9px 16px", fontSize: 13.5, fontWeight: 600 }}>
+                  <ShoppingBag size={16} color="var(--accent)" /> For sellers — reach every buyer
+                </div>
+              </Reveal>
+
+              {/* Mock browse search bar */}
+              <Reveal i={2} style={{ maxWidth: 760, margin: "0 auto 22px" }}>
+                <div className="cs-glass" style={{ display: "flex", alignItems: "center", gap: 10, borderRadius: 999, padding: "12px 18px" }}>
+                  <Compass size={18} color="var(--muted)" />
+                  <span style={{ color: "var(--muted)", fontSize: 14.5 }}>Search “2014 Honda Accord front bumper”, a VIN, or a part number…</span>
+                  <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Browse</span>
+                </div>
+              </Reveal>
+
+              {/* Live-listing grid (buyer view) */}
+              <div className="cs-feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+                {MARKET_SAMPLE.map((l, i) => (
+                  <motion.div key={l.part + l.vehicle}
+                    initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "80px 0px" }}
+                    transition={{ delay: (i % 3) * 0.08, duration: 0.5, ease: EASE }}
+                    whileHover={{ y: -5 }}
+                    className="cs-glass" style={{ borderRadius: "var(--radius-lg)", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: CONDITION_COLOR[l.grade], background: `color-mix(in srgb, ${CONDITION_COLOR[l.grade]} 16%, transparent)` }}>
+                        <span style={{ width: 7, height: 7, borderRadius: 999, background: CONDITION_COLOR[l.grade] }} /> Grade {l.grade}
+                      </span>
+                      <span className="cs-display" style={{ fontSize: 21, fontWeight: 700 }}>${l.price}</span>
+                    </div>
+                    {/* photo placeholder */}
+                    <div className="photo-cell" style={{ height: 100, borderRadius: 10, background: "color-mix(in srgb, var(--surface2) 70%, transparent)", display: "grid", placeItems: "center", position: "relative", overflow: "hidden" }}>
+                      <span aria-hidden="true" style={{ position: "absolute", inset: 0, background: `radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, ${CONDITION_COLOR[l.grade]} 14%, transparent), transparent 60%)` }} />
+                      <ShoppingBag size={26} color="var(--muted)" style={{ opacity: 0.4 }} />
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 600 }}>{l.side ? `${l.side} ` : ""}{l.part}</div>
+                    <div style={{ fontSize: 12.5, color: "var(--muted)" }}>Fits {l.vehicle}</div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2, paddingTop: 10, borderTop: "1px solid var(--line)" }}>
+                      <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{l.views} views · {l.loc}</span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 700, color: "var(--accent)" }}>
+                        <MessageSquare size={13} /> Message
+                      </span>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              <Reveal i={1} style={{ display: "flex", justifyContent: "center", marginTop: 32 }}>
+                <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtn, padding: "13px 24px", fontSize: 15 }}>Browse the marketplace <ArrowRight size={17} /></button>
+              </Reveal>
             </div>
           </section>
 

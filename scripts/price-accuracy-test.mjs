@@ -43,7 +43,7 @@ async function groundedMedianPrice(query) {
           `Cross-check several sources — eBay SOLD/completed listings, Google Shopping, car-part.com, Facebook Marketplace, OfferUp — and corroborate the figure across them. ` +
           `Strongly prefer COMPLETED / SOLD prices over current asking prices. ` +
           `Estimate the MEDIAN sold price in US dollars for the part in good used condition.\n\n` +
-          `Reply with ONLY the number (e.g. "385") — no currency sign, no words, no range. ` +
+          `Reply with ONLY the dollar amount, prefixed with "$" (e.g. "$385") — no year, no part name, no words, no range. ` +
           `If you cannot corroborate at least a few real sold comps, reply with exactly "NONE".`,
         } ] }],
         tools: [{ google_search: {} }],
@@ -53,10 +53,20 @@ async function groundedMedianPrice(query) {
     if (!r.ok) return null;
     const j = await r.json();
     const text = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text ?? "").join("");
-    if (/\bNONE\b/i.test(text)) return null;
-    const m = text.replace(/[$,]/g, "").match(/\d+(?:\.\d+)?/);
-    return m ? Math.round(parseFloat(m[0])) : null;
+    return parseGroundedPrice(text);
   } catch { return null; }
+}
+
+// Mirror of pricing.ts parseGroundedPrice: prefer a $-amount, else strip year
+// tokens before taking the first number (the model often echoes the query year).
+function parseGroundedPrice(text) {
+  if (!text || /\bNONE\b/i.test(text)) return null;
+  const cleaned = text.replace(/,/g, "");
+  const dollar = cleaned.match(/\$\s?(\d{1,6}(?:\.\d+)?)/);
+  if (dollar) return Math.round(parseFloat(dollar[1]));
+  const noYears = cleaned.replace(/\b(?:19|20)\d{2}\b/g, " ");
+  const m = noYears.match(/\d{1,6}(?:\.\d+)?/);
+  return m ? Math.round(parseFloat(m[0])) : null;
 }
 
 const pct = (a, b) => Math.abs(a - b) / b * 100;

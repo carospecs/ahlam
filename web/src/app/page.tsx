@@ -43,6 +43,19 @@ export default function Home() {
       setShowLogin(true);
     }
 
+    // PERF: the public landing must not wait on a network getSession() round-trip.
+    // Supabase persists the session in localStorage, so synchronously check for a
+    // token: if there's none, render the marketing page immediately (anonymous
+    // visitors are the common case). getSession() still runs below to confirm and
+    // upgrade returning users to the dashboard.
+    let hasPersistedSession = false;
+    try {
+      hasPersistedSession = Object.keys(localStorage).some(
+        (k) => k.startsWith("sb-") && k.endsWith("-auth-token"),
+      );
+    } catch { /* localStorage blocked — fall through to the network check */ }
+    if (!hasPersistedSession) setAuthed(false);
+
     const sb = supabaseBrowser();
     sb.auth
       .getSession()
