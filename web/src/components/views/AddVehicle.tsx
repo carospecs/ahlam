@@ -16,6 +16,11 @@ interface AIPart {
   condition: "Good" | "Poor"; conditionNotes: string; description: string;
   suggestedPriceUsd: number | null; confidence: "high" | "medium" | "low";
   lowConfidenceFields?: string[];
+  // Pricing provenance from the ladder (AHLAM-53): which rung set the price + how
+  // trustworthy it is. Spread through from the identify response.
+  pricingInsight?: { source?: "shop" | "grounded" | "asking" | "model"; confidence?: "high" | "medium" | "low"; similarCount?: number };
+  // Restricted-resale flag from the scan (AHLAM-54), surfaced in the review summary.
+  compliance?: { label: string; reason: string };
   photoUrl?: string; // the photo this part was scanned from — used as its thumbnail
   _id?: string;       // stable client id so edit/reorder/add survive list changes
   _aiPrice?: number | null; // the AI's original suggestion, kept for batch "% of suggested"
@@ -115,6 +120,41 @@ function comparePartsForDisplay(a: AIPart, b: AIPart): number {
   return sideRank(a.partName) - sideRank(b.partName);
 }
 
+// High-value, high-margin parts that only appear with engine-bay/underbody
+// photos. If a scan has none, the seller likely shot only the exterior and is
+// leaving the most profitable parts uncaptured (AHLAM-55).
+const HIGH_VALUE_CATEGORIES: { re: RegExp; label: string }[] = [
+  { re: /\bengine\b/i, label: "engine" },
+  { re: /\b(transmission|gearbox)\b/i, label: "transmission" },
+  { re: /\balternator\b/i, label: "alternator" },
+  { re: /\bstarter\b/i, label: "starter" },
+  { re: /\b(a\/?c )?compressor\b/i, label: "A/C compressor" },
+  { re: /\bcataly(tic|st)\b/i, label: "catalytic converter" },
+];
+function missingHighValueCategories(parts: AIPart[]): string[] {
+  const hay = parts.map((p) => p.partName).join(" | ");
+  return HIGH_VALUE_CATEGORIES.filter((c) => !c.re.test(hay)).map((c) => c.label);
+}
+
+// Flag left/right pairs of the same part priced very differently (>2.5×) — a
+// likely AI pricing slip the seller should eyeball before posting (AHLAM-69).
+function pairedPriceMismatches(parts: AIPart[]): { base: string }[] {
+  const groups = new Map<string, number[]>();
+  for (const p of parts) {
+    const price = p.suggestedPriceUsd || 0;
+    if (price <= 0 || !/\b(left|right)\b/i.test(p.partName)) continue;
+    const base = basePartName(p.partName);
+    groups.set(base, [...(groups.get(base) || []), price]);
+  }
+  const out: { base: string }[] = [];
+  for (const [base, prices] of groups) {
+    if (prices.length < 2) continue;
+    const min = Math.min(...prices), max = Math.max(...prices);
+    if (min > 0 && max / min > 2.5) out.push({ base: base.replace(/\b\w/g, (c) => c.toUpperCase()) });
+  }
+  return out;
+}
+
 export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
   const [phase, setPhase] = React.useState("upload");
   const [parts, setParts] = React.useState<AIPart[]>([]);
@@ -143,6 +183,12 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const sellable = parts.filter((p) => (p.suggestedPriceUsd || 0) > 0).length;
   const flagged = parts.filter((p) => p.confidence === "low");
   const goodCount = parts.filter((p) => p.condition === "Good").length;
+  // Pre-submit review checks (AHLAM-66): aggregate everything the seller should
+  // eyeball before posting — restricted parts, missing high-value categories,
+  // and wildly mismatched left/right prices.
+  const restricted = parts.filter((p) => p.compliance);                       // AHLAM-54
+  const missingHighValue = missingHighValueCategories(parts);                  // AHLAM-55
+  const priceMismatches = pairedPriceMismatches(parts);                        // AHLAM-69
   const photoCount = photos.length;
 
   // One box — drop everything in (HEIC, JPG, PNG, anything). The AI figures out
@@ -462,6 +508,15 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               {flagged.length > 0
                 ? <ReportLine icon={<TriangleAlert size={14} color="var(--signal)" />} text={`${flagged.length} part${flagged.length > 1 ? "s" : ""} flagged for review: ${flagged.map((f) => f.partName).join(", ")}.`} />
                 : <ReportLine icon={<CircleCheck size={14} color="var(--success)" />} text="No low-confidence parts. Every item came back clean." />}
+              {restricted.length > 0 && (
+                <ReportLine icon={<TriangleAlert size={14} color="#f59e0b" />} text={`${restricted.length} restricted part${restricted.length > 1 ? "s" : ""} — verify resale rules before listing: ${restricted.map((p) => p.partName).join(", ")}.`} />
+              )}
+              {missingHighValue.length > 0 && (
+                <ReportLine icon={<Info size={14} color="var(--signal)" />} text={`No ${missingHighValue.join(", ")} detected. If you're parting out the whole car, add engine-bay photos — these are usually the highest-value parts and you're leaving money on the table without them.`} />
+              )}
+              {priceMismatches.length > 0 && (
+                <ReportLine icon={<TriangleAlert size={14} color="var(--signal)" />} text={`Check left/right pricing — ${priceMismatches.map((m) => m.base).join(", ")} ${priceMismatches.length > 1 ? "have" : "has"} sides priced very differently. Paired parts usually sell within ~20% of each other.`} />
+              )}
               {mileage && <ReportLine icon={<Lock size={14} color="var(--muted)" />} text={`Mileage read from dashboard: ${mileage}. Kept private, never shown on listings. You can share it in chat if a buyer asks.`} />}
             </div>
           </Card>
@@ -607,6 +662,17 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                           <input type="number" min={0} value={p.suggestedPriceUsd ?? ""} placeholder="0" onChange={(e) => setPartPrice(p._id!, e.target.value)} className="tnum" style={{ width: 72, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 15, fontWeight: 700, textAlign: "right" }} />
                         </div>
                         {sellMode === "both" && <span style={{ fontSize: 10, color: "var(--muted)" }}>suggested</span>}
+                        {p.pricingInsight && (() => {
+                          const ins = p.pricingInsight!;
+                          const LBL: Record<string, string> = { shop: "Sold comps", grounded: "Market data", asking: "Active asking", model: "AI estimate" };
+                          const label = LBL[ins.source || "model"] || "AI estimate";
+                          const dot = ins.confidence === "high" ? "#16a34a" : ins.confidence === "medium" ? "#f59e0b" : "var(--muted)";
+                          return (
+                            <span title={`${label} · ${ins.confidence || "low"} confidence`} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap" }}>
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, flexShrink: 0 }} />{label}
+                            </span>
+                          );
+                        })()}
                       </div>
                       <button onClick={() => removePart(p._id!)} style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", flexShrink: 0 }}><X size={15} color="var(--muted)" /></button>
                     </div>

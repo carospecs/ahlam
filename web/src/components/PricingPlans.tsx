@@ -29,6 +29,22 @@ export const PLANS: Plan[] = [
     features: ["2 car listings per month", "Access to Ahlam marketplace"],
   },
   {
+    // Usage-based plan (AHLAM-65): no monthly commitment, billed per car scanned —
+    // undercuts per-seat incumbents and keeps "no card to start". Activating live
+    // billing needs a Stripe metered price wired into PLAN_PRODUCTS.payg.
+    id: "payg",
+    name: "Pay as you go",
+    price: "$6",
+    per: "/car scanned",
+    desc: "No monthly commitment — pay only for the cars you scan. Ideal for small or seasonal yards.",
+    features: [
+      "Billed per car scanned — no monthly fee",
+      "AI scan & auto-pricing (photo-to-listing)",
+      "Access to Ahlam marketplace",
+      "Upgrade to a monthly plan anytime",
+    ],
+  },
+  {
     id: "growth",
     name: "Growth",
     price: "$100",

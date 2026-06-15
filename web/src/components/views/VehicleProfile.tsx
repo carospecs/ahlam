@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Car, Wrench, ChevronLeft, Copy, Send, Sparkles, ScanLine, Check, CheckCircle2, Pencil, Lightbulb, LoaderCircle, ChevronDown, ChevronRight, Building, Cpu, Fuel, Gauge, Hash } from "lucide-react";
+import { Car, Wrench, ChevronLeft, Copy, Send, Sparkles, ScanLine, Check, CheckCircle2, Pencil, Lightbulb, LoaderCircle, ChevronDown, ChevronRight, Building, Cpu, Fuel, Gauge, Hash, AlertTriangle } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge, SellModeBadge, StatusBadge } from "../UI";
 import { buildVehicleText, partsForVehicle, SELL_MODE } from "../data";
 import { csToast, useData } from "../Dashboard";
@@ -367,6 +367,11 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
                     <div style={{ fontSize: 12, color: "var(--muted)" }}>{l.category}</div>
+                    {l.compliance && (
+                      <div title={l.compliance.reason} style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 4, padding: "2px 8px", borderRadius: 6, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)", color: "#f59e0b", fontSize: 11, fontWeight: 700 }}>
+                        <AlertTriangle size={12} /> {l.compliance.label}
+                      </div>
+                    )}
                   </div>
                   <ConditionBadge grade={l.grade} size="sm" />
                   <PricingToggle
@@ -377,11 +382,20 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
                     source={(priceSource[l.id] as any) || "asking"}
                     onChange={(s) => setPriceSource((ps) => ({ ...ps, [l.id]: s }))}
                   />
+                  <PriceConfidenceChip insight={l.priceInsight} />
                   <StatusBadge status={l.status} />
                   <button onClick={() => toggleExpand(l.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "1px solid var(--line)", background: isOpen ? "var(--surface2)" : "transparent", color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, flexShrink: 0 }}><Pencil size={13} /> {isOpen ? "Close" : "Edit"}</button>
                 </div>
                 {isOpen && (
                   <div style={{ padding: "10px 18px 16px", background: "var(--surface2)", borderBottom: i < parts.length - 1 ? "1px solid var(--line)" : "none" }}>
+                    {l.compliance && (
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 12, padding: "9px 12px", borderRadius: 8, background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.35)" }}>
+                        <AlertTriangle size={15} style={{ color: "#f59e0b", flexShrink: 0, marginTop: 1 }} />
+                        <div style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--foreground)" }}>
+                          <strong style={{ color: "#f59e0b" }}>{l.compliance.label}.</strong> {l.compliance.reason}
+                        </div>
+                      </div>
+                    )}
                     <div style={{ marginBottom: 10 }}>
                       <div style={fieldLabel}>Title (part name)</div>
                       <input value={f.name} onChange={(e) => setField(l.id, l, { name: e.target.value })} placeholder="e.g. OEM Alternator 130A" style={fieldInput} />
@@ -557,6 +571,30 @@ function VehicleGallery({ v }: { v: any }) {
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Pricing provenance chip (AHLAM-53): shows which ladder rung set the price and
+// how trustworthy it is, so the seller knows whether a number is backed by real
+// sold comps or is just an AI estimate. Hidden when there's no insight.
+function PriceConfidenceChip({ insight }: { insight: any }) {
+  if (!insight) return null;
+  const LABEL: Record<string, string> = {
+    shop: "Your sold comps",
+    grounded: "Market sold data",
+    asking: "Active asking",
+    model: "AI estimate",
+  };
+  const label = LABEL[insight.source as string] || "AI estimate";
+  const conf: "high" | "medium" | "low" = insight.confidence || "low";
+  const color = conf === "high" ? "#16a34a" : conf === "medium" ? "#f59e0b" : "var(--muted)";
+  const n = Number(insight.similarCount) || 0;
+  const tip = `${label}${n ? ` · ${n} comp${n === 1 ? "" : "s"}` : ""} · ${conf} confidence`;
+  return (
+    <div title={tip} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--surface2)", fontSize: 11, fontWeight: 600, color: "var(--muted)", flexShrink: 0, whiteSpace: "nowrap" }}>
+      <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+      {label}
     </div>
   );
 }

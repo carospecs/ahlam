@@ -61,6 +61,11 @@ export async function GET() {
           status: statusLabel(l.status), markets: l.marketplace_url ? [marketName(l.marketplace_url)] : [],
           views: l.views || 0, photos: 0, fitment: formatFit(c.fitment),
           category: c.partCategory || c.part_category || "", confidence: c.confidence || "high",
+          compliance: c.compliance || null,
+          // Pricing provenance for the UI (AHLAM-53): which ladder rung set the
+          // price and how trustworthy it is, plus the AI estimate itself.
+          aiPrice: c.suggestedPriceUsd ?? c.pricingInsight?.suggestedPrice ?? null,
+          priceInsight: c.pricingInsight || null,
           note: c.conditionNotes || c.condition_notes || "", desc: c.description || "",
           sellerId: l.seller_id, ebayUrl: l.ebay_url || null, image: l.photo_url || null,
           stockLocation: l.stock_location || "", barcode: l.barcode || "",

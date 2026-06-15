@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { groundedMedianPrice, askingApproxPrice, applyCondition } from "@/lib/pricing";
-import { clampToBand, bandsPromptBlock } from "@/lib/price-bands";
+import { floorPrice, bandsPromptBlock } from "@/lib/price-bands";
 import { loadSoldListings, ownSoldComps, type SoldRow } from "@/lib/own-comps";
 import { getCachedPrice, setCachedPrice } from "@/lib/price-cache";
 import { geminiGenerate } from "@/lib/gemini";
@@ -50,6 +50,18 @@ export interface AIPartOutput {
   confidence: Confidence;
   lowConfidenceFields?: (keyof AIPartOutput)[];
   pricingInsight?: PricingInsight;
+  // Set for parts whose resale is legally restricted (airbags/SRS, catalytic
+  // converters, seat-belt restraints). The UI shows a warning in place of a
+  // naked price so the seller confirms compliance before listing. (AHLAM-54)
+  compliance?: ComplianceFlag;
+}
+
+export interface ComplianceFlag {
+  level: "restricted";
+  // Short label for a badge, e.g. "Restricted: airbag".
+  label: string;
+  // One-line explanation of why it's restricted and what to verify.
+  reason: string;
 }
 
 export interface VehicleEstimate {
@@ -325,7 +337,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
       : null;
     const rawParts: RawPart[] = Array.isArray(parsed.parts) ? parsed.parts : parsed.partName ? [parsed] : [];
 
-    const data: AIPartOutput[] = rawParts.map((p) => {
+    const assembled: AIPartOutput[] = rawParts.map((p) => {
       // Center parts (hood, grille, bumper cover…) have no left/right — strip any
       // side word the model added and never apply one. Side parts keep theirs.
       const center = isCenterPart(p.partName ?? "");
@@ -361,8 +373,14 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
         suggestedPriceUsd: typeof p.suggestedPriceUsd === "number" ? p.suggestedPriceUsd : null,
         confidence,
         lowConfidenceFields: Array.from(lowFields),
+        compliance: complianceFor(partName),
       };
     });
+
+    // Remove the model's duplicate emissions (generic "Front Door" alongside
+    // "Front Left/Right Door", exact-name repeats) before pricing so phantoms
+    // neither cost a pricing call nor double-list a physical part. (AHLAM-52)
+    const data: AIPartOutput[] = dedupeParts(assembled);
 
     // One car = one wheel size. The model occasionally reports a left wheel at a
     // different diameter than the right, or a tire whose rim contradicts the wheel.
@@ -394,10 +412,11 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     // confidence even if the higher rungs bail. (The model estimate is already
     // condition-aware, so it is NOT re-multiplied by the grade below.)
     for (const p of data) {
-      p.suggestedPriceUsd = clampToBand(p.suggestedPriceUsd, p.partName);
-      p.pricingInsight = p.suggestedPriceUsd != null
-        ? { suggestedPrice: p.suggestedPriceUsd, priceRange: { min: p.suggestedPriceUsd, max: p.suggestedPriceUsd }, similarCount: 0, source: "model", confidence: "low" }
-        : undefined;
+      // floorPrice guarantees a positive, band-sane number even when the model
+      // returned null/0 or the part type has no band — so no part is ever seeded
+      // (and ultimately posted) at $0 (AHLAM-51). The insight is always defined.
+      p.suggestedPriceUsd = floorPrice(p.suggestedPriceUsd, p.partName);
+      p.pricingInsight = { suggestedPrice: p.suggestedPriceUsd, priceRange: { min: p.suggestedPriceUsd, max: p.suggestedPriceUsd }, similarCount: 0, source: "model", confidence: "low" };
     }
 
     // Load the shop's own SOLD listings once (its strongest comp), so per-part
@@ -495,6 +514,84 @@ function lateralSide(front: VehicleFront, imageSide?: ImageSide): "Left" | "Righ
 const LATERAL_PART = /\b(door|mirror|fender|quarter|headlight|head light|tail ?light|fog|window|rocker|wheel|rim|tire|tyre)\b/i;
 function isLateralPart(name: string): boolean {
   return LATERAL_PART.test(name);
+}
+
+// Parts whose used resale is legally restricted in the U.S. Flag them so the UI
+// warns the seller instead of presenting a naked price (AHLAM-54). Ordered
+// most-specific-first; "cataly" stem avoids matching "torque converter".
+const COMPLIANCE_RULES: { re: RegExp; label: string; reason: string }[] = [
+  {
+    re: /\bair\s?bag\b|\bsrs\b|\binflator\b/i,
+    label: "Restricted: airbag",
+    reason: "Used airbags/SRS parts are restricted or illegal to resell in many U.S. states, and recalled Takata inflators are banned outright. Verify local law and recall status before listing.",
+  },
+  {
+    re: /\bcataly(tic|st)\b|\bcatalytic\s?converter\b|\bcat\s?converter\b/i,
+    label: "Restricted: catalytic converter",
+    reason: "Used catalytic converters may only be resold for road use under EPA rules (testing/labeling required) and resale is restricted in many states. Confirm compliance or list as scrap/core only.",
+  },
+  {
+    re: /\bseat\s?belt\b|\bpretensioner\b|\brestraint\b/i,
+    label: "Restricted: restraint",
+    reason: "Seat belts and pretensioners are pyrotechnic safety-restraint parts; used resale is restricted in many states. Verify condition (not deployed) and local law before listing.",
+  },
+];
+
+// Return the compliance flag for a restricted part name, or undefined.
+function complianceFor(partName: string): ComplianceFlag | undefined {
+  for (const r of COMPLIANCE_RULES) {
+    if (r.re.test(partName)) return { level: "restricted", label: r.label, reason: r.reason };
+  }
+  return undefined;
+}
+
+// A part name is "sided" when stripping the side word actually changes it
+// (i.e. it contains left/right/driver/passenger). Generic names are unchanged.
+function isSidedName(name: string): boolean {
+  return stripSide(name).trim().toLowerCase() !== name.trim().toLowerCase();
+}
+
+// Collapse the model's duplicate emissions (AHLAM-52). Two patterns are removed:
+//   (a) a generic, unsided lateral part ("Front Door", "Side Mirror") when a
+//       sided sibling of the same base exists ("Front Left/Right Door") — the
+//       generic is a phantom that double-lists a physical part already covered;
+//   (b) exact-duplicate final names — keep the single best-scored entry.
+// Original order is preserved; only the redundant entries are dropped.
+function dedupeParts(parts: AIPartOutput[]): AIPartOutput[] {
+  const base = (p: AIPartOutput) => stripSide(p.partName).toLowerCase().trim();
+  const score = (p: AIPartOutput) => {
+    const c = p.confidence === "high" ? 2 : p.confidence === "medium" ? 1 : 0;
+    return c * 100 + (p.suggestedPriceUsd ? 10 : 0) + (p.description ? p.description.length > 0 ? 1 : 0 : 0);
+  };
+  const drop = new Set<AIPartOutput>();
+
+  // (a) Generic-vs-sided: within each base group, if any entry is sided and the
+  // type is lateral, the unsided entries are phantoms — drop them.
+  const groups = new Map<string, AIPartOutput[]>();
+  for (const p of parts) {
+    const b = base(p);
+    const g = groups.get(b) ?? [];
+    g.push(p);
+    groups.set(b, g);
+  }
+  for (const [b, g] of groups) {
+    if (isLateralPart(b) && g.some((p) => isSidedName(p.partName))) {
+      for (const p of g) if (!isSidedName(p.partName)) drop.add(p);
+    }
+  }
+
+  // (b) Exact-name duplicates among the survivors: keep the highest-scored.
+  const byName = new Map<string, AIPartOutput>();
+  for (const p of parts) {
+    if (drop.has(p)) continue;
+    const key = p.partName.toLowerCase().trim();
+    const cur = byName.get(key);
+    if (!cur) byName.set(key, p);
+    else if (score(p) > score(cur)) { drop.add(cur); byName.set(key, p); }
+    else drop.add(p);
+  }
+
+  return parts.filter((p) => !drop.has(p));
 }
 
 // --- Wheel/tire spec reconciliation -----------------------------------------

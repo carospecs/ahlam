@@ -330,7 +330,7 @@ export function Browse() {
                       <Store size={13} /> <ShopLink id={l.shopId} name={l.shopName} />{l.verified ? <VerifiedBadge size={12} /> : null}{(l.ratingCount ?? 0) > 0 ? <>· <Stars value={l.rating || 0} count={l.ratingCount} size={11} /></> : null}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                      <MapPin size={13} /> {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views} views
+                      <MapPin size={13} /> {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views > 0 ? `${l.views} views` : "New"}
                     </div>
                     <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}`, phone: l.phone }); }}>
                       <MessageSquare size={14} /> Message seller
@@ -358,7 +358,7 @@ export function Browse() {
                     <Store size={13} /> <ShopLink id={l.shopId} name={l.shopName} />{l.verified ? <VerifiedBadge size={12} /> : null}{(l.ratingCount ?? 0) > 0 ? <>· <Stars value={l.rating || 0} count={l.ratingCount} size={11} /></> : null}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                    <MapPin size={13} /> {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views} views
+                    <MapPin size={13} /> {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views > 0 ? `${l.views} views` : "New"}
                   </div>
                     <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}`, phone: l.phone }); }}>
                       <MessageSquare size={14} /> Message seller
@@ -388,7 +388,7 @@ export function Browse() {
                     <span>{v.mileage}</span><span>·</span><span>{v.body}</span><span>·</span><span>{v.color}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                    <Store size={13} /> <ShopLink id={v.shopId} name={v.shopName} />{v.verified ? <VerifiedBadge size={12} /> : null}{(v.ratingCount ?? 0) > 0 ? <> · <Stars value={v.rating || 0} count={v.ratingCount} size={11} /></> : null} · <MapPin size={12} /> {v.location || "—"}{v.distance != null ? ` · ${v.distance} mi` : ""}{v.driveTime != null ? ` · ~${v.driveTime} min` : ""} · <Eye size={12} /> {v.views} views
+                    <Store size={13} /> <ShopLink id={v.shopId} name={v.shopName} />{v.verified ? <VerifiedBadge size={12} /> : null}{(v.ratingCount ?? 0) > 0 ? <> · <Stars value={v.rating || 0} count={v.ratingCount} size={11} /></> : null} · <MapPin size={12} /> {v.location || "—"}{v.distance != null ? ` · ${v.distance} mi` : ""}{v.driveTime != null ? ` · ~${v.driveTime} min` : ""} · <Eye size={12} /> {v.views > 0 ? `${v.views} views` : "New"}
                   </div>
                   <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ shopId: v.shopId, subject: `${v.year} ${v.make} ${v.model}`, title: `${v.year} ${v.make} ${v.model} · ${v.shopName}`, phone: v.phone }); }}>
                     <MessageSquare size={14} /> Message seller
@@ -461,7 +461,7 @@ function PartDetailModal({ part, onClose, onContact }: { part: MktPart; onClose:
         {part.shopId && !part.shopId.startsWith("demo") && <ShopReviews shopId={part.shopId} />}
         <MetaRow icon={<MapPin size={14} />}>{part.location || "—"}{part.distance != null ? ` · ${part.distance} mi · ~${part.driveTime} min drive` : ""}</MetaRow>
         {part.phone && <MetaRow icon={<Phone size={14} />}><a href={`tel:${part.phone}`} style={{ color: "var(--foreground)", textDecoration: "none" }}>{part.phone}</a></MetaRow>}
-        <MetaRow icon={<Eye size={14} />}>{part.views} {part.views === 1 ? "person has" : "people have"} viewed this</MetaRow>
+        <MetaRow icon={<Eye size={14} />}>{part.views > 0 ? `${part.views} ${part.views === 1 ? "person has" : "people have"} viewed this` : "Be the first to view this — newly listed"}</MetaRow>
         <BuyButton body={{ listingId: part.id }} />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 11.5, color: "var(--muted)" }}>
           <ShieldCheck size={12} color="var(--success)" /> Payment held in escrow until you confirm you got the part

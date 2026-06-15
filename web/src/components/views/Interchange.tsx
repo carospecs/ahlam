@@ -382,17 +382,18 @@ function Results({ result, cached }: { result: IcResult; cached?: boolean }) {
         <Card pad={18} style={{ display: "grid", gap: 14 }}>
           {result.oemNumbers.length > 0 && (
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 7, marginBottom: 9 }}><Hash size={14} color="var(--accent)" /> OEM part numbers</div>
+              <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 7, marginBottom: 9 }}><Hash size={14} color="var(--accent)" /> OEM part numbers <UnverifiedTag /></div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {result.oemNumbers.map((n, i) => <span key={i} style={chip}>{n}</span>)}
+                {result.oemNumbers.map((n, i) => <span key={i} style={{ ...chip, borderStyle: "dashed" }}>{n}</span>)}
               </div>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 7, lineHeight: 1.45 }}>AI-suggested, not catalog-verified — confirm against the number stamped on the actual part before buying or selling.</div>
             </div>
           )}
           {result.aftermarket.length > 0 && (
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 7, marginBottom: 9 }}><Tag size={14} color="var(--accent)" /> Aftermarket equivalents</div>
+              <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 7, marginBottom: 9 }}><Tag size={14} color="var(--accent)" /> Aftermarket equivalents <UnverifiedTag /></div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {result.aftermarket.map((n, i) => <span key={i} style={chip}>{n}</span>)}
+                {result.aftermarket.map((n, i) => <span key={i} style={{ ...chip, borderStyle: "dashed" }}>{n}</span>)}
               </div>
             </div>
           )}
@@ -452,3 +453,14 @@ function MarketSection({ matches, part }: { matches: MarketMatch[]; part: string
 }
 
 const chip: React.CSSProperties = { fontSize: 12.5, fontFamily: "monospace", color: "var(--foreground)", background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 7, padding: "4px 9px" };
+
+// AHLAM-50: marks AI-generated part numbers as not catalog-verified, so they are
+// never presented as authoritative. A wrong OEM number ships the wrong part — the
+// signal tells the user to confirm against the number stamped on the actual part.
+function UnverifiedTag() {
+  return (
+    <span title="AI-generated — not verified against an OEM catalog. Confirm before relying on it." style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "1px 7px", borderRadius: 6, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)", color: "#f59e0b", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3 }}>
+      <AlertTriangle size={10} /> AI · verify
+    </span>
+  );
+}

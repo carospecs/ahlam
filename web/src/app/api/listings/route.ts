@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { floorPrice } from "@/lib/price-bands";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -122,7 +123,9 @@ export async function POST(req: Request) {
         listing_type: "part",
         photo_url: url,
         ai_output: ai,
-        price_usd: typeof p.suggestedPriceUsd === "number" ? p.suggestedPriceUsd : null,
+        // Guardrail (AHLAM-51): never persist a part at $0/null. floorPrice falls
+        // a missing/zero estimate to the middle of the part's band.
+        price_usd: floorPrice(p.suggestedPriceUsd, p.partName || ""),
         status,
       };
     });

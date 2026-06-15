@@ -41,6 +41,9 @@ export const DEFAULT_BANDS: Record<string, PriceBand> = {
   alternator: { low: 80, high: 250 },
   starter: { low: 80, high: 250 },
   ac_compressor: { low: 120, high: 350 },
+  // Used catalytic converters span scrap-core value to full OEM units; wide band
+  // keeps a sane floor without capping a high-value OEM cat. (AHLAM-56)
+  catalytic_converter: { low: 75, high: 900 },
 };
 
 // Recalibrated bands win over defaults; anything the job didn't cover keeps its
@@ -65,6 +68,7 @@ const BAND_MATCHERS: Matcher[] = [
   { key: "headlight", label: "Headlight assembly", re: /\bhead ?light\b/i },
   { key: "taillight", label: "Tail light", re: /\btail ?light\b/i },
   { key: "mirror", label: "Side mirror", re: /\bside ?mirror\b/i },
+  { key: "catalytic_converter", label: "Catalytic converter", re: /\bcataly(tic|st)\b|\bcatalytic ?converter\b/i },
   { key: "bumper", label: "Bumper cover", re: /\bbumper\b/i },
   { key: "hood", label: "Hood", re: /\bhood\b/i },
   { key: "fender", label: "Fender", re: /\bfender\b/i },
@@ -98,6 +102,37 @@ export function clampToBand(price: number | null, partName: string): number | nu
   if (price < band.low) return band.low;
   const ceiling = band.high * CEILING_MULTIPLE;
   if (price > ceiling) return ceiling;
+  return price;
+}
+
+// A conservative catch-all band for part types we have no specific anchor for
+// (interior trim, consoles, seat belts, etc.). Guarantees even an unrecognized
+// part gets a sane positive floor, so nothing is ever posted at $0 (AHLAM-51).
+export const DEFAULT_BAND: PriceBand = { low: 40, high: 160 };
+
+// Round a fallback price to a realistic-looking number (nearest $5, min $5),
+// matching the prompt's "use realistic round numbers" guidance. Only applied to
+// computed fallbacks — a genuine in-range market/model price is left as-is.
+function roundFallback(n: number): number {
+  return Math.max(5, Math.round(n / 5) * 5);
+}
+
+// Final price GUARANTEE (AHLAM-51): every part gets a positive, band-sane price.
+// Unlike clampToBand (which passes null/unbanded prices straight through), this
+// never returns null or <= 0:
+//   • missing / zero / negative estimate  → middle of the part's band (fair
+//     market, no undercut), using DEFAULT_BAND when the type has no anchor;
+//   • below the band floor                → floored to the band low;
+//   • absurd outlier above the ceiling    → capped at CEILING_MULTIPLE × high.
+// An in-range price is returned unchanged so existing good prices are untouched.
+export function floorPrice(price: number | null | undefined, partName: string): number {
+  const band = bandFor(partName) ?? DEFAULT_BAND;
+  if (price == null || !Number.isFinite(price) || price <= 0) {
+    return roundFallback((band.low + band.high) / 2);
+  }
+  if (price < band.low) return roundFallback(band.low);
+  const ceiling = band.high * CEILING_MULTIPLE;
+  if (price > ceiling) return roundFallback(ceiling);
   return price;
 }
 

@@ -15,6 +15,10 @@ export function YardManagement() {
   const [saving, setSaving] = React.useState<Set<string>>(new Set());
   const [view, setView] = React.useState<"list" | "grid">("list");
   const [locFilter, setLocFilter] = React.useState("");
+  // Bulk location/barcode assignment + label printing (AHLAM-68).
+  const [sel, setSel] = React.useState<Set<string>>(new Set());
+  const [bulkLoc, setBulkLoc] = React.useState("");
+  const [bulkBusy, setBulkBusy] = React.useState(false);
 
   const vMap = React.useMemo(() => {
     const m = new Map();
@@ -54,6 +58,70 @@ export function YardManagement() {
       else { csToast("Location saved"); cancelEdit(id); (window as any).csReloadData?.(); }
     } catch { csToast("Couldn't save — check your connection"); }
     setSaving((prev) => { const n = new Set(prev); n.delete(id); return n; });
+  }
+
+  // ── Bulk actions (AHLAM-68) ───────────────────────────────────────────────
+  const toggleSel = (id: string) => setSel((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selAllVisible = () => setSel((p) => p.size === sorted.length ? new Set() : new Set(sorted.map((l: any) => l.id)));
+  const selectedRows = () => sorted.filter((l: any) => sel.has(l.id));
+
+  async function patchOne(id: string, body: Record<string, string>): Promise<boolean> {
+    try {
+      const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: id, ...body }) });
+      return r.ok;
+    } catch { return false; }
+  }
+
+  // Apply one aisle/bin code (e.g. "A3") to every selected part at once.
+  async function bulkApplyLocation() {
+    const loc = bulkLoc.trim();
+    if (!loc) { csToast("Type a location (e.g. A3) to apply"); return; }
+    if (!sel.size) return;
+    setBulkBusy(true);
+    let ok = 0;
+    for (const id of sel) if (await patchOne(id, { stockLocation: loc })) ok++;
+    csToast(`Set ${ok} part${ok === 1 ? "" : "s"} to ${loc}`);
+    setBulkBusy(false); setSel(new Set()); (window as any).csReloadData?.();
+  }
+
+  // Auto-assign unique sequential barcodes to selected parts that lack one.
+  async function bulkAutoBarcode() {
+    const targets = selectedRows().filter((l: any) => !l.barcode);
+    if (!targets.length) { csToast("Selected parts already have barcodes"); return; }
+    setBulkBusy(true);
+    const base = Date.now().toString().slice(-6);
+    let n = 0, ok = 0;
+    for (const l of targets) { const code = `AHL-${base}-${String(++n).padStart(3, "0")}`; if (await patchOne(l.id, { barcode: code })) ok++; }
+    csToast(`Assigned ${ok} barcode${ok === 1 ? "" : "s"}`);
+    setBulkBusy(false); setSel(new Set()); (window as any).csReloadData?.();
+  }
+
+  // Open a printable label sheet (scannable Code 39 via web font) for the
+  // selected parts — or all visible parts when nothing is selected.
+  function printLabels() {
+    const items = sel.size ? selectedRows() : sorted;
+    if (!items.length) { csToast("No parts to print"); return; }
+    const esc = (s: any) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
+    const cards = items.map((l: any) => {
+      const v = l.vehicleId ? vMap.get(l.vehicleId) : null;
+      const veh = v ? `${v.year} ${v.make} ${v.model}` : "";
+      const bc = (l.barcode || "").toUpperCase();
+      return `<div class="lbl"><div class="pn">${esc(l.part || "Part")}</div><div class="vh">${esc(veh)}</div><div class="lo">LOC ${esc(l.stockLocation || "—")}</div>${bc ? `<div class="bc">*${esc(bc)}*</div><div class="bn">${esc(bc)}</div>` : `<div class="bn">no barcode</div>`}</div>`;
+    }).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Ahlam yard labels</title>
+      <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap" rel="stylesheet">
+      <style>@page{margin:10mm}body{font-family:system-ui,sans-serif;margin:0}
+      .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6mm}
+      .lbl{border:1px solid #000;border-radius:6px;padding:8px 10px;height:32mm;display:flex;flex-direction:column;justify-content:space-between;page-break-inside:avoid}
+      .pn{font-size:12px;font-weight:700;line-height:1.15;max-height:28px;overflow:hidden}
+      .vh{font-size:9px;color:#444}.lo{font-size:13px;font-weight:700}
+      .bc{font-family:'Libre Barcode 39',cursive;font-size:30px;line-height:1}
+      .bn{font-family:monospace;font-size:9px;letter-spacing:1px;text-align:center}</style></head>
+      <body><div class="grid">${cards}</div>
+      <script>window.onload=function(){setTimeout(function(){window.print()},500)}</script></body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) { csToast("Allow pop-ups to print labels"); return; }
+    w.document.write(html); w.document.close();
   }
 
   function yardCell(l: any) {
@@ -131,6 +199,28 @@ export function YardManagement() {
         </Card>
       )}
 
+      {/* Bulk assign + print toolbar (AHLAM-68) */}
+      <Card pad={12}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button onClick={selAllVisible} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+            <Check size={14} /> {sel.size === sorted.length && sorted.length > 0 ? "Clear all" : "Select all"}
+          </button>
+          <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>{sel.size} selected</span>
+          <div style={{ flex: 1 }} />
+          <input value={bulkLoc} onChange={(e) => setBulkLoc(e.target.value.toUpperCase())} placeholder="e.g. A3" disabled={!sel.size || bulkBusy}
+            style={{ width: 80, padding: "7px 9px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 12.5, fontFamily: "monospace", outline: "none", opacity: sel.size ? 1 : 0.5 }} />
+          <button onClick={bulkApplyLocation} disabled={!sel.size || bulkBusy} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: sel.size ? "pointer" : "default", opacity: sel.size && !bulkBusy ? 1 : 0.5 }}>
+            <MapPin size={14} /> Apply location
+          </button>
+          <button onClick={bulkAutoBarcode} disabled={!sel.size || bulkBusy} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: sel.size ? "pointer" : "default", opacity: sel.size && !bulkBusy ? 1 : 0.5 }}>
+            {bulkBusy ? <LoaderCircle size={14} style={{ animation: "spin 0.8s linear infinite" }} /> : <QrCode size={14} />} Auto-barcode
+          </button>
+          <button onClick={printLabels} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+            <FileDown size={14} /> Print labels{sel.size ? ` (${sel.size})` : " (all)"}
+          </button>
+        </div>
+      </Card>
+
       <Card pad={0}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 100px 110px 90px 80px", gap: 0, padding: "12px 18px", borderBottom: "1px solid var(--line)", fontSize: 11.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
           <span>Part</span>
@@ -151,7 +241,8 @@ export function YardManagement() {
           const loc = l.stockLocation || "";
           const bc = l.barcode || "";
           return (
-            <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 18px", borderBottom: i < sorted.length - 1 ? "1px solid var(--line)" : "none" }}>
+            <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 18px", borderBottom: i < sorted.length - 1 ? "1px solid var(--line)" : "none", background: sel.has(l.id) ? "var(--surface2)" : "transparent" }}>
+              <input type="checkbox" checked={sel.has(l.id)} onChange={() => toggleSel(l.id)} aria-label={`Select ${l.part}`} style={{ width: 16, height: 16, accentColor: "var(--accent)", cursor: "pointer", flexShrink: 0 }} />
               <PhotoCell icon="Wrench" url={l.image} style={{ width: 40, height: 36, flexShrink: 0 }} iconSize={15} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.part}</div>
