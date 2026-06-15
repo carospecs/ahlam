@@ -65,8 +65,10 @@ function LogoImg({ src, alt, h = 24 }: { src: string; alt: string; h?: number })
 }
 
 const reveal: Variants = {
-  hidden: { opacity: 0, y: 16, filter: "blur(2px)" },
-  show: (i = 0) => ({ opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.5, ease: EASE, delay: i * 0.07 } }),
+  // Quick opacity-only fade — no slide/blur — so content is "just there" during
+  // fast scroll instead of animating into place (which read as lag).
+  hidden: { opacity: 0 },
+  show: (i = 0) => ({ opacity: 1, transition: { duration: 0.25, ease: EASE, delay: i * 0.03 } }),
 };
 
 // Scroll-reveal wrapper: a gentle lift into view once. Trigger margin is positive
@@ -87,7 +89,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
   const previewY = useTransform(scrollY, [0, 500], [0, -46]);
 
   return (
-    <MotionConfig reducedMotion="user">
+    <MotionConfig reducedMotion="always">
       <div style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)", position: "relative" }}>
         {/* Animated aurora wash (fixed + clipped, so it never adds page scroll) */}
         <div className="aurora" aria-hidden="true">
@@ -664,7 +666,7 @@ function Step({ index, eyebrow, title, body, visual, flip }: { index: number; ey
       style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40, alignItems: "center" }}
     >
       <motion.div
-        variants={{ hidden: { opacity: 0, y: 26, filter: "blur(5px)" }, show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.6, ease: EASE } } }}
+        variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.25, ease: EASE } } }}
         style={{ order: flip ? 2 : 1 }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -675,7 +677,7 @@ function Step({ index, eyebrow, title, body, visual, flip }: { index: number; ey
         <p style={{ fontSize: 15.5, color: "var(--muted)", lineHeight: 1.65, margin: "10px 0 0", maxWidth: 440 }}>{body}</p>
       </motion.div>
       <motion.div
-        variants={{ hidden: { opacity: 0, x: dir, filter: "blur(6px)" }, show: { opacity: 1, x: 0, filter: "blur(0px)", transition: { duration: 0.7, ease: EASE, delay: 0.08 } } }}
+        variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.25, ease: EASE, delay: 0.05 } } }}
         style={{ order: flip ? 1 : 2 }}
       >
         {visual}
