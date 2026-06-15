@@ -5,6 +5,7 @@ import { CreditCard, Mail, Trash2, LoaderCircle, Check, Plus, Shield, Crown, Eye
 import { Card } from "../UI";
 import { useData, csToast } from "../Dashboard";
 import { AddressAutocomplete, ZipField } from "../AddressAutocomplete";
+import { PricingPlans } from "../PricingPlans";
 import { WARRANTY_DAYS } from "@/lib/warranty";
 
 function reloadData() { (window as any).csReloadData?.(); }
@@ -446,13 +447,19 @@ export function Billing(_: ViewProps) {
             <div style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 700, color: "var(--success)", background: "color-mix(in srgb, var(--success) 14%, transparent)", borderRadius: 999, padding: "4px 11px" }}>
               <Shield size={13} /> {shop.plan || "Pro"} plan
             </div>
-            <div style={{ fontSize: 22, fontWeight: 800, marginTop: 10 }}>$49<span style={{ fontSize: 14, fontWeight: 500, color: "var(--muted)" }}>/mo</span></div>
-            <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>Unlimited listings · {shop.members?.length || 1} team seats · {trialLeft} days left in trial</div>
+            <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 10 }}>{shop.members?.length || 1} team seats · {trialLeft} days left in trial. Choose or change your plan below.</div>
           </div>
           <button onClick={() => go("portal")} disabled={busy !== null} style={{ ...saveBtn, opacity: busy ? 0.6 : 1 }}>
             {busy === "portal" ? <LoaderCircle size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : null} Manage subscription
           </button>
         </div>
+      </Card>
+
+      {/* Choose / change plan — same themed plans as the homepage. */}
+      <Card>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Plans</div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 18 }}>Pick a plan or upgrade. Checkout is handled securely by Stripe.</div>
+        <PricingPlans onChoose={() => go("checkout")} ctaLabel="Subscribe" />
       </Card>
 
       <PayoutCard canManage={user?.role === "owner"} />
@@ -474,7 +481,7 @@ export function Billing(_: ViewProps) {
       <div>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
           <div style={{ fontSize: 14, fontWeight: 700 }}>This month's usage</div>
-          <div style={{ fontSize: 12, color: "var(--muted)" }}>Pro includes <b style={{ color: "var(--foreground)" }}>unlimited</b> listings, vehicles & AI scans — no caps or overage fees.</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>Your usage this billing period — see your plan&apos;s included listings above.</div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {[
