@@ -96,7 +96,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
           <div className="aurora-blob aurora-3" />
         </div>
 
-        <div style={{ position: "relative", zIndex: 1 }}>
+        <div className="cs-landing-body" style={{ position: "relative", zIndex: 1 }}>
           {/* Floating pill nav: compact, centered, follows on scroll, gently compacts */}
           <div style={{ position: "sticky", top: 14, zIndex: 30, display: "flex", justifyContent: "center", padding: "0 16px" }}>
             <motion.header
