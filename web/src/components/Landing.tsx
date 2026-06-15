@@ -6,6 +6,7 @@ import { ScanLine, Sparkles, Send, ArrowRight, Tag, ShieldCheck, Check, ChevronD
 import { BrandChip, BrandMark } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
 import { CONDITION_COLOR } from "./data";
+import { PricingPlans } from "./PricingPlans";
 
 // Public marketing page shown to unauthenticated visitors, so the product
 // explains itself before asking anyone to sign up. Motion is gated behind
@@ -293,21 +294,11 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
           <section id="pricing" style={{ maxWidth: 1080, margin: "0 auto", padding: "72px 24px" }}>
             <Reveal style={{ textAlign: "center" }}>
               <div className="cs-eyebrow">Pricing</div>
-              <h2 className="cs-display" style={h2}>One plan, everything included</h2>
+              <h2 className="cs-display" style={h2}>Simple, transparent pricing</h2>
               <p style={{ color: "var(--muted)", fontSize: 15, marginTop: 10 }}>Start with a free trial. No card to begin, cancel anytime.</p>
             </Reveal>
-            <Reveal i={1} style={{ maxWidth: 430, margin: "34px auto 0" }}>
-              <div className="cs-glass" style={{ borderRadius: "var(--radius-xl)", padding: 30, position: "relative", border: "1.5px solid color-mix(in srgb, var(--accent) 60%, var(--line))" }}>
-                <span style={{ position: "absolute", top: -12, left: 30, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#fff", background: "var(--accent)", borderRadius: 999, padding: "4px 12px" }}>Most popular</span>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Pro</div>
-                <div className="cs-display" style={{ fontSize: 46, fontWeight: 600, marginTop: 8 }}>$49<span style={{ fontSize: 16, fontWeight: 500, color: "var(--muted)", fontFamily: "var(--font-sans)" }}>/mo</span></div>
-                <div style={{ display: "grid", gap: 10, margin: "20px 0 0" }}>
-                  {["Unlimited listings, vehicles, and AI scans", "Cross-post to every marketplace", "Public shop storefront", "Team seats and roles", "Buyer messaging"].map((b) => (
-                    <div key={b} style={{ display: "flex", gap: 9, alignItems: "center", fontSize: 13.5 }}><Check size={16} color="var(--success)" /> {b}</div>
-                  ))}
-                </div>
-                <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtn, width: "100%", justifyContent: "center", marginTop: 24, padding: "13px 0", fontSize: 15 }}>Start free trial <ArrowRight size={16} /></button>
-              </div>
+            <Reveal i={1} style={{ maxWidth: 820, margin: "34px auto 0" }}>
+              <PricingPlans onChoose={onGetStarted} />
             </Reveal>
           </section>
 
