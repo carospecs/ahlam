@@ -440,7 +440,7 @@ export function Billing(_: ViewProps) {
   }
 
   return (
-    <div style={{ maxWidth: 680, display: "grid", gap: 20 }}>
+    <div style={{ maxWidth: 1080, display: "grid", gap: 20 }}>
       <Card>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <div>

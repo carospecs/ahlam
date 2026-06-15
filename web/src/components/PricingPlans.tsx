@@ -25,7 +25,7 @@ export const PLANS: Plan[] = [
     name: "Starter",
     price: "$0",
     per: "/mo",
-    desc: "Get started — list a couple of cars and explore the platform at no cost.",
+    desc: "Get started with Ahlam — list a couple of cars and explore the platform at no cost.",
     features: ["2 car listings per month", "Access to Ahlam marketplace"],
   },
   {
@@ -40,8 +40,41 @@ export const PLANS: Plan[] = [
       "Team access — Owner & Editor",
       "AI Interchange Assistant",
       "Inventory analytics",
+      "eBay listing integration",
     ],
     highlight: true,
+  },
+  {
+    id: "max",
+    name: "Max",
+    price: "$200",
+    per: "/mo",
+    desc: "For high-volume yards that need full team access and cross-platform selling power.",
+    features: [
+      "50 car listings per month",
+      "AI scan & auto-pricing (photo-to-listing)",
+      "Team access — Owner & Unlimited Editors",
+      "AI Interchange Assistant",
+      "Full inventory analytics & profit tracking",
+      "Cross-platform export (eBay, Facebook, OfferUp, Craigslist)",
+    ],
+  },
+  {
+    id: "ultimate",
+    name: "Ultimate",
+    price: "$350",
+    per: "/mo",
+    desc: "Everything in Max, plus we build and host a professional website for your business with your own custom domain — fully managed by Ahlam.",
+    features: [
+      "Unlimited car listings per month",
+      "AI scan & auto-pricing (photo-to-listing)",
+      "Team access — Owner & Unlimited Editors",
+      "AI Interchange Assistant",
+      "Full inventory analytics & profit tracking",
+      "Cross-platform export (eBay, Facebook, OfferUp, Craigslist)",
+      "Custom business website — built for you",
+      "Managed domain registration & hosting · priority support",
+    ],
   },
 ];
 
@@ -60,10 +93,10 @@ export function PricingPlans({
           className="cs-glass"
           style={{
             flex: "1 1 0",
-            minWidth: 260,
-            maxWidth: 380,
+            minWidth: 215,
+            maxWidth: 320,
             borderRadius: "var(--radius-xl)",
-            padding: 28,
+            padding: 22,
             position: "relative",
             display: "flex",
             flexDirection: "column",
@@ -79,11 +112,11 @@ export function PricingPlans({
             </span>
           )}
           <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{p.name}</div>
-          <div className="cs-display" style={{ fontSize: 44, fontWeight: 800, marginTop: 8, lineHeight: 1 }}>
+          <div className="cs-display" style={{ fontSize: 38, fontWeight: 800, marginTop: 8, lineHeight: 1 }}>
             {p.price}
-            {p.per && <span style={{ fontSize: 15, fontWeight: 500, color: "var(--muted)", fontFamily: "var(--font-sans)" }}>{p.per}</span>}
+            {p.per && <span style={{ fontSize: 14, fontWeight: 500, color: "var(--muted)", fontFamily: "var(--font-sans)" }}>{p.per}</span>}
           </div>
-          <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 10, lineHeight: 1.5, minHeight: 40 }}>{p.desc}</div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 10, lineHeight: 1.5, minHeight: 72 }}>{p.desc}</div>
           <div style={{ display: "grid", gap: 11, margin: "20px 0 24px" }}>
             {p.features.map((f) => (
               <div key={f} style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 13.5, lineHeight: 1.45 }}>
