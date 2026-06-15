@@ -207,7 +207,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                   { icon: ShieldCheck, t: "Private by default", d: "VIN and mileage stay hidden until you choose to share." },
                 ].map((f, i) => (
                   <motion.div key={f.t}
-                    initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: false, margin: "-50px" }}
+                    initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }}
                     transition={{ delay: i * 0.1, duration: 0.5, ease: EASE }}
                     whileHover={{ y: -6 }}
                     className="cs-glass" style={{ borderRadius: "var(--radius-lg)", padding: 22, height: "100%", position: "relative", overflow: "hidden" }}
@@ -291,13 +291,13 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
           </section>
 
           {/* Pricing */}
-          <section id="pricing" style={{ maxWidth: 1080, margin: "0 auto", padding: "72px 24px" }}>
+          <section id="pricing" style={{ maxWidth: 1200, margin: "0 auto", padding: "72px 24px" }}>
             <Reveal style={{ textAlign: "center" }}>
               <div className="cs-eyebrow">Pricing</div>
               <h2 className="cs-display" style={h2}>Simple, transparent pricing</h2>
               <p style={{ color: "var(--muted)", fontSize: 15, marginTop: 10 }}>Start with a free trial. No card to begin, cancel anytime.</p>
             </Reveal>
-            <Reveal i={1} style={{ maxWidth: 820, margin: "34px auto 0" }}>
+            <Reveal i={1} style={{ maxWidth: 1180, margin: "34px auto 0" }}>
               <PricingPlans onChoose={onGetStarted} />
             </Reveal>
           </section>
