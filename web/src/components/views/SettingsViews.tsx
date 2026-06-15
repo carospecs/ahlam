@@ -428,10 +428,14 @@ export function Billing(_: ViewProps) {
 
   // Send the user to Stripe. The endpoints go live once STRIPE_SECRET_KEY +
   // STRIPE_PRICE_ID are set; until then they return a clear "not configured".
-  async function go(kind: "checkout" | "portal") {
+  async function go(kind: "checkout" | "portal", plan?: string) {
     setBusy(kind);
     try {
-      const r = await fetch(`/api/billing/${kind}`, { method: "POST" });
+      const r = await fetch(`/api/billing/${kind}`, {
+        method: "POST",
+        headers: plan ? { "Content-Type": "application/json" } : undefined,
+        body: plan ? JSON.stringify({ plan }) : undefined,
+      });
       const d = await r.json();
       if (d.url) { window.location.href = d.url; return; }
       csToast(d.error || "Billing isn't available right now");
@@ -459,7 +463,7 @@ export function Billing(_: ViewProps) {
       <Card>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Plans</div>
         <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 18 }}>Pick a plan or upgrade. Checkout is handled securely by Stripe.</div>
-        <PricingPlans onChoose={() => go("checkout")} ctaLabel="Subscribe" />
+        <PricingPlans onChoose={(planId) => go("checkout", planId)} ctaLabel="Subscribe" />
       </Card>
 
       <PayoutCard canManage={user?.role === "owner"} />
