@@ -388,20 +388,18 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
 .cs-textlink:hover::after { width: calc(100% - 22px); }
 .cs-textlink:hover { opacity: 0.92; }
 
-/* Animated aurora: slow-drifting blurred brand-color blobs, GPU-friendly
-   (transform/opacity only). Disabled automatically by prefers-reduced-motion. */
+/* Static aurora: soft blurred brand-color blobs. No longer animated — a
+   perpetually-animating large blur competes with scroll compositing and made
+   fast scrolling feel laggy. Kept as a still background wash. */
 .aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-.aurora-blob { position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.3; will-change: transform; transform: translateZ(0); }
-:root[data-theme="light"] .aurora-blob { opacity: 0.24; filter: blur(64px); }
+.aurora-blob { position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.28; }
+:root[data-theme="light"] .aurora-blob { opacity: 0.22; filter: blur(64px); }
 .aurora-1 { width: 48vw; height: 48vw; left: -10vw; top: -12vw;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 60%, transparent), transparent 70%);
-  animation: aurora-a 24s ease-in-out infinite alternate; }
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 60%, transparent), transparent 70%); }
 .aurora-2 { width: 42vw; height: 42vw; right: -8vw; top: -4vw;
-  background: radial-gradient(circle, color-mix(in srgb, var(--sand) 58%, transparent), transparent 70%);
-  animation: aurora-b 30s ease-in-out infinite alternate; }
+  background: radial-gradient(circle, color-mix(in srgb, var(--sand) 58%, transparent), transparent 70%); }
 .aurora-3 { width: 40vw; height: 40vw; left: 24vw; top: 28vw;
-  background: radial-gradient(circle, color-mix(in srgb, #3b5bdb 48%, transparent), transparent 70%);
-  animation: aurora-c 36s ease-in-out infinite alternate; }
+  background: radial-gradient(circle, color-mix(in srgb, #3b5bdb 48%, transparent), transparent 70%); }
 @keyframes aurora-a { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(7vw,5vw,0) scale(1.18); } }
 @keyframes aurora-b { from { transform: translate3d(0,0,0) scale(1.05); } to { transform: translate3d(-6vw,7vw,0) scale(1); } }
 @keyframes aurora-c { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(4vw,-6vw,0) scale(1.12); } }
