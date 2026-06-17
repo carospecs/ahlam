@@ -521,7 +521,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       const dec = d?.decode;
       if (res.ok && dec && (dec.make || dec.model)) {
         const label = [dec.year, dec.make, dec.model].filter(Boolean).join(" ");
-        const trim = dec.trim || dec.series || null;
+        const trim = dec.trim || null; // series is a platform code, not the trim
         const dispL = dec.displacementL || (dec.displacement ? (Number(dec.displacement) / 1000).toFixed(1) : null);
         const engine = [dispL ? `${dispL}L` : null, dec.engineCylinders ? `${dec.engineCylinders}-cyl` : null, dec.engine].filter(Boolean).join(" ") || null;
         const drivetrain = dec.driveType || null;
@@ -747,7 +747,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             const engineStr = [dispL ? `${dispL}L` : null, vi.engineCylinders ? `${vi.engineCylinders}-cyl` : null, vi.engine].filter(Boolean).join(" ");
             const rows: [string, string | null][] = [
               ["VIN", vi.vin], ["Year", vi.year ? String(vi.year) : null], ["Make", vi.make], ["Model", vi.model],
-              ["Trim / Series", vi.trim || vi.series], ["Body", vi.bodyClass], ["Engine", engineStr || null],
+              ["Trim", vi.trim], ["Body", vi.bodyClass], ["Engine", engineStr || null],
               ["Fuel", vi.fuelType], ["Transmission", vi.transmission], ["Drivetrain", vi.driveType],
               ["Doors", vi.doors], ["Seating", vi.seatingCapacity], ["Built in", [vi.plantCity, vi.plantState, vi.plantCountry].filter(Boolean).join(", ") || null],
               ["Manufacturer", vi.manufacturer],

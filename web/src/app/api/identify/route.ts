@@ -228,6 +228,30 @@ function vinContext(decoded: { make?: string; model?: string; year?: number }): 
   return `\n\nKnown source vehicle (from VIN decode): ${parts.join(" ")}. Use this to improve fitment accuracy, but only if the part visibly belongs to this vehicle.`;
 }
 
+// NHTSA doesn't carry Toyota/most marketing trims (it returns a platform "Series"
+// like "40 Series"). Scan the web with Gemini's grounded search for the real trim
+// of THIS exact VIN — auction (Copart/IAAI), dealer, and classified listings state
+// it. Best-effort: returns null (no guess) unless it can confirm one.
+async function vinTrimLookup(vin: string, label: string): Promise<string | null> {
+  try {
+    const res = await geminiGenerate("gemini-2.5-flash", {
+      contents: [{ role: "user", parts: [{ text:
+        `What is the factory trim / grade of the vehicle with VIN ${vin} (${label})? ` +
+        `Search the web — salvage auction listings (Copart, IAAI, bidexport), dealer and classified listings usually state it. ` +
+        `Reply with ONLY the trim name, e.g. "SR", "SR5", "TRD Sport", "TRD Off-Road", "Limited", "Platinum". ` +
+        `If you cannot confirm the trim for THIS exact VIN, reply exactly "UNKNOWN" — never guess.` }] }],
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature: 0 },
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    const text: string = (j.candidates?.[0]?.content?.parts || []).map((p: { text?: string }) => p.text ?? "").join("").trim();
+    if (!text || /unknown/i.test(text)) return null;
+    const trim = text.replace(/["'.\n]/g, " ").replace(/\s+/g, " ").trim().slice(0, 40);
+    return trim || null;
+  } catch { return null; }
+}
+
 // --- End of inlined shared code ---
 
 type VehicleFront = "toward-camera" | "away-from-camera" | "points-left" | "points-right" | "unknown";
@@ -367,12 +391,14 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
         if (decoded.model) vehicle.model = decoded.model;
         if (decoded.year) { vehicle.yearStart = decoded.year; vehicle.yearEnd = decoded.year; }
         if (decoded.bodyClass && !vehicle.bodyStyle) vehicle.bodyStyle = decoded.bodyClass;
-        vehicle.trim = decoded.trim || decoded.series || null;
+        // NHTSA "Series" (e.g. "40 Series") is a platform code, not the marketing
+        // trim — use the real Trim field, else scan the web for it.
+        vehicle.trim = decoded.trim || await vinTrimLookup(decoded.vin, [decoded.year, decoded.make, decoded.model].filter(Boolean).join(" ")) || null;
         const disp = decoded.displacementL || (decoded.displacement ? (Number(decoded.displacement) / 1000).toFixed(1) : null);
         vehicle.engine = [disp ? `${disp}L` : null, decoded.engineCylinders ? `${decoded.engineCylinders}-cyl` : null, decoded.engine].filter(Boolean).join(" ") || null;
         vehicle.drivetrain = decoded.driveType || null;
         const { raw: _raw, ...info } = decoded; // strip the bulky raw map
-        vehicle.vinInfo = info;
+        vehicle.vinInfo = { ...info, trim: vehicle.trim }; // include the resolved (looked-up) trim
         vehicle.confidence = "high"; // identity is now VIN-confirmed, not guessed
       } else {
         vehicle.vin = null; // misread / not in NHTSA — don't surface a bogus VIN
