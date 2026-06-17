@@ -217,6 +217,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const [suggestedCarPrice, setSuggestedCarPrice] = React.useState<number | null>(null);
   const [mileage, setMileage] = React.useState<string | null>(null);
   const [vin, setVin] = React.useState("");
+  const [vinStatus, setVinStatus] = React.useState<"idle" | "checking" | "confirmed" | "bad">("idle");
   const [vehicleTrim, setVehicleTrim] = React.useState("");
   const [vehicleColor, setVehicleColor] = React.useState("");
   const [vehicleTitle, setVehicleTitle] = React.useState("");
@@ -334,7 +335,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         setSuggestedCarPrice(agg.suggestedPrice);
         setCarPrice(agg.suggestedPrice ? String(agg.suggestedPrice) : "");
         setMileage(agg.mileage);
-        if (agg.vin) setVin(agg.vin); // surface the VIN the scanner read off the photos
+        if (agg.vin) { setVin(agg.vin); setVinStatus("confirmed"); } // VIN read + decoded server-side
       } else {
         setVehicle(deriveVehicle(deduped));
         setSuggestedCarPrice(null);
@@ -428,6 +429,41 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       csToast("Couldn't save. Check your connection");
       setSaving(false);
       setSavingKind(null);
+    }
+  }
+
+  // Decode the VIN and make it AUTHORITATIVE for the vehicle's identity. The photo
+  // model can guess the wrong model; the VIN can't. When a full 17-char VIN is
+  // present (read from a photo or typed), decode it via NHTSA and overwrite the
+  // make/model/year with the confirmed values.
+  async function confirmVinModel() {
+    const raw = vin.replace(/[\s-]/g, "").toUpperCase();
+    if (!raw) { setVinStatus("idle"); return; }
+    if (raw.length !== 17 || /[IOQ]/.test(raw)) { setVinStatus("bad"); return; }
+    setVinStatus("checking");
+    try {
+      const res = await fetch(`/api/vin-decode?vin=${encodeURIComponent(raw)}`);
+      const d = await res.json();
+      const dec = d?.decode;
+      if (res.ok && dec && (dec.make || dec.model)) {
+        const label = [dec.year, dec.make, dec.model].filter(Boolean).join(" ");
+        setVehicle((v) => ({
+          label: label || v?.label || "Vehicle",
+          sub: [dec.year, dec.bodyClass || v?.body].filter(Boolean).join(" · ") || v?.sub || "Confirmed by VIN",
+          make: dec.make || v?.make,
+          model: dec.model || v?.model,
+          year: dec.year ? String(dec.year) : v?.year,
+          body: dec.bodyClass || v?.body,
+        }));
+        if (dec.trim && !vehicleTrim) setVehicleTrim(dec.trim);
+        setVinStatus("confirmed");
+        csToast(`Model confirmed from VIN: ${label}`);
+      } else {
+        setVinStatus("bad");
+        csToast("Couldn't decode that VIN — double-check the 17 characters");
+      }
+    } catch {
+      setVinStatus("bad");
     }
   }
 
@@ -589,8 +625,17 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               </div>
               <div style={{ display: "grid", gap: 5, minWidth: 240 }}>
                 <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><ScanLine size={13} color="var(--accent)" /> VIN / plate <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, opacity: 0.8 }}>· optional</span></label>
-                <input value={vin} onChange={(e) => setVin(e.target.value.toUpperCase())} placeholder="Read from your photos. Confirm or add" maxLength={17} style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, letterSpacing: "0.04em", fontFamily: "var(--font-sans)" }} />
-                <span style={{ fontSize: 11, color: "var(--muted)" }}>Kept private, never shown on public listings.</span>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input value={vin} onChange={(e) => { setVin(e.target.value.toUpperCase()); setVinStatus("idle"); }} onBlur={confirmVinModel} onKeyDown={(e) => { if (e.key === "Enter") confirmVinModel(); }} placeholder="Read from your photos. Confirm or add" maxLength={17} style={{ flex: 1, minWidth: 0, border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, letterSpacing: "0.04em", fontFamily: "var(--font-sans)" }} />
+                  <button onClick={confirmVinModel} disabled={vinStatus === "checking"} style={{ flexShrink: 0, padding: "0 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--accent)", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{vinStatus === "checking" ? "…" : "Confirm"}</button>
+                </div>
+                {vinStatus === "confirmed" ? (
+                  <span style={{ fontSize: 11, color: "var(--success)", fontWeight: 600 }}>✓ Model confirmed from VIN</span>
+                ) : vinStatus === "bad" ? (
+                  <span style={{ fontSize: 11, color: "var(--danger)" }}>Couldn&apos;t decode — check the 17 characters (no I, O, Q)</span>
+                ) : (
+                  <span style={{ fontSize: 11, color: "var(--muted)" }}>Enter the VIN to confirm the exact model. Kept private, never shown publicly.</span>
+                )}
                 <label style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><Tag size={13} color="var(--accent)" /> Stock # <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, opacity: 0.8 }}>· optional</span></label>
                 <input value={stockNumber} onChange={(e) => setStockNumber(e.target.value)} placeholder="Your yard inventory code" style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "9px 12px", borderRadius: 10, fontFamily: "var(--font-sans)" }} />
                 {vehicle && (
