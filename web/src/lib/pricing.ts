@@ -137,7 +137,10 @@ export async function ebayUsedPrices(query: string): Promise<number[]> {
 // actual grade so a clean Grade A part isn't underpriced and a worn Grade C isn't
 // overpriced. (The Layer-2 model estimate is already condition-aware, so it is NOT
 // re-multiplied.)
-export const CONDITION_MULTIPLIER: Record<"A" | "B" | "C", number> = { A: 1.15, B: 1.0, C: 0.78 };
+// B is the market baseline (comps reflect good/usable parts). A is a modest premium
+// for like-new. C is a damaged/repairable core and must be CLEARLY below market — a
+// crashed door should never approach a clean one's price (0.78 left them too close).
+export const CONDITION_MULTIPLIER: Record<"A" | "B" | "C", number> = { A: 1.15, B: 1.0, C: 0.5 };
 export function applyCondition(price: number, grade: "A" | "B" | "C"): number {
   return Math.round(price * (CONDITION_MULTIPLIER[grade] ?? 1));
 }
@@ -158,6 +161,24 @@ export async function askingApproxPrice(query: string, partName: string): Promis
   if (med == null) return null;
   const approx = Math.round(med * ASKING_TO_SOLD);
   return isSanePrice(approx, partName) ? approx : null;
+}
+
+// Live eBay comp statistics for a part query — the MEDIAN of current US used,
+// fixed-price listings (NOT discounted: this is what comparable parts are listed
+// at right now), plus the listing count and price range. Used both to price the
+// part and to show the seller a "selling on eBay for ~$X" reference note. Returns
+// null if eBay is unconfigured, there are too few listings, or the median is
+// implausible for the part type.
+export interface EbayCompStats { median: number; count: number; min: number; max: number; }
+export async function ebayCompStats(query: string, partName: string): Promise<EbayCompStats | null> {
+  const asking = await ebayUsedPrices(query);
+  if (asking.length < MIN_COMPS) return null;
+  const med = trimmedMedian(asking);
+  if (med == null) return null;
+  const median = Math.round(med);
+  if (!isSanePrice(median, partName)) return null;
+  const sorted = [...asking].sort((a, b) => a - b);
+  return { median, count: asking.length, min: Math.round(sorted[0]), max: Math.round(sorted[sorted.length - 1]) };
 }
 
 // Resolve the eBay LEAF category a part should be listed in by reading the

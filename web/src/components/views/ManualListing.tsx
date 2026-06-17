@@ -71,7 +71,7 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
   const vehicleObj = () => ({ year, make, model, trim, body });
   const vehStr = [year, make, model].filter(Boolean).join(" ");
 
-  // Groq vision (no Gemini) autofills fields from the first photo + drafts copy.
+  // Gemini vision autofills fields from the first photo + drafts copy.
   async function scanPhoto() {
     if (!photos.length || busy) return;
     setBusy("scan");
@@ -92,7 +92,7 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
     setBusy(null);
   }
 
-  // Groq draft of title + description + suggested price.
+  // Gemini draft of title + description + suggested price.
   async function writeWithAI() {
     if (busy) return;
     if (kind === "part" && !partName.trim()) { csToast("Pick or type the part first"); return; }

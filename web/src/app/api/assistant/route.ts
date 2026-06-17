@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
+import { geminiGenerate, getPrimaryKey, getFallbackKey } from "@/lib/gemini";
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = "llama-3.3-70b-versatile";
+const MODEL = "gemini-2.5-flash";
 
 const SYSTEM_PROMPT = `You are the Ahlam Assistant, a specialist for auto salvage yards and used-parts shops.
 
@@ -28,9 +28,8 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in to use the assistant" }, { status: 401 });
 
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "The assistant isn't configured yet (missing GROQ_API_KEY)." }, { status: 503 });
+  if (!getPrimaryKey() && !getFallbackKey()) {
+    return NextResponse.json({ error: "The assistant isn't configured yet (missing GEMINI_API_KEY)." }, { status: 503 });
   }
 
   const { messages } = await req.json().catch(() => ({ messages: [] }));
@@ -38,35 +37,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No message provided" }, { status: 400 });
   }
 
-  // Keep the last ~10 turns for context; coerce to {role, content}.
-  const history = messages
+  // Keep the last ~10 turns for context; coerce to Gemini's {role, parts} shape
+  // (Gemini uses "model" for the assistant role, not "assistant").
+  const contents = messages
     .slice(-10)
     .filter((m: any) => m && typeof m.content === "string" && m.content.trim())
     .map((m: any) => ({
-      role: m.role === "assistant" || m.role === "ai" ? "assistant" : "user",
-      content: String(m.content).slice(0, 4000),
+      role: m.role === "assistant" || m.role === "ai" ? "model" : "user",
+      parts: [{ text: String(m.content).slice(0, 4000) }],
     }));
 
   try {
-    const res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: MODEL,
-        temperature: 0.4,
-        max_tokens: 700,
-        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...history],
-      }),
+    const res = await geminiGenerate(MODEL, {
+      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents,
+      generationConfig: { temperature: 0.4, maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } },
     });
 
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
-      console.error("Groq error", res.status, detail);
+      console.error("Gemini error", res.status, detail);
       return NextResponse.json({ error: "The assistant is busy right now — try again in a moment." }, { status: 502 });
     }
 
     const data = await res.json();
-    const reply = data.choices?.[0]?.message?.content?.trim();
+    const parts = data.candidates?.[0]?.content?.parts;
+    const reply = Array.isArray(parts) ? parts.map((p: any) => p.text ?? "").join("").trim() : "";
     if (!reply) return NextResponse.json({ error: "The assistant didn't return a reply." }, { status: 502 });
 
     return NextResponse.json({ reply });

@@ -16,6 +16,7 @@ import { Browse } from "./views/Browse";
 import { Parts } from "./views/Parts";
 import { Messages, DeletedChats } from "./views/Messages";
 import { AIChat } from "./views/AIChat";
+import { AssistantDrawer } from "./AssistantDrawer";
 import { Interchange } from "./views/Interchange";
 import { ExportCenter } from "./views/ExportCenter";
 import { AddVehicle } from "./views/AddVehicle";
@@ -50,7 +51,6 @@ const NAV = [
   { id: "analytics", label: "Analytics", icon: TrendingUp },
   { id: "files", label: "Files", icon: FolderClosed, ownerOnly: true },
   { section: "Assist" },
-  { id: "aichat", label: "AI assistant", icon: Sparkles },
   { id: "gallery", label: "Gallery", icon: Images },
   { id: "export", label: "Export & posting", icon: Send },
   { id: "messages", label: "Messages", icon: MessageSquare },
@@ -125,9 +125,9 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
   );
 }
 
-function Topbar({ meta, onMenu, onSignOut, onNav }: {
+function Topbar({ meta, onMenu, onSignOut, onNav, onToggleAssistant }: {
   meta: { title: string; sub: string }; onMenu: () => void;
-  onSignOut: () => void; onNav?: (id: string) => void;
+  onSignOut: () => void; onNav?: (id: string) => void; onToggleAssistant?: () => void;
 }) {
   const t = useT();
   const { lang, setLang } = useI18n();
@@ -141,6 +141,14 @@ function Topbar({ meta, onMenu, onSignOut, onNav }: {
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button
+          title={t("AI assistant")}
+          aria-label={t("AI assistant")}
+          onClick={() => onToggleAssistant?.()}
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--accent)", cursor: "pointer" }}
+        >
+          <Sparkles size={17} />
+        </button>
         <span title="Language" className="cs-lang" style={{ display: "inline-flex", border: "1px solid var(--line)", borderRadius: 9, overflow: "hidden" }}>
           {(["en", "es"] as const).map((l) => (
             <button key={l} onClick={() => setLang(l)} aria-label={l === "en" ? "English" : "Español"} style={{ padding: "6px 10px", fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: lang === l ? "var(--accent)" : "transparent", color: lang === l ? "#fff" : "var(--muted)" }}>{l.toUpperCase()}</button>
@@ -699,6 +707,7 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   const [active, setActive] = useState("overview");
   const [vehicle, setVehicle] = useState<any>(null);
   const [navOpen, setNavOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [data, setData] = useState<any>({ role: "seller", user: {}, shop: {}, vehicles: [], listings: [], threads: [], activity: [] });
   const [loading, setLoading] = useState(true);
 
@@ -758,8 +767,8 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
       <div style={sx.layout} className="cs-layout">
         {navOpen && <div className="cs-backdrop" onClick={() => setNavOpen(false)} style={sx.backdrop} />}
         <Sidebar active={effectiveActive} onNav={navTo} onSignOut={onSignOut} open={navOpen} onClose={() => setNavOpen(false)} />
-        <main style={sx.main} className="cs-main">
-          <Topbar meta={meta} onNav={navTo} onMenu={() => setNavOpen(true)} onSignOut={onSignOut} />
+        <main style={sx.main} className={"cs-main" + (assistantOpen ? " cs-assistant-open" : "")}>
+          <Topbar meta={meta} onNav={navTo} onMenu={() => setNavOpen(true)} onSignOut={onSignOut} onToggleAssistant={() => setAssistantOpen((o) => !o)} />
           <div style={sx.content} className="cs-content" key={vehicle ? "vp" + vehicle.id : effectiveActive}>
             {loading ? (
               <DashboardSkeleton />
@@ -775,6 +784,7 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
         </main>
         <ExportModal />
         <ToastHost />
+        <AssistantDrawer open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       </div>
       </I18nProvider>
     </DataContext.Provider>

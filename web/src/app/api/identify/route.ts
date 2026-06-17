@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { groundedMedianPrice, askingApproxPrice, applyCondition } from "@/lib/pricing";
+import { groundedMedianPrice, ebayCompStats, applyCondition, CONDITION_MULTIPLIER } from "@/lib/pricing";
 import { floorPrice, bandsPromptBlock } from "@/lib/price-bands";
 import { loadSoldListings, ownSoldComps, type SoldRow } from "@/lib/own-comps";
 import { getCachedPrice, setCachedPrice } from "@/lib/price-cache";
 import { geminiGenerate } from "@/lib/gemini";
+import { decodeVin, normalizeVin } from "@/lib/vin";
 
 export const runtime = "nodejs";
 // Up to 50 parts × a grounded sold-price search each (in bounded batches) can run
@@ -30,12 +31,16 @@ export interface PricingInsight {
   similarCount: number;
   // Which rung of the pricing ladder produced this price (best → fallback):
   // "shop" = the shop's own past sold comps (strongest), "grounded" = live grounded
-  // sold-price web search, "asking" = discounted active asking prices, "model" =
-  // AI estimate clamped to the sold-price bands (last-resort floor).
-  source?: "shop" | "grounded" | "asking" | "model";
+  // sold-price web search, "ebay" = live eBay listing median, "asking" = discounted
+  // active asking prices, "model" = AI estimate clamped to the sold-price bands.
+  source?: "shop" | "grounded" | "ebay" | "asking" | "model";
   // How trustworthy the price is, derived from the rung: real sold data is high,
   // discounted asking is medium, the band/model estimate is low. Surfaced in the UI.
   confidence?: "high" | "medium" | "low";
+  // The raw eBay listing median (pre-condition) + range, when priced off eBay — so
+  // the UI can show the seller "selling on eBay for ~$X across N listings".
+  ebayMedian?: number;
+  ebayRange?: { min: number; max: number };
 }
 
 export interface AIPartOutput {
@@ -65,6 +70,7 @@ export interface ComplianceFlag {
 }
 
 export interface VehicleEstimate {
+  vin: string | null;
   make: string | null;
   model: string | null;
   yearStart: number | null;
@@ -91,6 +97,7 @@ You MUST return ONLY a JSON object, no prose, with this shape:
 {
   "vehicleFront": "toward-camera" | "away-from-camera" | "points-left" | "points-right" | "unknown",
   "vehicle": {
+    "vin": string | null,
     "make": string | null,
     "model": string | null,
     "yearStart": number | null,
@@ -140,16 +147,19 @@ MECE — each part is ONE distinct, separately-sold unit (mutually exclusive, co
 - Don't merge an assembly with its sub-parts (e.g. don't fold the mirror glass into the door). When in doubt, split into the parts a yard actually sells individually.
 
 VEHICLE ESTIMATE ("vehicle"):
+- VIN — THIS IS HIGH PRIORITY. Scan the photo for a VIN and READ IT if one is legible anywhere: the windshield VIN plate (driver-side base of the windshield), the driver door-jamb sticker, the firewall/engine-bay label, the dashboard, or any paperwork in frame. A VIN is exactly 17 characters, capital letters and digits only, and never contains the letters I, O, or Q. Transcribe all 17 characters CAREFULLY, character by character, and return it in "vin". If no VIN is legible, set "vin" to null — NEVER invent or guess a VIN, and never partially fill one.
+- If you read a VIN, USE IT: it tells you the exact make, model, and model year — set yearStart and yearEnd to that EXACT same year (not a range) — and the engine/drivetrain, which determines which parts the car has and what they interchange with. Trust the VIN over a visual guess.
+- EXACT YEAR over ranges: when you can identify the exact model year (from a VIN, a clearly recognizable model/generation, or a build date sticker), set yearStart === yearEnd to that one year. Only return a multi-year range (e.g. 2015–2025) when you genuinely cannot narrow it down — a wide range is a last resort, not a default. Prefer the tightest range you can justify.
 - If you can identify the source vehicle, fill in make/model/year/bodyStyle from what you actually see.
 - "mileage": ONLY if this photo clearly shows an odometer / instrument cluster with a readable mileage number, return it as a string (e.g. "112,480 mi"). Otherwise null. Never guess mileage.
 - "suggestedWholeCarPriceUsd": your best estimate of the fair market price (USD) for the COMPLETE vehicle in average used/salvage condition, as a single whole car. This is a standalone market value — it is NOT the sum of the parts. If you cannot estimate it, use null.
-- Never invent a VIN. If you are unsure of any field, set it to null and lower "confidence".
+- If you are unsure of any field, set it to null and lower "confidence".
 
 PRICING GUIDANCE (applies to both "suggestedWholeCarPriceUsd" and each part's "suggestedPriceUsd"):
 - Price at the MIDDLE of the real used-market range — the AVERAGE of what comparable items actually sell for on Facebook Marketplace, Craigslist, OfferUp, eBay sold listings, and Google Shopping for the same make/model/year and condition. Aim for fair market value, NOT a quick-sale lowball.
 - DO NOT UNDERCUT. If a "Good" used part typically sells for $600–$1000, price it around the middle (~$800), never below the bottom of that range. Sellers can always lower it; starting too low leaves money on the table.
 - Use the part's full OEM fitment (make/model/year/trim) when judging comps — a popular late-model part holds strong value.
-- "Good" condition = mid-to-upper market range; "Poor" = priced as a core/repairable (clearly below range, but still realistic).
+- "Good" condition = mid-to-upper market range; a DAMAGED / Grade-C part = priced as a core/repairable, CLEARLY below the good-used price for that same part (roughly half), never near or above it. Two of the same part on one car (e.g. a left and right door) are worth the same when condition is equal — only real damage should make one cheaper than the other.
 - For the whole car: think used-car comps for that year/make/model/mileage and trim, at typical private-party value (only discount for genuine salvage/parts-car condition).
 - Use realistic round numbers. If you genuinely have no basis for a price, use null rather than guessing — but prefer a market-based estimate.
 - ${bandsPromptBlock()}
@@ -188,6 +198,7 @@ CONDITION RUBRIC — grade each part as exactly "A", "B", or "C" (ARA-style), ba
 - B: ${CONDITION_RUBRIC.B.detail}
 - C: ${CONDITION_RUBRIC.C.detail}
 Pick the grade by visible wear and damage. When genuinely between two grades, choose the LOWER (more conservative) one.
+- COLLISION / STRUCTURAL DAMAGE IS ALWAYS GRADE C. If a part is crumpled, caved-in, bent, torn, cracked, has a deep dent, broken/missing mounting points, or shattered/spidered glass, it is a damaged repairable CORE — grade it "C", never "A" or "B". A clearly wrecked part is the CHEAPEST version of that part on the car, not a premium one. Inspect each part for collision damage specifically before grading.
 
 DAMAGE CODE ("damageCode"): a short ARA-style code summarizing the worst visible damage, as TYPE-LOCATION-SIZE.
 - TYPE: DT (dent), SC (scratch/scuff), CR (crack), BR (break/missing piece), RU (rust/corrosion), CH (chip), BN (bend), GL (glass damage), WR (general wear).
@@ -325,6 +336,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     const v = parsed.vehicle;
     const vehicle: VehicleEstimate | null = v
       ? {
+          vin: normalizeVin((v as { vin?: string }).vin),
           make: v.make ?? null,
           model: v.model ?? null,
           yearStart: typeof v.yearStart === "number" ? v.yearStart : null,
@@ -335,6 +347,32 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
           confidence: v.confidence ?? "low",
         }
       : null;
+
+    // VIN authority: a VIN read off the photo is the single source of truth for
+    // the vehicle's identity. Decode it via NHTSA and LOCK make/model/exact year
+    // to the decode — overriding the model's visual guess and any wide year range
+    // (the "2015–2025" problem). NHTSA is deterministic per VIN, so repeat scans
+    // of the same car now agree on identity.
+    if (vehicle?.vin) {
+      const decoded = await decodeVin(vehicle.vin);
+      if (decoded) {
+        vehicle.vin = decoded.vin;
+        if (decoded.make) vehicle.make = decoded.make;
+        if (decoded.model) vehicle.model = decoded.model;
+        if (decoded.year) { vehicle.yearStart = decoded.year; vehicle.yearEnd = decoded.year; }
+        if (decoded.bodyClass && !vehicle.bodyStyle) vehicle.bodyStyle = decoded.bodyClass;
+        vehicle.confidence = "high"; // identity is now VIN-confirmed, not guessed
+      } else {
+        vehicle.vin = null; // misread / not in NHTSA — don't surface a bogus VIN
+      }
+    }
+    // Client-supplied decode (user scanned/typed the VIN before uploading): trust
+    // its exact year/make/model the same way, even when no VIN was visible in frame.
+    if (vehicle && !vehicle.vin && body.vin) {
+      if (body.vin.make) vehicle.make = body.vin.make;
+      if (body.vin.model) vehicle.model = body.vin.model;
+      if (typeof body.vin.year === "number") { vehicle.yearStart = body.vin.year; vehicle.yearEnd = body.vin.year; }
+    }
     const rawParts: RawPart[] = Array.isArray(parsed.parts) ? parsed.parts : parsed.partName ? [parsed] : [];
 
     const assembled: AIPartOutput[] = rawParts.map((p) => {
@@ -443,10 +481,11 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
           // A market comp reflects ~good (Grade B) condition; adjust to this part's grade.
           const setMarket = (
             raw: number,
-            source: "shop" | "grounded" | "asking",
+            source: "shop" | "grounded" | "ebay" | "asking",
             confidence: "high" | "medium",
             range?: { min: number; max: number },
             count = 0,
+            ebay?: { median: number; range: { min: number; max: number } },
           ) => {
             const adj = applyCondition(raw, grade);
             p.suggestedPriceUsd = adj;
@@ -456,6 +495,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
               similarCount: count,
               source,
               confidence,
+              ...(ebay ? { ebayMedian: ebay.median, ebayRange: ebay.range } : {}),
             };
           };
 
@@ -465,26 +505,53 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
 
           const q = [vehicle.yearStart, vehicle.make, vehicle.model, p.partName].filter(Boolean).join(" ");
 
-          // (2) Grounded sold-price web search, cache-first (free + stable on repeat).
+          // (2) Live eBay listings — real market MEDIAN (not discounted) plus the
+          // listing count + range, so the seller sees what comparable parts are
+          // actually going for on eBay right now. Price is the median, condition-
+          // adjusted; the raw median rides along for the "selling on eBay" note.
+          try {
+            const eb = await ebayCompStats(q, p.partName);
+            if (eb) {
+              setMarket(eb.median, "ebay", eb.count >= 8 ? "high" : "medium", { min: eb.min, max: eb.max }, eb.count, { median: eb.median, range: { min: eb.min, max: eb.max } });
+              return;
+            }
+          } catch { /* fall to the next rung */ }
+
+          // (3) Grounded sold-price web search, cache-first (free + stable on repeat).
           try {
             let grounded = await getCachedPrice(q);
             if (grounded == null) {
               grounded = await groundedMedianPrice(q, p.partName);
-              if (grounded && grounded > 0) await setCachedPrice(q, grounded, "grounded");
+              if (grounded && grounded > 0) void setCachedPrice(q, grounded, "grounded"); // fire-and-forget
             }
             if (grounded && grounded > 0) { setMarket(grounded, "grounded", "high"); return; }
-          } catch { /* fall to the next rung */ }
-
-          // (3) Discounted active asking prices — fills the gap when no sold comps
-          // are found, instead of dropping straight to the band estimate.
-          try {
-            const asking = await askingApproxPrice(q, p.partName);
-            if (asking && asking > 0) { setMarket(asking, "asking", "medium"); return; }
           } catch { /* fall to the band estimate */ }
 
           // (4) else: keep the Layer-2 band/model estimate (already seeded, low confidence).
         }));
       }
+    }
+
+    // Same-type parts on ONE car share a single pre-condition market value, so
+    // CONDITION — not comp-search noise — must drive the spread between them.
+    // (Fixes the crashed-door-$407 / good-door-$207 inversion.)
+    reconcileSameTypePrices(data);
+
+    // Whole-car price consistency: the model's whole-car estimate drifts wildly
+    // run-to-run ($5.5k one scan, $17.5k the next on the same car). Anchor it to a
+    // per-vehicle cache keyed by identity — VIN when known (most stable), else
+    // year+make+model — so a repeat scan of the SAME car returns the SAME number.
+    if (vehicle && (vehicle.make || vehicle.model)) {
+      const idKey = `wholecar ${vehicle.vin || [vehicle.yearStart, vehicle.make, vehicle.model].filter(Boolean).join(" ")}`;
+      try {
+        const cached = await getCachedPrice(idKey);
+        if (cached && cached > 0) {
+          vehicle.suggestedWholeCarPriceUsd = cached;
+        } else if (vehicle.suggestedWholeCarPriceUsd && vehicle.suggestedWholeCarPriceUsd > 0) {
+          // Fire-and-forget — don't make the user wait on the cache write.
+          void setCachedPrice(idKey, vehicle.suggestedWholeCarPriceUsd, "model");
+        }
+      } catch { /* cache is best-effort — fall back to the live estimate */ }
     }
 
     return NextResponse.json({ ok: true, data, vehicle, vehicleFront });
@@ -660,6 +727,62 @@ function reconcileWheelSpecs(parts: AIPartOutput[]): void {
     const lf = new Set<keyof AIPartOutput>(w.p.lowConfidenceFields ?? []);
     lf.add("description");
     w.p.lowConfidenceFields = Array.from(lf);
+  }
+}
+
+// Normalize the prices of same-type parts (e.g. left + right "Front Door") to ONE
+// market base, then re-apply each part's condition grade — so condition, not the
+// per-part comp search's run-to-run variance, decides the spread. Without this a
+// damaged door could out-price a clean one when their independent comp lookups
+// landed at different numbers. The clean, real-comp parts define the base; the
+// damaged ones come out as a proper discount off it.
+function reconcileSameTypePrices(parts: AIPartOutput[]): void {
+  const gradeOf = (p: AIPartOutput): "A" | "B" | "C" =>
+    (["A", "B", "C"] as const).includes(p.condition) ? (p.condition as "A" | "B" | "C") : "B";
+  const baseOf = (p: AIPartOutput): number | null => {
+    const m = CONDITION_MULTIPLIER[gradeOf(p)] ?? 1;
+    return p.suggestedPriceUsd && m ? p.suggestedPriceUsd / m : null;
+  };
+  const isRealData = (p: AIPartOutput): boolean => {
+    const s = p.pricingInsight?.source;
+    return s === "shop" || s === "grounded" || s === "asking";
+  };
+  const median = (xs: number[]): number => {
+    const s = [...xs].sort((a, b) => a - b);
+    return s[Math.floor(s.length / 2)];
+  };
+
+  const groups = new Map<string, AIPartOutput[]>();
+  for (const p of parts) {
+    const key = stripSide(p.partName).toLowerCase().trim();
+    const g = groups.get(key);
+    if (g) g.push(p); else groups.set(key, [p]);
+  }
+
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    // Pick the cleanest signal for the shared base: prefer undamaged parts backed
+    // by real comps, then any undamaged part, then any real-comp part, then all.
+    const tiers: AIPartOutput[][] = [
+      group.filter((p) => gradeOf(p) !== "C" && isRealData(p)),
+      group.filter((p) => gradeOf(p) !== "C"),
+      group.filter((p) => isRealData(p)),
+      group,
+    ];
+    const ref = tiers.find((t) => t.some((p) => baseOf(p) != null)) ?? group;
+    const bases = ref.map(baseOf).filter((b): b is number => typeof b === "number" && b > 0);
+    if (!bases.length) continue;
+    const base = median(bases);
+
+    for (const p of group) {
+      const priced = applyCondition(base, gradeOf(p));
+      if (priced <= 0) continue;
+      p.suggestedPriceUsd = priced;
+      if (p.pricingInsight) {
+        p.pricingInsight.suggestedPrice = priced;
+        p.pricingInsight.priceRange = { min: priced, max: priced };
+      }
+    }
   }
 }
 

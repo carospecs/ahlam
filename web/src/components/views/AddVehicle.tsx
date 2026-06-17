@@ -18,7 +18,7 @@ interface AIPart {
   lowConfidenceFields?: string[];
   // Pricing provenance from the ladder (AHLAM-53): which rung set the price + how
   // trustworthy it is. Spread through from the identify response.
-  pricingInsight?: { source?: "shop" | "grounded" | "asking" | "model"; confidence?: "high" | "medium" | "low"; similarCount?: number };
+  pricingInsight?: { source?: "shop" | "grounded" | "ebay" | "asking" | "model"; confidence?: "high" | "medium" | "low"; similarCount?: number; ebayMedian?: number; ebayRange?: { min: number; max: number } };
   // Restricted-resale flag from the scan (AHLAM-54), surfaced in the review summary.
   compliance?: { label: string; reason: string };
   photoUrl?: string; // the photo this part was scanned from — used as its thumbnail
@@ -28,7 +28,7 @@ interface AIPart {
 
 const MAX_PHOTOS = 8;
 interface VehicleEstimate {
-  make: string | null; model: string | null; yearStart: number | null; yearEnd: number | null;
+  vin: string | null; make: string | null; model: string | null; yearStart: number | null; yearEnd: number | null;
   bodyStyle: string | null; mileage: string | null; suggestedWholeCarPriceUsd: number | null; confidence: "high" | "medium" | "low";
 }
 type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; vehicleFront?: string } | { ok: false; userMessage: string; internalError: string };
@@ -38,7 +38,7 @@ type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; ve
 const SCAN_TONE = "var(--signal)";
 
 // Pick the single best whole-car price + label from per-photo AI estimates.
-function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { label: string; sub: string; suggestedPrice: number | null; mileage: string | null; make: string; model: string; year: string; body: string } | null {
+function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { label: string; sub: string; suggestedPrice: number | null; mileage: string | null; make: string; model: string; year: string; body: string; vin: string | null } | null {
   const valid = estimates.filter((e): e is VehicleEstimate => !!e && !!e.make && !!e.model);
   if (!valid.length) return null;
   // Most-named make+model wins the label.
@@ -55,6 +55,8 @@ function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { 
   const prices = valid.map((e) => e.suggestedWholeCarPriceUsd).filter((p): p is number => typeof p === "number" && p > 0).sort((a, b) => a - b);
   const suggestedPrice = prices.length ? prices[Math.floor(prices.length / 2)] : null;
   const mileage = valid.map((e) => e.mileage).find((m): m is string => !!m) ?? null;
+  // VIN read off any photo (decoded server-side). First non-empty wins.
+  const vin = valid.map((e) => e.vin).find((v): v is string => !!v) ?? null;
   return {
     label: `${top.e.make} ${top.e.model}`,
     sub: [years, top.e.bodyStyle].filter(Boolean).join(" · "),
@@ -64,6 +66,7 @@ function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { 
     model: top.e.model || "",
     year: years,
     body: top.e.bodyStyle || "",
+    vin,
   };
 }
 
@@ -282,6 +285,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         setSuggestedCarPrice(agg.suggestedPrice);
         setCarPrice(agg.suggestedPrice ? String(agg.suggestedPrice) : "");
         setMileage(agg.mileage);
+        if (agg.vin) setVin(agg.vin); // surface the VIN the scanner read off the photos
       } else {
         setVehicle(deriveVehicle(deduped));
         setSuggestedCarPrice(null);
@@ -517,6 +521,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               {priceMismatches.length > 0 && (
                 <ReportLine icon={<TriangleAlert size={14} color="var(--signal)" />} text={`Check left/right pricing — ${priceMismatches.map((m) => m.base).join(", ")} ${priceMismatches.length > 1 ? "have" : "has"} sides priced very differently. Paired parts usually sell within ~20% of each other.`} />
               )}
+              {vin && <ReportLine icon={<ScanLine size={14} color="var(--accent)" />} text={`VIN read from your photos: ${vin}. Used to lock the exact year, make, model, and engine for accurate fitment and pricing. Confirm it below.`} />}
               {mileage && <ReportLine icon={<Lock size={14} color="var(--muted)" />} text={`Mileage read from dashboard: ${mileage}. Kept private, never shown on listings. You can share it in chat if a buyer asks.`} />}
             </div>
           </Card>
@@ -664,13 +669,22 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                         {sellMode === "both" && <span style={{ fontSize: 10, color: "var(--muted)" }}>suggested</span>}
                         {p.pricingInsight && (() => {
                           const ins = p.pricingInsight!;
-                          const LBL: Record<string, string> = { shop: "Sold comps", grounded: "Market data", asking: "Active asking", model: "AI estimate" };
+                          const LBL: Record<string, string> = { shop: "Sold comps", grounded: "Market data", ebay: "eBay listings", asking: "Active asking", model: "AI estimate" };
                           const label = LBL[ins.source || "model"] || "AI estimate";
                           const dot = ins.confidence === "high" ? "#16a34a" : ins.confidence === "medium" ? "#f59e0b" : "var(--muted)";
+                          const em = Number(ins.ebayMedian) || 0;
+                          const n = Number(ins.similarCount) || 0;
                           return (
-                            <span title={`${label} · ${ins.confidence || "low"} confidence`} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap" }}>
-                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, flexShrink: 0 }} />{label}
-                            </span>
+                            <>
+                              <span title={`${label} · ${ins.confidence || "low"} confidence`} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap" }}>
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, flexShrink: 0 }} />{label}
+                              </span>
+                              {em > 0 && (
+                                <span style={{ fontSize: 10, color: "var(--muted)", whiteSpace: "nowrap", textAlign: "right" }}>
+                                  Selling on eBay ~${em.toLocaleString()}{n ? ` · ${n} listings` : ""}
+                                </span>
+                              )}
+                            </>
                           );
                         })()}
                       </div>

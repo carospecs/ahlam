@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
+import { geminiGenerate, getPrimaryKey, getFallbackKey } from "@/lib/gemini";
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = "llama-3.3-70b-versatile";
+const MODEL = "gemini-2.5-flash";
 
 // Summarizes a conversation into a short title. Used to auto-name chats.
 export async function POST(req: NextRequest) {
@@ -10,8 +10,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "not configured" }, { status: 503 });
+  if (!getPrimaryKey() && !getFallbackKey()) return NextResponse.json({ error: "not configured" }, { status: 503 });
 
   const { messages } = await req.json().catch(() => ({ messages: [] }));
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -25,22 +24,16 @@ export async function POST(req: NextRequest) {
     .join("\n");
 
   try {
-    const res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: MODEL,
-        temperature: 0.3,
-        max_tokens: 20,
-        messages: [
-          { role: "system", content: "You write very short chat titles. Given a conversation, reply with ONLY a 2-6 word title summarizing what it's about, in the same language as the conversation. No quotes, no punctuation at the end, no prefix." },
-          { role: "user", content: transcript },
-        ],
-      }),
+    const res = await geminiGenerate(MODEL, {
+      system_instruction: { parts: [{ text: "You write very short chat titles. Given a conversation, reply with ONLY a 2-6 word title summarizing what it's about, in the same language as the conversation. No quotes, no punctuation at the end, no prefix." }] },
+      contents: [{ role: "user", parts: [{ text: transcript }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 20, thinkingConfig: { thinkingBudget: 0 } },
     });
     if (!res.ok) return NextResponse.json({ error: "title failed" }, { status: 502 });
     const data = await res.json();
-    let title = (data.choices?.[0]?.message?.content || "").trim().replace(/^["']|["']$/g, "").replace(/[.]$/, "");
+    const parts = data.candidates?.[0]?.content?.parts;
+    const raw = Array.isArray(parts) ? parts.map((p: any) => p.text ?? "").join("") : "";
+    let title = raw.trim().replace(/^["']|["']$/g, "").replace(/[.]$/, "");
     if (title.length > 48) title = title.slice(0, 48).trim();
     if (!title) return NextResponse.json({ error: "empty" }, { status: 502 });
     return NextResponse.json({ title });

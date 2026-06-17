@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Camera, Car, Wrench, MapPin, Store, Search, MessageSquare, X, Send, LoaderCircle, Eye, SlidersHorizontal, ChevronDown, Plus, Phone, MessageCircle, ShieldCheck, ShoppingBag } from "lucide-react";
+import { Camera, Car, Wrench, MapPin, Store, Search, MessageSquare, X, Send, LoaderCircle, Eye, SlidersHorizontal, ChevronDown, Phone, MessageCircle, ShieldCheck, ShoppingBag } from "lucide-react";
 import { PhotoCell, ConditionBadge, conditionColorOf, Stars, VerifiedBadge } from "../UI";
 import { csToast } from "../Dashboard";
 
@@ -74,6 +74,7 @@ export function Browse() {
   const [priceMax, setPriceMax] = React.useState("");
   const fileRef = React.useRef<HTMLInputElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
   const [suggestions, setSuggestions] = React.useState<string[]>([]);
   const [focusedSuggestion, setFocusedSuggestion] = React.useState(-1);
   const [showSuggestions, setShowSuggestions] = React.useState(false);
@@ -233,6 +234,18 @@ export function Browse() {
   const shownParts = fParts.slice(0, visible);
   const shownVehicles = fVehicles.slice(0, visible);
 
+  // Infinite scroll: reveal more cards as the sentinel scrolls into view —
+  // no "load more" button, everything streams in as the user scrolls down.
+  React.useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) setVisible((v) => v + PAGE);
+    }, { rootMargin: "600px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [tab, q, sort, partCat, vehMake, visible, fParts.length, fVehicles.length]);
+
   return (
     <div style={{ maxWidth: 1180, display: "grid", gap: 18 }}>
       {demo && (
@@ -367,7 +380,7 @@ export function Browse() {
               </div>
             ))}
           </div>
-          {fParts.length > visible && <LoadMore onClick={() => setVisible((v) => v + PAGE)} remaining={fParts.length - visible} />}
+          {fParts.length > visible && <div ref={sentinelRef} aria-hidden style={{ height: 1 }} />}
           </>
         )}
         {fParts.length === 0 && !photoSearchResult && <Empty label="No parts match your search." />}
@@ -397,7 +410,7 @@ export function Browse() {
               </div>
             ))}
           </div>
-          {fVehicles.length > visible && <LoadMore onClick={() => setVisible((v) => v + PAGE)} remaining={fVehicles.length - visible} />}
+          {fVehicles.length > visible && <div ref={sentinelRef} aria-hidden style={{ height: 1 }} />}
           </>
         )
       )}
@@ -649,16 +662,6 @@ function ShopLink({ id, name }: { id?: string; name: string }) {
     <a href={`/shop/${id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
       {name}
     </a>
-  );
-}
-
-function LoadMore({ onClick, remaining }: { onClick: () => void; remaining: number }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "center", marginTop: 6 }}>
-      <button onClick={onClick} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 22px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, fontWeight: 600 }}>
-        <Plus size={15} /> Load {Math.min(12, remaining)} more <span style={{ color: "var(--muted)" }}>({remaining} left)</span>
-      </button>
-    </div>
   );
 }
 

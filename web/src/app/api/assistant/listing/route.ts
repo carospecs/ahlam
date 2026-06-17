@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
+import { geminiGenerate, getPrimaryKey, getFallbackKey } from "@/lib/gemini";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const TEXT_MODEL = "llama-3.3-70b-versatile";
-const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"; // Groq vision
+const MODEL = "gemini-2.5-flash"; // handles both text and vision
 
-// Manual-listing AI assist — Groq only (no Gemini).
+// Manual-listing AI assist — Gemini.
 //  • text mode: draft title/description/price from typed fields
 //  • vision mode (image given): also read the photo to fill part/vehicle/condition
-const SYSTEM = `You write and price used auto listings for a salvage/used-parts shop. Groq is the only AI here.
+const SYSTEM = `You write and price used auto listings for a salvage/used-parts shop.
 Return ONLY a JSON object with these keys (omit none you can fill):
 { "title": string, "description": string, "suggestedPriceUsd": number,
   "priceRange": { "min": number, "max": number },
@@ -34,42 +33,42 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
 
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "AI assist isn't configured (missing GROQ_API_KEY)." }, { status: 503 });
+  if (!getPrimaryKey() && !getFallbackKey()) return NextResponse.json({ error: "AI assist isn't configured (missing GEMINI_API_KEY)." }, { status: 503 });
 
   const b = await req.json().catch(() => ({}));
   const kind = b.kind === "part" ? "part" : "car";
   const v = b.vehicle || {};
   const vehStr = [v.year, v.make, v.model, v.trim, v.body].filter(Boolean).join(" ") || "unknown vehicle";
   const hasImage = typeof b.imageBase64 === "string" && b.imageBase64.length > 100;
-  const dataUrl = hasImage ? (b.imageBase64.startsWith("data:") ? b.imageBase64 : `data:image/jpeg;base64,${b.imageBase64}`) : null;
+  // Strip any data-URL prefix → raw base64 + mime for Gemini inline_data.
+  let imgMime = "image/jpeg";
+  let imgData: string | null = null;
+  if (hasImage) {
+    const m = b.imageBase64.match(/^data:([^;]+);base64,(.*)$/s);
+    if (m) { imgMime = m[1]; imgData = m[2]; }
+    else { imgData = b.imageBase64; }
+  }
 
   const ask = kind === "part"
     ? `Write a listing for this used PART${b.partName ? `: "${b.partName}"` : (hasImage ? " (identify it from the photo)" : "")}. Vehicle/fitment: ${vehStr}. Condition: ${b.condition || "(judge it)"}.${b.notes ? ` Seller notes: ${String(b.notes).slice(0, 400)}` : ""}`
     : `Write a listing for this WHOLE vehicle (sold whole or parted out): ${vehStr}.${hasImage ? " Identify the vehicle from the photo if fields are missing." : ""} ${b.mileage ? `Mileage: ${b.mileage}. ` : ""}Condition: ${b.condition || "used"}.${b.notes ? ` Seller notes: ${String(b.notes).slice(0, 400)}` : ""}`;
 
-  const userContent: any = hasImage
-    ? [{ type: "text", text: ask }, { type: "image_url", image_url: { url: dataUrl } }]
-    : ask;
+  const userParts: any[] = [{ text: ask }];
+  if (hasImage && imgData) userParts.push({ inline_data: { mime_type: imgMime, data: imgData } });
 
   try {
-    const res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: hasImage ? VISION_MODEL : TEXT_MODEL,
-        temperature: 0.4,
-        max_tokens: 600,
-        ...(hasImage ? {} : { response_format: { type: "json_object" } }),
-        messages: [{ role: "system", content: SYSTEM }, { role: "user", content: userContent }],
-      }),
+    const res = await geminiGenerate(MODEL, {
+      system_instruction: { parts: [{ text: SYSTEM }] },
+      contents: [{ role: "user", parts: userParts }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 600, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } },
     });
     if (!res.ok) {
-      console.error("Groq listing error", res.status, await res.text().catch(() => ""));
+      console.error("Gemini listing error", res.status, await res.text().catch(() => ""));
       return NextResponse.json({ error: "AI assist is busy — try again." }, { status: 502 });
     }
     const data = await res.json();
-    const raw = (data.choices?.[0]?.message?.content || "").replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
+    const parts = data.candidates?.[0]?.content?.parts;
+    const raw = (Array.isArray(parts) ? parts.map((p: any) => p.text ?? "").join("") : "").replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
     let out: any = {};
     try { out = JSON.parse(raw); } catch { try { out = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)); } catch {} }
 

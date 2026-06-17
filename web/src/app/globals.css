@@ -231,8 +231,12 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
 }
 
 /* ---- Dashboard responsive (phone / tablet) ---- */
+/* Assistant drawer pushes the main content aside (beside it, never on top) on
+   wide screens; on narrow screens the fixed drawer overlays instead. */
+.cs-main { transition: margin-right 0.28s cubic-bezier(0.4, 0, 0.2, 1); }
 @media (min-width: 901px) {
   .cs-backdrop { display: none !important; }
+  .cs-main.cs-assistant-open { margin-right: min(390px, 42vw); }
 }
 @media (max-width: 900px) {
   .cs-layout { grid-template-columns: 1fr !important; }

@@ -1,58 +1,17 @@
 import { NextResponse } from "next/server";
+import { decodeVin, normalizeVin } from "@/lib/vin";
 
-// NHTSA VPIC API — free, no key required
-// https://vpic.nhtsa.dot.gov/api/
-const NHTSA_LOOKUP = (vin: string) =>
-  `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/${vin}?format=json`;
-
+// NHTSA VPIC decode — free, no key required. Shared logic lives in @/lib/vin so
+// the scanner (/api/identify) can decode a VIN it reads off a photo too.
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const vin = searchParams.get("vin")?.toUpperCase().trim();
+  const raw = searchParams.get("vin") || "";
 
-  if (!vin || vin.length < 11) {
-    return NextResponse.json({ error: "VIN must be at least 11 characters" }, { status: 400 });
+  if (!normalizeVin(raw)) {
+    return NextResponse.json({ error: "VIN must be 17 valid characters" }, { status: 400 });
   }
 
-  try {
-    const res = await fetch(NHTSA_LOOKUP(vin), { next: { revalidate: 86400 } });
-    if (!res.ok) {
-      return NextResponse.json({ error: "NHTSA API error" }, { status: 502 });
-    }
-    const data = await res.json();
-
-    // Extract meaningful fields from the NHTSA response
-    const results = data.Results || [];
-    const fields: Record<string, string> = {};
-    for (const r of results) {
-      if (r.Value && r.Value !== "" && r.Value !== "Not Applicable") {
-        fields[r.Variable] = r.Value;
-      }
-    }
-
-    const decode = {
-      vin,
-      make: fields["Make"] || null,
-      model: fields["Model"] || null,
-      year: fields["Model Year"] ? parseInt(fields["Model Year"]) : null,
-      trim: fields["Trim"] || null,
-      bodyClass: fields["Body Class"] || null,
-      engine: fields["Engine Model"] || fields["Engine Configuration"] || null,
-      engineCylinders: fields["Engine Number of Cylinders"] || null,
-      displacement: fields["Displacement (CC)"] || null,
-      fuelType: fields["Fuel Type - Primary"] || null,
-      transmission: fields["Transmission Style"] || null,
-      driveType: fields["Drive Type"] || fields["Drive System"] || null,
-      doors: fields["Number of Doors"] || null,
-      seatingCapacity: fields["Seating Capacity"] || null,
-      manufacturer: fields["Manufacturer Name"] || null,
-      plantCity: fields["Plant City"] || null,
-      plantState: fields["Plant State"] || null,
-      plantCountry: fields["Plant Country"] || null,
-      raw: fields,
-    };
-
-    return NextResponse.json({ ok: true, decode });
-  } catch (err) {
-    return NextResponse.json({ error: "Failed to decode VIN" }, { status: 500 });
-  }
+  const decode = await decodeVin(raw);
+  if (!decode) return NextResponse.json({ error: "Failed to decode VIN" }, { status: 502 });
+  return NextResponse.json({ ok: true, decode });
 }

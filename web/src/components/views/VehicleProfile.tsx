@@ -583,6 +583,7 @@ function PriceConfidenceChip({ insight }: { insight: any }) {
   const LABEL: Record<string, string> = {
     shop: "Your sold comps",
     grounded: "Market sold data",
+    ebay: "eBay listings",
     asking: "Active asking",
     model: "AI estimate",
   };
@@ -590,7 +591,10 @@ function PriceConfidenceChip({ insight }: { insight: any }) {
   const conf: "high" | "medium" | "low" = insight.confidence || "low";
   const color = conf === "high" ? "#16a34a" : conf === "medium" ? "#f59e0b" : "var(--muted)";
   const n = Number(insight.similarCount) || 0;
-  const tip = `${label}${n ? ` · ${n} comp${n === 1 ? "" : "s"}` : ""} · ${conf} confidence`;
+  const em = Number(insight.ebayMedian) || 0;
+  const tip = em
+    ? `Selling on eBay for ~$${em.toLocaleString()} across ${n} listing${n === 1 ? "" : "s"} · ${conf} confidence`
+    : `${label}${n ? ` · ${n} comp${n === 1 ? "" : "s"}` : ""} · ${conf} confidence`;
   return (
     <div title={tip} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--surface2)", fontSize: 11, fontWeight: 600, color: "var(--muted)", flexShrink: 0, whiteSpace: "nowrap" }}>
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
