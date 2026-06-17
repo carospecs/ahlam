@@ -5,7 +5,7 @@ import { floorPrice, bandsPromptBlock } from "@/lib/price-bands";
 import { loadSoldListings, ownSoldComps, type SoldRow } from "@/lib/own-comps";
 import { getCachedPrice, setCachedPrice } from "@/lib/price-cache";
 import { geminiGenerate } from "@/lib/gemini";
-import { decodeVin, normalizeVin } from "@/lib/vin";
+import { decodeVin, normalizeVin, type VinInfo } from "@/lib/vin";
 
 export const runtime = "nodejs";
 // Up to 50 parts × a grounded sold-price search each (in bounded batches) can run
@@ -83,6 +83,7 @@ export interface VehicleEstimate {
   trim?: string | null;
   engine?: string | null;
   drivetrain?: string | null;
+  vinInfo?: VinInfo | null; // full decode for the seller-facing VIN details section
 }
 
 export type AIResult =
@@ -370,6 +371,8 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
         const disp = decoded.displacementL || (decoded.displacement ? (Number(decoded.displacement) / 1000).toFixed(1) : null);
         vehicle.engine = [disp ? `${disp}L` : null, decoded.engineCylinders ? `${decoded.engineCylinders}-cyl` : null, decoded.engine].filter(Boolean).join(" ") || null;
         vehicle.drivetrain = decoded.driveType || null;
+        const { raw: _raw, ...info } = decoded; // strip the bulky raw map
+        vehicle.vinInfo = info;
         vehicle.confidence = "high"; // identity is now VIN-confirmed, not guessed
       } else {
         vehicle.vin = null; // misread / not in NHTSA — don't surface a bogus VIN

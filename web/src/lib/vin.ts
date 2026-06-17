@@ -27,6 +27,9 @@ export interface VinDecode {
   raw: Record<string, string>;
 }
 
+// The decode minus the bulky raw map — what we surface to the seller / store.
+export type VinInfo = Omit<VinDecode, "raw">;
+
 // A real VIN is 17 chars, capital letters + digits, never I/O/Q. Normalize and
 // validate so we never decode (or trust) garbage the model misread off a photo.
 export function normalizeVin(raw: string | null | undefined): string | null {

@@ -12,6 +12,8 @@ import { useSyncExternalStore } from "react";
 export interface ScanVehicleInfo {
   label: string; sub: string; make?: string; model?: string; year?: string; body?: string;
   trim?: string | null; engine?: string | null; drivetrain?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vinInfo?: any | null; // full VIN decode (VinInfo); kept loose to avoid a circular import
 }
 
 export interface ScanSession {

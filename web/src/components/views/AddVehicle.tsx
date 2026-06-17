@@ -8,6 +8,7 @@ import { csToast } from "../Dashboard";
 import { looksLikeImage, normalizeImageFile, fileToJpegDataUrl } from "@/lib/image";
 import { ManualListing } from "./ManualListing";
 import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, type ScanSession } from "@/lib/scanSession";
+import type { VinInfo } from "@/lib/vin";
 
 interface UploadedPhoto { url: string; name: string; file: File }
 
@@ -31,7 +32,7 @@ const MAX_PHOTOS = 8;
 interface VehicleEstimate {
   vin: string | null; make: string | null; model: string | null; yearStart: number | null; yearEnd: number | null;
   bodyStyle: string | null; mileage: string | null; suggestedWholeCarPriceUsd: number | null; confidence: "high" | "medium" | "low";
-  trim?: string | null; engine?: string | null; drivetrain?: string | null;
+  trim?: string | null; engine?: string | null; drivetrain?: string | null; vinInfo?: VinInfo | null;
 }
 type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; vehicleFront?: string } | { ok: false; userMessage: string; internalError: string };
 
@@ -40,7 +41,7 @@ type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; ve
 const SCAN_TONE = "var(--signal)";
 
 // Pick the single best whole-car price + label from per-photo AI estimates.
-function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { label: string; sub: string; suggestedPrice: number | null; mileage: string | null; make: string; model: string; year: string; body: string; vin: string | null; trim: string | null; engine: string | null; drivetrain: string | null } | null {
+function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { label: string; sub: string; suggestedPrice: number | null; mileage: string | null; make: string; model: string; year: string; body: string; vin: string | null; trim: string | null; engine: string | null; drivetrain: string | null; vinInfo: VinInfo | null } | null {
   const valid = estimates.filter((e): e is VehicleEstimate => !!e && !!e.make && !!e.model);
   if (!valid.length) return null;
 
@@ -71,6 +72,7 @@ function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { 
   const trim = vinEst?.trim || null;
   const engine = vinEst?.engine || null;
   const drivetrain = vinEst?.drivetrain || null;
+  const vinInfo = vinEst?.vinInfo || null;
 
   const prices = valid.map((e) => e.suggestedWholeCarPriceUsd).filter((p): p is number => typeof p === "number" && p > 0).sort((a, b) => a - b);
   const suggestedPrice = prices.length ? prices[Math.floor(prices.length / 2)] : null;
@@ -80,7 +82,7 @@ function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { 
   return {
     label: `${make} ${model}`,
     sub: [year, trim, body].filter(Boolean).join(" · "),
-    suggestedPrice, mileage, make, model, year, body, vin, trim, engine, drivetrain,
+    suggestedPrice, mileage, make, model, year, body, vin, trim, engine, drivetrain, vinInfo,
   };
 }
 
@@ -401,7 +403,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       // fall back to fitment-derived identity if the model didn't return one.
       const agg = aggregateVehicle(estimates);
       if (agg) {
-        setVehicle({ label: agg.label, sub: agg.sub || "identified by AI", make: agg.make, model: agg.model, year: agg.year, body: agg.body, trim: agg.trim, engine: agg.engine, drivetrain: agg.drivetrain });
+        setVehicle({ label: agg.label, sub: agg.sub || "identified by AI", make: agg.make, model: agg.model, year: agg.year, body: agg.body, trim: agg.trim, engine: agg.engine, drivetrain: agg.drivetrain, vinInfo: agg.vinInfo });
         setSuggestedCarPrice(agg.suggestedPrice);
         setCarPrice(agg.suggestedPrice ? String(agg.suggestedPrice) : "");
         setMileage(agg.mileage);
@@ -531,6 +533,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
           year: dec.year ? String(dec.year) : v?.year,
           body: dec.bodyClass || v?.body,
           trim, engine, drivetrain,
+          vinInfo: (() => { const { raw, ...info } = dec; return info; })(),
         }));
         if (trim && !vehicleTrim) setVehicleTrim(trim);
         setVinStatus("confirmed");
@@ -735,6 +738,41 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               </div>
             </Card>
           )}
+
+          {/* Full VIN decode — everything NHTSA returns about this exact vehicle.
+              Read before pricing to lock the exact year/model/engine. */}
+          {vehicle?.vinInfo && (() => {
+            const vi = vehicle.vinInfo as VinInfo;
+            const dispL = vi.displacementL || (vi.displacement ? (Number(vi.displacement) / 1000).toFixed(1) : null);
+            const engineStr = [dispL ? `${dispL}L` : null, vi.engineCylinders ? `${vi.engineCylinders}-cyl` : null, vi.engine].filter(Boolean).join(" ");
+            const rows: [string, string | null][] = [
+              ["VIN", vi.vin], ["Year", vi.year ? String(vi.year) : null], ["Make", vi.make], ["Model", vi.model],
+              ["Trim / Series", vi.trim || vi.series], ["Body", vi.bodyClass], ["Engine", engineStr || null],
+              ["Fuel", vi.fuelType], ["Transmission", vi.transmission], ["Drivetrain", vi.driveType],
+              ["Doors", vi.doors], ["Seating", vi.seatingCapacity], ["Built in", [vi.plantCity, vi.plantState, vi.plantCountry].filter(Boolean).join(", ") || null],
+              ["Manufacturer", vi.manufacturer],
+            ];
+            const shown = rows.filter(([, v]) => v && String(v).trim());
+            return (
+              <Card pad={18} style={{ display: "grid", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                  <span style={{ width: 30, height: 30, borderRadius: 8, display: "grid", placeItems: "center", background: "var(--accent-tint)" }}><ScanLine size={16} color="var(--accent)" /></span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>VIN details</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)" }}>Decoded from the VIN and used to lock the exact vehicle before pricing.</div>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: "10px 18px" }}>
+                  {shown.map(([k, v]) => (
+                    <div key={k} style={{ display: "grid", gap: 1 }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{k}</span>
+                      <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--foreground)", wordBreak: "break-word" }}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            );
+          })()}
 
           <Card pad={18} style={{ display: "grid", gap: 12 }}>
             <div>
