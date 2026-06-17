@@ -41,16 +41,21 @@ const SCAN_TONE = "var(--signal)";
 function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { label: string; sub: string; suggestedPrice: number | null; mileage: string | null; make: string; model: string; year: string; body: string; vin: string | null } | null {
   const valid = estimates.filter((e): e is VehicleEstimate => !!e && !!e.make && !!e.model);
   if (!valid.length) return null;
-  // Most-named make+model wins the label.
-  const tally = new Map<string, { e: VehicleEstimate; n: number; lo: number; hi: number }>();
+  // Most-named make+model wins the label. Collapse to a SINGLE model year (never a
+  // range): use each photo's exact year if it gave one, else the midpoint of its
+  // span, then take the median across photos. A VIN-decoded exact year flows
+  // straight through. (Sellers want "2019 Honda Accord", not "2016–2025".)
+  const tally = new Map<string, { e: VehicleEstimate; n: number; years: number[] }>();
   for (const e of valid) {
     const key = `${e.make} ${e.model}`.toLowerCase();
+    const yr = e.yearStart && e.yearEnd ? Math.round((e.yearStart + e.yearEnd) / 2) : (e.yearStart || e.yearEnd || 0);
     const cur = tally.get(key);
-    if (cur) { cur.n++; if (e.yearStart) cur.lo = Math.min(cur.lo, e.yearStart); if (e.yearEnd) cur.hi = Math.max(cur.hi, e.yearEnd); }
-    else tally.set(key, { e, n: 1, lo: e.yearStart || 0, hi: e.yearEnd || 0 });
+    if (cur) { cur.n++; if (yr) cur.years.push(yr); }
+    else tally.set(key, { e, n: 1, years: yr ? [yr] : [] });
   }
   const top = [...tally.values()].sort((a, b) => b.n - a.n)[0];
-  const years = top.lo && top.hi ? (top.lo === top.hi ? `${top.lo}` : `${top.lo}–${top.hi}`) : "";
+  const ys = top.years.sort((a, b) => a - b);
+  const years = ys.length ? String(ys[Math.floor(ys.length / 2)]) : "";
   // Median of all suggested prices the model returned.
   const prices = valid.map((e) => e.suggestedWholeCarPriceUsd).filter((p): p is number => typeof p === "number" && p > 0).sort((a, b) => a - b);
   const suggestedPrice = prices.length ? prices[Math.floor(prices.length / 2)] : null;
@@ -137,6 +142,46 @@ const HIGH_VALUE_CATEGORIES: { re: RegExp; label: string }[] = [
 function missingHighValueCategories(parts: AIPart[]): string[] {
   const hay = parts.map((p) => p.partName).join(" | ");
   return HIGH_VALUE_CATEGORIES.filter((c) => !c.re.test(hay)).map((c) => c.label);
+}
+
+// Condition multipliers — MUST match the server (lib/pricing.ts). A=like-new
+// premium, B=market baseline, C=damaged core (clearly cheaper).
+const COND_MULT: Record<string, number> = { A: 1.15, B: 1.0, C: 0.5 };
+
+// Reconcile the prices of same-type parts ACROSS ALL PHOTOS (the server only sees
+// one photo per call, so a left door in photo 1 and a right door in photo 2 get
+// priced by independent comp searches — which is how a damaged door ends up above
+// a clean one). Group every same-type part (ignoring left/right), derive ONE
+// consensus market base from the cleanest signal, then re-apply each part's
+// condition grade so condition — not search noise — drives the spread. Also aligns
+// the "selling on eBay" note so paired parts show the same reference number.
+function reconcileSameTypePrices(parts: AIPart[]): void {
+  const gradeOf = (p: AIPart) => (["A", "B", "C"].includes(p.condition as string) ? (p.condition as string) : "B");
+  const baseOf = (p: AIPart) => { const m = COND_MULT[gradeOf(p)] ?? 1; const pr = p.suggestedPriceUsd || 0; return pr > 0 && m ? pr / m : null; };
+  const isReal = (p: AIPart) => { const s = p.pricingInsight?.source; return s === "shop" || s === "grounded" || s === "ebay" || s === "asking"; };
+  const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+
+  const groups = new Map<string, AIPart[]>();
+  for (const p of parts) { const k = basePartName(p.partName); const g = groups.get(k); if (g) g.push(p); else groups.set(k, [p]); }
+
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    const tiers: AIPart[][] = [
+      g.filter((p) => gradeOf(p) !== "C" && isReal(p)),
+      g.filter((p) => gradeOf(p) !== "C"),
+      g.filter(isReal),
+      g,
+    ];
+    const ref = tiers.find((t) => t.some((p) => baseOf(p) != null)) ?? g;
+    const bases = ref.map(baseOf).filter((b): b is number => typeof b === "number" && b > 0);
+    if (!bases.length) continue;
+    const base = median(bases);
+    for (const p of g) {
+      const np = Math.round(base * (COND_MULT[gradeOf(p)] ?? 1));
+      if (np > 0) p.suggestedPriceUsd = np;
+      if (p.pricingInsight?.ebayMedian) p.pricingInsight = { ...p.pricingInsight, ebayMedian: Math.round(base) };
+    }
+  }
 }
 
 // Flag left/right pairs of the same part priced very differently (>2.5×) — a
@@ -267,6 +312,10 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       const deduped = [...byName.values()]
         .sort(comparePartsForDisplay)
         .map((p) => ({ ...p, _id: newId(), _aiPrice: p.suggestedPriceUsd ?? null }));
+
+      // Normalize same-type parts (e.g. left + right door) to one market base so
+      // condition drives the spread — across photos, which the server can't do.
+      reconcileSameTypePrices(deduped);
 
       // Front shot for the main post image; fall back to the first uploaded photo.
       setMainPhoto(frontPhoto || photos[0]?.url || null);
