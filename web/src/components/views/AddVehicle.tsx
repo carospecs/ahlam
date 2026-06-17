@@ -7,6 +7,7 @@ import { SELL_MODE } from "../data";
 import { csToast } from "../Dashboard";
 import { looksLikeImage, normalizeImageFile, fileToJpegDataUrl } from "@/lib/image";
 import { ManualListing } from "./ManualListing";
+import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, type ScanSession } from "@/lib/scanSession";
 
 interface UploadedPhoto { url: string; name: string; file: File }
 
@@ -204,28 +205,46 @@ function pairedPriceMismatches(parts: AIPart[]): { base: string }[] {
 }
 
 export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
-  const [phase, setPhase] = React.useState("upload");
-  const [parts, setParts] = React.useState<AIPart[]>([]);
-  const [vehicle, setVehicle] = React.useState<{ label: string; sub: string; make?: string; model?: string; year?: string; body?: string } | null>(null);
+  // Session state lives in a module store (lib/scanSession) so an in-progress scan
+  // and its results survive switching sections and coming back. Each field below
+  // reads from the store and writes through a useState-compatible setter, so all
+  // the handler code stays unchanged.
+  const s = useScanSession();
+  function up<K extends keyof ScanSession>(key: K) {
+    return (v: ScanSession[K] | ((prev: ScanSession[K]) => ScanSession[K])) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setScanSession({ [key]: typeof v === "function" ? (v as any)(getScanSession()[key]) : v } as Partial<ScanSession>);
+  }
+  type Dispatch<T> = (v: T | ((prev: T) => T)) => void;
+
+  const phase = s.phase;                              const setPhase = up("phase") as Dispatch<string>;
+  const parts = s.parts as AIPart[];                  const setParts = up("parts") as Dispatch<AIPart[]>;
+  const vehicle = s.vehicle;                          const setVehicle = up("vehicle") as Dispatch<typeof s.vehicle>;
+  const mainPhoto = s.mainPhoto;                      const setMainPhoto = up("mainPhoto") as Dispatch<string | null>;
+  const sellMode = s.sellMode;                        const setSellMode = up("sellMode") as Dispatch<string>;
+  const mode = s.mode;                                const setMode = up("mode") as Dispatch<typeof s.mode>;
+  const photos = s.photos as UploadedPhoto[];         const setPhotos = up("photos") as Dispatch<UploadedPhoto[]>;
+  const carPrice = s.carPrice;                        const setCarPrice = up("carPrice") as Dispatch<string>;
+  const suggestedCarPrice = s.suggestedCarPrice;      const setSuggestedCarPrice = up("suggestedCarPrice") as Dispatch<number | null>;
+  const mileage = s.mileage;                          const setMileage = up("mileage") as Dispatch<string | null>;
+  const vin = s.vin;                                  const setVin = up("vin") as Dispatch<string>;
+  const vinStatus = s.vinStatus;                      const setVinStatus = up("vinStatus") as Dispatch<typeof s.vinStatus>;
+  const vehicleTrim = s.vehicleTrim;                  const setVehicleTrim = up("vehicleTrim") as Dispatch<string>;
+  const vehicleColor = s.vehicleColor;                const setVehicleColor = up("vehicleColor") as Dispatch<string>;
+  const vehicleTitle = s.vehicleTitle;               const setVehicleTitle = up("vehicleTitle") as Dispatch<string>;
+  const vehicleDesc = s.vehicleDesc;                  const setVehicleDesc = up("vehicleDesc") as Dispatch<string>;
+  const error = s.error;                              const setError = up("error") as Dispatch<string | null>;
+  const stockNumber = s.stockNumber;                  const setStockNumber = up("stockNumber") as Dispatch<string>;
+
+  // Transient UI state — fine to lose on navigation.
   const [saving, setSaving] = React.useState(false);
-  const [mainPhoto, setMainPhoto] = React.useState<string | null>(null);
-  const [sellMode, setSellMode] = React.useState("parts");
-  const [mode, setMode] = React.useState<null | "ai" | "manualCar" | "manualPart">(null);
-  const [photos, setPhotos] = React.useState<UploadedPhoto[]>([]);
   const [dragging, setDragging] = React.useState(false);
-  const [carPrice, setCarPrice] = React.useState<string>("");
-  const [suggestedCarPrice, setSuggestedCarPrice] = React.useState<number | null>(null);
-  const [mileage, setMileage] = React.useState<string | null>(null);
-  const [vin, setVin] = React.useState("");
-  const [vinStatus, setVinStatus] = React.useState<"idle" | "checking" | "confirmed" | "bad">("idle");
-  const [vehicleTrim, setVehicleTrim] = React.useState("");
-  const [vehicleColor, setVehicleColor] = React.useState("");
-  const [vehicleTitle, setVehicleTitle] = React.useState("");
-  const [vehicleDesc, setVehicleDesc] = React.useState("");
-  const [error, setError] = React.useState<string | null>(null);
   const [camOpen, setCamOpen] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
   const partSeq = React.useRef(0);
+  // After a remount (e.g. returning to a restored session), continue ids above the
+  // highest existing one so new rows never collide with restored parts.
+  if (partSeq.current === 0) partSeq.current = parts.reduce((m, p) => Math.max(m, Number(p._id) || 0), 0);
   const newId = () => String(++partSeq.current);
 
   const partsTotal = parts.reduce((s, p) => s + (p.suggestedPriceUsd || 0), 0);
@@ -266,7 +285,11 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   }
 
   // Send every photo to /api/identify; the AI defines what it can pull from each.
+  // Writes go through the module store (setPhase/setParts/… are store-backed), so
+  // the scan keeps running and lands its results even if the user navigates away
+  // mid-scan. The run token lets a cancel (resetScanSession) discard a stale run.
   async function runAnalysis() {
+    const myToken = beginScanRun();
     setPhase("analyzing"); setError(null);
     try {
       const results = await Promise.all(
@@ -280,6 +303,8 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
           return { result: (await res.json()) as AIResult, photo };
         })
       );
+
+      if (!isScanRun(myToken)) return; // cancelled / superseded while scanning
 
       const collected: AIPart[] = [];
       const estimates: (VehicleEstimate | null | undefined)[] = [];
@@ -345,6 +370,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       setParts(deduped);
       setPhase("results");
     } catch (e) {
+      if (!isScanRun(myToken)) return; // cancelled / superseded
       setError("We couldn't reach the analysis server. Check your connection and try again.");
       setPhase("error");
     }
@@ -388,7 +414,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   }
   const anyAiPriced = parts.some((p) => (p._aiPrice || 0) > 0);
 
-  const [stockNumber, setStockNumber] = React.useState("");
   const [savingKind, setSavingKind] = React.useState<"post" | "draft" | null>(null);
   // Persist the reviewed vehicle + parts, then reload data and jump to the list.
   // draft=true keeps everything private (status 'draft'), nothing posted to the market.
@@ -424,6 +449,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         ? "Saved as draft, not posted yet"
         : sellMode === "whole" ? "Vehicle saved and posted to the market" : `Saved. ${d.listings} part${d.listings === 1 ? "" : "s"} posted`);
       (window as any).csReloadData?.();
+      resetScanSession(); // posted/saved — clear the session so it doesn't linger
       go(dest);
     } catch {
       csToast("Couldn't save. Check your connection");
@@ -477,7 +503,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
 
   return (
     <div style={{ maxWidth: 880, margin: "0 auto", display: "grid", gap: 20 }}>
-      <button onClick={() => setMode(null)} style={{ ...navBtn, justifySelf: "start" }}><ArrowLeft size={15} /> Back to options</button>
+      <button onClick={() => resetScanSession()} style={{ ...navBtn, justifySelf: "start" }}><ArrowLeft size={15} /> Back to options</button>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <Step n={1} label="Photos" on={phase === "upload"} done={phase !== "upload"} />
         <span style={{ flex: 1, height: 2, background: "var(--line)", borderRadius: 2, maxWidth: 80 }} />
