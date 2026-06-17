@@ -168,6 +168,22 @@ export async function askingApproxPrice(query: string, partName: string): Promis
 // part and to show the seller a "selling on eBay for ~$X" reference note. Returns
 // null if eBay is unconfigured, there are too few listings, or the median is
 // implausible for the part type.
+// Turn a catalog part name into an eBay search phrase that targets the COMPLETE
+// used unit, so the comp median reflects the whole part — not the cheap sub-parts
+// that share its keyword and crater the price. (Measured: "Tacoma front left door"
+// → median $217 from a mix of panels/handles/switches; "Tacoma front door shell"
+// → $750 from actual full doors.) Side (left/right) is dropped — it doesn't move
+// the price and widens the comp set.
+export function partSearchPhrase(name: string): string {
+  const n = name.replace(/\b(left|right|driver|passenger)\b/gi, "").replace(/\s+/g, " ").trim();
+  // A "Door" in our catalog is the door body; sellers list the full used door as a
+  // "door shell". Exclude the door's separately-listed sub-parts.
+  if (/\bdoor\b/i.test(n) && !/\b(panel|window|glass|handle|hinge|latch|lock|regulator|switch|speaker|moulding|molding|trim|sill|seal|wiring|motor|striker|check)\b/i.test(n)) {
+    return `${n} shell`;
+  }
+  return n;
+}
+
 export interface EbayCompStats { median: number; count: number; min: number; max: number; }
 export async function ebayCompStats(query: string, partName: string): Promise<EbayCompStats | null> {
   const token = await getAppToken();

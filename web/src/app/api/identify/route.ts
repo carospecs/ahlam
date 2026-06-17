@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { groundedMedianPrice, ebayCompStats, applyCondition, CONDITION_MULTIPLIER } from "@/lib/pricing";
+import { groundedMedianPrice, ebayCompStats, applyCondition, CONDITION_MULTIPLIER, partSearchPhrase } from "@/lib/pricing";
 import { floorPrice, bandsPromptBlock } from "@/lib/price-bands";
 import { loadSoldListings, ownSoldComps, type SoldRow } from "@/lib/own-comps";
 import { getCachedPrice, setCachedPrice } from "@/lib/price-cache";
@@ -511,7 +511,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
           const own = ownSoldComps(soldRows, p.partName);
           if (own) { setMarket(own.median, "shop", "high", { min: own.min, max: own.max }, own.count); return; }
 
-          const q = [vehicle.yearStart, vehicle.make, vehicle.model, p.partName].filter(Boolean).join(" ");
+          const q = [vehicle.yearStart, vehicle.make, vehicle.model, partSearchPhrase(p.partName)].filter(Boolean).join(" ");
 
           // (2) Live eBay listings — real market MEDIAN (not discounted) plus the
           // listing count + range, so the seller sees what comparable parts are
