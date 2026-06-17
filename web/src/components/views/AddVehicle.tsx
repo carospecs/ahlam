@@ -157,6 +157,43 @@ function missingHighValueCategories(parts: AIPart[]): string[] {
 // B=market median, C=40% of median (damaged core).
 const COND_MULT: Record<string, number> = { A: 1.25, B: 1.0, C: 0.4 };
 
+// A door + its glass + its panel (+ handle) belong to one physical door. Group them
+// so the seller sees the COMPLETE door total while each piece keeps its own price.
+// Keyed by position+side (e.g. "front left") so front and rear doors stay separate.
+function doorGroupKey(name: string): string | null {
+  const n = name.toLowerCase();
+  if (!/\bdoor\b/.test(n)) return null;
+  const side = /\bleft\b/.test(n) ? "left" : /\bright\b/.test(n) ? "right" : "";
+  if (!side) return null;                               // need a side to group safely
+  const pos = /\bfront\b/.test(n) ? "front" : /\brear\b/.test(n) ? "rear" : "";
+  return `${pos} ${side}`.trim();
+}
+function titleCaseWords(s: string): string { return s.replace(/\b\w/g, (c) => c.toUpperCase()); }
+
+// One render row: either a complete-door group header, or a single part.
+type RenderRow = { type: "header"; key: string; label: string; total: number } | { type: "part"; part: AIPart };
+function buildRenderRows(parts: AIPart[]): RenderRow[] {
+  const groups = new Map<string, AIPart[]>();
+  for (const p of parts) { const k = doorGroupKey(p.partName); if (k) { const g = groups.get(k); if (g) g.push(p); else groups.set(k, [p]); } }
+  const rows: RenderRow[] = [];
+  const emitted = new Set<string>();
+  for (const p of parts) {
+    const k = doorGroupKey(p.partName);
+    if (k && (groups.get(k)?.length ?? 0) >= 2) {
+      if (!emitted.has(k)) {
+        emitted.add(k);
+        const members = groups.get(k)!;
+        const total = members.reduce((s, m) => s + (m.suggestedPriceUsd || 0), 0);
+        rows.push({ type: "header", key: k, label: `${titleCaseWords(k)} Door — complete`, total });
+        for (const m of members) rows.push({ type: "part", part: m });
+      }
+    } else {
+      rows.push({ type: "part", part: p });
+    }
+  }
+  return rows;
+}
+
 // Reconcile the prices of same-type parts ACROSS ALL PHOTOS (the server only sees
 // one photo per call, so a left door in photo 1 and a right door in photo 2 get
 // priced by independent comp searches — which is how a damaged door ends up above
@@ -786,11 +823,22 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               </div>
 
               <div style={{ display: "grid", gap: 10 }}>
-                {parts.map((p, idx) => {
+                {buildRenderRows(parts).map((row) => {
+                  if (row.type === "header") {
+                    return (
+                      <div key={"h:" + row.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "8px 14px", borderRadius: "var(--radius-md)", background: "var(--accent-tint)", border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)", marginTop: 4 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--foreground)", display: "inline-flex", alignItems: "center", gap: 7 }}><Car size={14} color="var(--accent)" /> {row.label}</span>
+                        <span style={{ fontSize: 13.5, fontWeight: 800, color: "var(--accent)" }} className="tnum">${row.total.toLocaleString()}</span>
+                      </div>
+                    );
+                  }
+                  const p = row.part;
+                  const idx = parts.findIndex((x) => x._id === p._id);
+                  const grouped = !!doorGroupKey(p.partName);
                   const warn = p.confidence === "low";
                   const price = p.suggestedPriceUsd || 0;
                   return (
-                    <div key={p._id} style={{ display: "flex", alignItems: "center", gap: 14, padding: 14, borderRadius: "var(--radius-md)", flexWrap: "wrap", background: warn ? "var(--signal-bg)" : "var(--surface)", border: `1px solid ${warn ? "color-mix(in srgb, var(--signal) 40%, transparent)" : "var(--line)"}` }}>
+                    <div key={p._id} style={{ display: "flex", alignItems: "center", gap: 14, padding: 14, marginLeft: grouped ? 16 : 0, borderRadius: "var(--radius-md)", flexWrap: "wrap", background: warn ? "var(--signal-bg)" : "var(--surface)", border: `1px solid ${warn ? "color-mix(in srgb, var(--signal) 40%, transparent)" : "var(--line)"}`, borderLeft: grouped ? "3px solid color-mix(in srgb, var(--accent) 45%, transparent)" : undefined }}>
                       <div style={{ display: "grid", gap: 1 }}>
                         <button onClick={() => movePart(p._id!, -1)} disabled={idx === 0} title="Move up" style={{ width: 24, height: 20, borderRadius: 6, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", opacity: idx === 0 ? 0.35 : 1 }}><ChevronUp size={13} color="var(--muted)" /></button>
                         <button onClick={() => movePart(p._id!, 1)} disabled={idx === parts.length - 1} title="Move down" style={{ width: 24, height: 20, borderRadius: 6, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", opacity: idx === parts.length - 1 ? 0.35 : 1 }}><ChevronDown size={13} color="var(--muted)" /></button>
