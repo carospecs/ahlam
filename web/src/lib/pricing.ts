@@ -137,10 +137,9 @@ export async function ebayUsedPrices(query: string): Promise<number[]> {
 // actual grade so a clean Grade A part isn't underpriced and a worn Grade C isn't
 // overpriced. (The Layer-2 model estimate is already condition-aware, so it is NOT
 // re-multiplied.)
-// B is the market baseline (comps reflect good/usable parts). A is a modest premium
-// for like-new. C is a damaged/repairable core and must be CLEARLY below market — a
-// crashed door should never approach a clean one's price (0.78 left them too close).
-export const CONDITION_MULTIPLIER: Record<"A" | "B" | "C", number> = { A: 1.15, B: 1.0, C: 0.5 };
+// B is the market baseline (comps reflect good/usable parts). A is a +25% premium
+// for like-new; C is a damaged/repairable core at 40% of market.
+export const CONDITION_MULTIPLIER: Record<"A" | "B" | "C", number> = { A: 1.25, B: 1.0, C: 0.4 };
 export function applyCondition(price: number, grade: "A" | "B" | "C"): number {
   return Math.round(price * (CONDITION_MULTIPLIER[grade] ?? 1));
 }

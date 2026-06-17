@@ -153,9 +153,9 @@ function missingHighValueCategories(parts: AIPart[]): string[] {
   return HIGH_VALUE_CATEGORIES.filter((c) => !c.re.test(hay)).map((c) => c.label);
 }
 
-// Condition multipliers — MUST match the server (lib/pricing.ts). A=like-new
-// premium, B=market baseline, C=damaged core (clearly cheaper).
-const COND_MULT: Record<string, number> = { A: 1.15, B: 1.0, C: 0.5 };
+// Condition multipliers — MUST match the server (lib/pricing.ts). A=+25% (like-new),
+// B=market median, C=40% of median (damaged core).
+const COND_MULT: Record<string, number> = { A: 1.25, B: 1.0, C: 0.4 };
 
 // Reconcile the prices of same-type parts ACROSS ALL PHOTOS (the server only sees
 // one photo per call, so a left door in photo 1 and a right door in photo 2 get
