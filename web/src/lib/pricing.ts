@@ -171,14 +171,28 @@ export async function askingApproxPrice(query: string, partName: string): Promis
 // implausible for the part type.
 export interface EbayCompStats { median: number; count: number; min: number; max: number; }
 export async function ebayCompStats(query: string, partName: string): Promise<EbayCompStats | null> {
-  const asking = await ebayUsedPrices(query);
-  if (asking.length < MIN_COMPS) return null;
-  const med = trimmedMedian(asking);
-  if (med == null) return null;
-  const median = Math.round(med);
-  if (!isSanePrice(median, partName)) return null;
-  const sorted = [...asking].sort((a, b) => a - b);
-  return { median, count: asking.length, min: Math.round(sorted[0]), max: Math.round(sorted[sorted.length - 1]) };
+  const token = await getAppToken();
+  if (!token) return null;
+  try {
+    const url = `${API}/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=50`
+      + `&filter=${encodeURIComponent("conditions:{USED},buyingOptions:{FIXED_PRICE}")}`;
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    // `total` is eBay's REAL count of matching listings (not the 50-item page cap),
+    // so the "N listings" the seller sees is honest, not a constant 40/50.
+    const total = Number(j.total) || 0;
+    const prices: number[] = (j.itemSummaries || [])
+      .map((i: { price?: { value?: string } }) => parseFloat(i.price?.value ?? ""))
+      .filter((n: number) => Number.isFinite(n) && n > 0);
+    if (prices.length < MIN_COMPS) return null;
+    const med = trimmedMedian(prices);
+    if (med == null) return null;
+    const median = Math.round(med);
+    if (!isSanePrice(median, partName)) return null;
+    const sorted = [...prices].sort((a, b) => a - b);
+    return { median, count: total || prices.length, min: Math.round(sorted[0]), max: Math.round(sorted[sorted.length - 1]) };
+  } catch { return null; }
 }
 
 // Resolve the eBay LEAF category a part should be listed in by reading the

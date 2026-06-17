@@ -11,6 +11,7 @@ import { useSyncExternalStore } from "react";
 
 export interface ScanVehicleInfo {
   label: string; sub: string; make?: string; model?: string; year?: string; body?: string;
+  trim?: string | null; engine?: string | null; drivetrain?: string | null;
 }
 
 export interface ScanSession {

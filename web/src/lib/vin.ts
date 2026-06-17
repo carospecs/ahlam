@@ -9,10 +9,12 @@ export interface VinDecode {
   model: string | null;
   year: number | null;
   trim: string | null;
+  series: string | null;
   bodyClass: string | null;
   engine: string | null;
   engineCylinders: string | null;
   displacement: string | null;
+  displacementL: string | null;
   fuelType: string | null;
   transmission: string | null;
   driveType: string | null;
@@ -65,11 +67,13 @@ export async function decodeVin(rawVin: string): Promise<VinDecode | null> {
       make: fields["Make"] || null,
       model: fields["Model"] || null,
       year: fields["Model Year"] ? parseInt(fields["Model Year"]) : null,
-      trim: fields["Trim"] || null,
+      trim: fields["Trim"] || fields["Trim2"] || null,
+      series: fields["Series"] || fields["Series2"] || null,
       bodyClass: fields["Body Class"] || null,
       engine: fields["Engine Model"] || fields["Engine Configuration"] || null,
       engineCylinders: fields["Engine Number of Cylinders"] || null,
       displacement: fields["Displacement (CC)"] || null,
+      displacementL: fields["Displacement (L)"] || null,
       fuelType: fields["Fuel Type - Primary"] || null,
       transmission: fields["Transmission Style"] || null,
       driveType: fields["Drive Type"] || fields["Drive System"] || null,

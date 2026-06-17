@@ -79,6 +79,10 @@ export interface VehicleEstimate {
   mileage: string | null;
   suggestedWholeCarPriceUsd: number | null;
   confidence: Confidence;
+  // Populated from the VIN decode (NHTSA) when a VIN is read/confirmed.
+  trim?: string | null;
+  engine?: string | null;
+  drivetrain?: string | null;
 }
 
 export type AIResult =
@@ -361,6 +365,10 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
         if (decoded.model) vehicle.model = decoded.model;
         if (decoded.year) { vehicle.yearStart = decoded.year; vehicle.yearEnd = decoded.year; }
         if (decoded.bodyClass && !vehicle.bodyStyle) vehicle.bodyStyle = decoded.bodyClass;
+        vehicle.trim = decoded.trim || decoded.series || null;
+        const disp = decoded.displacementL || (decoded.displacement ? (Number(decoded.displacement) / 1000).toFixed(1) : null);
+        vehicle.engine = [disp ? `${disp}L` : null, decoded.engineCylinders ? `${decoded.engineCylinders}-cyl` : null, decoded.engine].filter(Boolean).join(" ") || null;
+        vehicle.drivetrain = decoded.driveType || null;
         vehicle.confidence = "high"; // identity is now VIN-confirmed, not guessed
       } else {
         vehicle.vin = null; // misread / not in NHTSA — don't surface a bogus VIN

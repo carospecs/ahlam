@@ -31,6 +31,7 @@ const MAX_PHOTOS = 8;
 interface VehicleEstimate {
   vin: string | null; make: string | null; model: string | null; yearStart: number | null; yearEnd: number | null;
   bodyStyle: string | null; mileage: string | null; suggestedWholeCarPriceUsd: number | null; confidence: "high" | "medium" | "low";
+  trim?: string | null; engine?: string | null; drivetrain?: string | null;
 }
 type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; vehicleFront?: string } | { ok: false; userMessage: string; internalError: string };
 
@@ -39,13 +40,18 @@ type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; ve
 const SCAN_TONE = "var(--signal)";
 
 // Pick the single best whole-car price + label from per-photo AI estimates.
-function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { label: string; sub: string; suggestedPrice: number | null; mileage: string | null; make: string; model: string; year: string; body: string; vin: string | null } | null {
+function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { label: string; sub: string; suggestedPrice: number | null; mileage: string | null; make: string; model: string; year: string; body: string; vin: string | null; trim: string | null; engine: string | null; drivetrain: string | null } | null {
   const valid = estimates.filter((e): e is VehicleEstimate => !!e && !!e.make && !!e.model);
   if (!valid.length) return null;
-  // Most-named make+model wins the label. Collapse to a SINGLE model year (never a
-  // range): use each photo's exact year if it gave one, else the midpoint of its
-  // span, then take the median across photos. A VIN-decoded exact year flows
-  // straight through. (Sellers want "2019 Honda Accord", not "2016–2025".)
+
+  // A VIN read off any photo is GROUND TRUTH — it was decoded by NHTSA, so it wins
+  // outright over the per-photo visual guesses (which otherwise average out to the
+  // wrong year, e.g. 2024 instead of the VIN's 2025). Use the VIN estimate's exact
+  // make/model/year/engine and ignore the visual dilution.
+  const vinEst = valid.find((e) => e.vin && e.make && e.model);
+
+  // Otherwise: most-named make+model wins, collapsed to a SINGLE median year (never
+  // a range) so sellers see "2019 Honda Accord", not "2016–2025".
   const tally = new Map<string, { e: VehicleEstimate; n: number; years: number[] }>();
   for (const e of valid) {
     const key = `${e.make} ${e.model}`.toLowerCase();
@@ -56,23 +62,25 @@ function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { 
   }
   const top = [...tally.values()].sort((a, b) => b.n - a.n)[0];
   const ys = top.years.sort((a, b) => a - b);
-  const years = ys.length ? String(ys[Math.floor(ys.length / 2)]) : "";
-  // Median of all suggested prices the model returned.
+
+  const src = vinEst || top.e;
+  const make = src.make || "";
+  const model = src.model || "";
+  const year = vinEst?.yearStart ? String(vinEst.yearStart) : (ys.length ? String(ys[Math.floor(ys.length / 2)]) : "");
+  const body = src.bodyStyle || top.e.bodyStyle || "";
+  const trim = vinEst?.trim || null;
+  const engine = vinEst?.engine || null;
+  const drivetrain = vinEst?.drivetrain || null;
+
   const prices = valid.map((e) => e.suggestedWholeCarPriceUsd).filter((p): p is number => typeof p === "number" && p > 0).sort((a, b) => a - b);
   const suggestedPrice = prices.length ? prices[Math.floor(prices.length / 2)] : null;
   const mileage = valid.map((e) => e.mileage).find((m): m is string => !!m) ?? null;
-  // VIN read off any photo (decoded server-side). First non-empty wins.
-  const vin = valid.map((e) => e.vin).find((v): v is string => !!v) ?? null;
+  const vin = vinEst?.vin || valid.map((e) => e.vin).find((v): v is string => !!v) || null;
+
   return {
-    label: `${top.e.make} ${top.e.model}`,
-    sub: [years, top.e.bodyStyle].filter(Boolean).join(" · "),
-    suggestedPrice,
-    mileage,
-    make: top.e.make || "",
-    model: top.e.model || "",
-    year: years,
-    body: top.e.bodyStyle || "",
-    vin,
+    label: `${make} ${model}`,
+    sub: [year, trim, body].filter(Boolean).join(" · "),
+    suggestedPrice, mileage, make, model, year, body, vin, trim, engine, drivetrain,
   };
 }
 
@@ -356,10 +364,11 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       // fall back to fitment-derived identity if the model didn't return one.
       const agg = aggregateVehicle(estimates);
       if (agg) {
-        setVehicle({ label: agg.label, sub: agg.sub || "identified by AI", make: agg.make, model: agg.model, year: agg.year, body: agg.body });
+        setVehicle({ label: agg.label, sub: agg.sub || "identified by AI", make: agg.make, model: agg.model, year: agg.year, body: agg.body, trim: agg.trim, engine: agg.engine, drivetrain: agg.drivetrain });
         setSuggestedCarPrice(agg.suggestedPrice);
         setCarPrice(agg.suggestedPrice ? String(agg.suggestedPrice) : "");
         setMileage(agg.mileage);
+        if (agg.trim) setVehicleTrim(agg.trim); // prefill trim from the VIN
         if (agg.vin) { setVin(agg.vin); setVinStatus("confirmed"); } // VIN read + decoded server-side
       } else {
         setVehicle(deriveVehicle(deduped));
@@ -473,15 +482,20 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       const dec = d?.decode;
       if (res.ok && dec && (dec.make || dec.model)) {
         const label = [dec.year, dec.make, dec.model].filter(Boolean).join(" ");
+        const trim = dec.trim || dec.series || null;
+        const dispL = dec.displacementL || (dec.displacement ? (Number(dec.displacement) / 1000).toFixed(1) : null);
+        const engine = [dispL ? `${dispL}L` : null, dec.engineCylinders ? `${dec.engineCylinders}-cyl` : null, dec.engine].filter(Boolean).join(" ") || null;
+        const drivetrain = dec.driveType || null;
         setVehicle((v) => ({
           label: label || v?.label || "Vehicle",
-          sub: [dec.year, dec.bodyClass || v?.body].filter(Boolean).join(" · ") || v?.sub || "Confirmed by VIN",
+          sub: [dec.year, trim, dec.bodyClass || v?.body].filter(Boolean).join(" · ") || v?.sub || "Confirmed by VIN",
           make: dec.make || v?.make,
           model: dec.model || v?.model,
           year: dec.year ? String(dec.year) : v?.year,
           body: dec.bodyClass || v?.body,
+          trim, engine, drivetrain,
         }));
-        if (dec.trim && !vehicleTrim) setVehicleTrim(dec.trim);
+        if (trim && !vehicleTrim) setVehicleTrim(trim);
         setVinStatus("confirmed");
         csToast(`Model confirmed from VIN: ${label}`);
       } else {
@@ -647,7 +661,16 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 17, fontWeight: 700 }}>{vehicle.label}</div>
                 <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 3 }}>{vehicle.sub}</div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>Identified by AI. Confirm before posting.</div>
+                {(vehicle.engine || vehicle.drivetrain) && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                    {[vehicle.engine, vehicle.drivetrain].filter(Boolean).map((t, i) => (
+                      <span key={i} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--foreground)", background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 7, padding: "3px 9px" }}>{t}</span>
+                    ))}
+                  </div>
+                )}
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>
+                  {vinStatus === "confirmed" ? "✓ Confirmed from VIN. " : "Identified by AI. "}Confirm before posting.
+                </div>
               </div>
               <div style={{ display: "grid", gap: 5, minWidth: 240 }}>
                 <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 6 }}><ScanLine size={13} color="var(--accent)" /> VIN / plate <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, opacity: 0.8 }}>· optional</span></label>
