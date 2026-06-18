@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 /**
  * POST /api/waitlist
  * Body: { email, shopName?, location?, partsPerDay? }
- * Stores the signup and (optionally) sends a welcome email via Google Workspace SMTP.
+ * Stores the signup and sends a welcome email via Google Workspace SMTP.
  */
 export async function POST(req: Request) {
   let body: Record<string, unknown>;
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       body.partsPerDay != null && !Number.isNaN(Number(body.partsPerDay))
         ? Number(body.partsPerDay)
         : null,
-    source: "landing",
+    source: body.source ? String(body.source).trim() : "landing",
   };
 
   try {
@@ -44,8 +44,6 @@ export async function POST(req: Request) {
     });
     if (error) throw error;
   } catch (err) {
-    // Don't 500 the user over a duplicate or transient DB hiccup if the email
-    // is already captured — but do surface real failures.
     console.error("waitlist insert failed", err);
     return NextResponse.json(
       { error: "Something went wrong saving your spot. Try again shortly." },
@@ -53,9 +51,9 @@ export async function POST(req: Request) {
     );
   }
 
-  // Welcome email (no-op if GMAIL_USER / GMAIL_APP_PASSWORD aren't set).
+  // Welcome email. Logs loudly if it can't send so failures aren't silent.
   await sendConfirmation(email).catch((e) =>
-    console.error("confirmation email failed", e)
+    console.error("waitlist confirmation email FAILED to send:", e)
   );
 
   return NextResponse.json({ ok: true });
@@ -63,18 +61,26 @@ export async function POST(req: Request) {
 
 async function sendConfirmation(email: string) {
   // Sends through Google Workspace (Gmail) SMTP using an App Password.
-  // GMAIL_USER authenticates; WAITLIST_FROM_EMAIL is the visible From.
+  // GMAIL_USER authenticates; the visible From is mohammadabbas@ahlam.io.
   const user = process.env.GMAIL_USER;
   const pass = process.env.GMAIL_APP_PASSWORD;
-  const from = process.env.WAITLIST_FROM_EMAIL ?? user;
-  if (!user || !pass) return; // not configured yet — skip silently
+  const from =
+    process.env.WAITLIST_FROM_EMAIL || "Ahlam <mohammadabbas@ahlam.io>";
 
-  // Optionally CC an internal address (e.g. a founder) so the team is looped
-  // in on every signup. Supports a comma-separated list.
+  if (!user || !pass) {
+    // Loud, actionable log — this is the most common reason emails go missing.
+    console.error(
+      "waitlist confirmation SKIPPED: GMAIL_USER and/or GMAIL_APP_PASSWORD " +
+        "are not set in the environment. No email was sent."
+    );
+    return;
+  }
+
+  // CC the team so every signup is visible in an inbox, not just the database.
   const cc = process.env.WAITLIST_CC_EMAIL
     ? process.env.WAITLIST_CC_EMAIL.split(",").map((s) => s.trim()).filter(Boolean)
     : undefined;
-  const replyTo = process.env.WAITLIST_REPLY_TO ?? undefined;
+  const replyTo = process.env.WAITLIST_REPLY_TO || "mohammadabbas@ahlam.io";
 
   const transport = nodemailer.createTransport({
     host: "smtp.gmail.com",
@@ -88,18 +94,13 @@ async function sendConfirmation(email: string) {
     from,
     to: email,
     ...(cc ? { cc } : {}),
-    ...(replyTo ? { replyTo } : {}),
-    subject: "Welcome to the Ahlam waitlist 🚗",
+    replyTo,
+    subject: "You're on the Ahlam waitlist",
     text:
-      "Thanks for joining the Ahlam waitlist!\n\n" +
-      "We aim to modernize the automotive sector by building the fastest way to " +
-      "photograph cars, identify parts, grade condition, and list across multiple " +
-      "platforms with one button — without needing a parts expert on staff.\n\n" +
-      "You'll be among the first invited to the free pilot. Reply to this email and " +
-      "tell us how many parts you list a day — it helps us prioritize.\n\n" +
-      "Pilot participants will receive free perks. Referrals to other yards will " +
-      "extend these free perks.\n\n" +
-      "Warm regards,\n" +
-      "The Ahlam Team",
+      "Thanks for joining. You're on the list, and we'll email you the " +
+      "moment your pilot invite is ready.\n\n" +
+      "Best,\n" +
+      "Mohammad and Andy\n" +
+      "mohammadabbas@ahlam.io & andygarcia@ahlam.io",
   });
 }
