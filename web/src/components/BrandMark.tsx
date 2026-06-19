@@ -28,6 +28,34 @@ export function BrandMark({
 // box ("Flat · Ink") — which reads cleanly on a light ground. Only one renders at
 // a time, toggled by CSS on :root[data-theme="light"] (see globals.css), so it's
 // still a pure server/client component with no theme flash.
+// Small "BETA" pill shown beside the wordmark while the product is in development.
+// Mirrors the grade/accent pill styling used elsewhere (uppercase, rounded, accent
+// tint) so it reads as part of the brand, not a banner. Size scales the type.
+export function BetaBadge({ size = 10 }: { size?: number }) {
+  return (
+    <span
+      style={{
+        fontSize: size,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.08em",
+        lineHeight: 1,
+        padding: `${size * 0.32}px ${size * 0.66}px`,
+        borderRadius: 999,
+        color: "var(--accent)",
+        background: "color-mix(in srgb, var(--accent) 14%, transparent)",
+        border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)",
+        whiteSpace: "nowrap",
+        userSelect: "none",
+      }}
+      aria-label="Beta — product in development"
+      title="Ahlam is in beta — still in active development"
+    >
+      Beta
+    </span>
+  );
+}
+
 export function BrandChip({ size = 34 }: { size?: number }) {
   return (
     <span className="brand-chip" style={{ width: size, height: size, flexShrink: 0, display: "inline-grid", placeItems: "center" }}>

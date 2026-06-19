@@ -47,7 +47,7 @@ export default function WaitlistPage() {
           <div className="cs-waitlist-hero" style={{ maxWidth: 1040, margin: "0 auto", padding: "60px 24px 64px", display: "grid", gap: 44, gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 0.95fr)", alignItems: "center" }}>
             <Reveal>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700, color: "var(--accent)", background: "var(--accent-tint)", borderRadius: 999, padding: "5px 12px" }}>
-                <Clock size={14} /> Launching soon. Free pilot.
+                <Clock size={14} /> Launching right after the Fourth of July weekend. Free pilot.
               </span>
               <h1 className="cs-display" style={{ margin: "18px 0 14px", fontSize: 46, lineHeight: 1.08, fontWeight: 600, letterSpacing: "-0.02em" }}>
                 Be first in line when <span style={{ color: "var(--accent)", fontStyle: "italic", fontWeight: 500 }}>Ahlam</span> launches.

@@ -3,7 +3,8 @@
 import React from "react";
 import { motion, AnimatePresence, MotionConfig, useScroll, useMotionValueEvent, useTransform, type Variants } from "framer-motion";
 import { ScanLine, Sparkles, Send, ArrowRight, Tag, ShieldCheck, Check, ChevronDown, CalendarCheck, Mail, MessageSquare, Compass, Wrench, DollarSign, Brain, Download, ShoppingBag, BarChart3, Users, Building2, X } from "lucide-react";
-import { BrandChip, BrandMark } from "./BrandMark";
+import { BrandChip, BrandMark, BetaBadge } from "./BrandMark";
+import { LaunchCountdown } from "./LaunchCountdown";
 import { ThemeToggle } from "./ThemeToggle";
 import { CONDITION_COLOR } from "./data";
 import { PricingPlans } from "./PricingPlans";
@@ -27,7 +28,7 @@ const CAL_DEMO_URL = "https://cal.com/team/ahlam-team";
 
 const FAQS = [
   { q: "Do I need to know parts to use it?", a: "No. That is the point. Photograph the car and the AI names every sellable part, grades its condition, and prices it. You review and post." },
-  { q: "How accurate is the pricing?", a: "Each price is pulled from real market comps and set at the middle of the range, never a lowball. Every number is editable, and you can see how confident the AI is on each one." },
+  { q: "How accurate is the pricing?", a: "We look up what the same part actually sells for across eBay, Facebook, and OfferUp, then suggest the median of those real sales. We use the median, not the average, so a few suspiciously cheap listings (often stolen or knock-off parts) can't drag your price down. Every number is editable, and you can see how confident the AI is on each one." },
   { q: "Which marketplaces can I post to?", a: "Auto-post to eBay, and one-tap copy clean listings for Facebook Marketplace, OfferUp, Craigslist, and Car-Part.com, plus your own Ahlam storefront." },
   { q: "Can I list a part or car manually?", a: "Yes. AI scanning is the fast path, but you can type in a vehicle or a single part by hand any time, with the AI helping write and price it." },
   { q: "Is my VIN and mileage private?", a: "Yes. VIN and mileage are read for accuracy but stay hidden on public listings until you choose to share them." },
@@ -42,7 +43,7 @@ const MARKET_SAMPLE: { part: string; side?: string; vehicle: string; grade: "A" 
   { part: "Tailgate Assembly", vehicle: "2013 Ford F-150", grade: "B", price: 410, views: 318, loc: "Phoenix, AZ" },
   { part: "Hood", vehicle: "2016 Chevy Silverado", grade: "C", price: 120, views: 73, loc: "Houston, TX" },
   { part: "Headlight Assembly", side: "Right", vehicle: "2019 Toyota RAV4", grade: "A", price: 185, views: 96, loc: "Dallas, TX" },
-  { part: "Alloy Wheel — Set of 4", vehicle: "2017 Toyota Camry", grade: "B", price: 300, views: 204, loc: "Atlanta, GA" },
+  { part: "Alloy Wheel (Set of 4)", vehicle: "2017 Toyota Camry", grade: "B", price: 300, views: 204, loc: "Atlanta, GA" },
   { part: "Engine 2.4L", vehicle: "2015 Nissan Altima", grade: "C", price: 880, views: 58, loc: "Denver, CO" },
 ];
 
@@ -110,13 +111,14 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
             >
               <span className="cs-brand-ring" style={{ width: 30, height: 30 }}><BrandMark size={19} /></span>
               <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span>
+              <BetaBadge />
               <span style={navDivider} className="cs-pill-links" />
               <nav className="cs-pill-links" style={{ display: "flex", alignItems: "center", gap: 2 }}>
                 <a href="#how" style={navLink}>How it works</a>
                 <a href="#marketplace" style={navLink}>Marketplace</a>
                 <a href="#pricing" style={navLink}>Pricing</a>
                 <a href="/guides" style={navLink}>Guides</a>
-                <a href="/waitlist" style={navLink}>Waitlist</a>
+                <a href="/waitlist" style={{ ...navLink, color: "var(--accent)", background: "var(--accent-tint)", fontWeight: 700 }}>Waitlist</a>
               </nav>
               <span style={navDivider} />
               <ThemeToggle size={31} />
@@ -137,7 +139,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                   <span className="accent">List every part in seconds.</span>
                 </motion.h1>
                 <motion.p variants={reveal} custom={2} initial="hidden" animate="show" style={{ margin: "22px 0 0", fontSize: 17, color: "var(--muted)", lineHeight: 1.6, maxWidth: 520 }}>
-                  Ahlam&apos;s AI identifies every part, grades its condition, and prices it straight from your photos. Then it posts to eBay and preps Facebook, OfferUp, and Craigslist. The hours you spend cataloging and typing listings are gone.
+                  Ahlam&apos;s AI identifies every part, grades its condition, and prices it straight from your photos. Then with a few clicks, it posts straight to eBay, with Facebook and OfferUp coming soon. The hours you spend cataloging and typing listings are gone.
                 </motion.p>
                 <motion.div variants={reveal} custom={3} initial="hidden" animate="show" style={{ display: "flex", gap: 20, marginTop: 32, flexWrap: "wrap", alignItems: "center" }}>
                   <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtn, padding: "14px 26px", fontSize: 15.5 }}>Start free <ArrowRight size={17} /></button>
@@ -145,7 +147,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                 </motion.div>
                 <motion.div variants={reveal} custom={4} initial="hidden" animate="show" style={{ marginTop: 20, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
                   <PoweredByGoogle />
-                  <span style={{ fontSize: 13, color: "var(--muted)", display: "inline-flex", gap: 6, alignItems: "center" }}><Check size={14} color="var(--success)" /> No card to start</span>
+                  <span style={{ fontSize: 13, color: "var(--muted)", display: "inline-flex", gap: 6, alignItems: "center" }}><Check size={14} color="var(--success)" /> Free first month, no card</span>
                 </motion.div>
               </div>
 
@@ -153,6 +155,22 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                 <ReviewCard onPost={onGetStarted} float />
               </motion.div>
             </div>
+          </section>
+
+          {/* Beta notice: free trial + roadmap, sets expectations honestly */}
+          <section style={{ borderBottom: "1px solid var(--line)" }}>
+            <Reveal style={{ maxWidth: 900, margin: "0 auto", padding: "22px 24px" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 13, justifyContent: "center", flexWrap: "wrap", background: "var(--accent-tint)", border: "1px solid color-mix(in srgb, var(--accent) 28%, transparent)", borderRadius: 14, padding: "15px 22px" }}>
+                <span style={{ marginTop: 1 }}><BetaBadge size={11} /></span>
+                <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.6, maxWidth: 720 }}>
+                  <strong style={{ color: "var(--foreground)" }}>Ahlam is in beta.</strong> Posting to eBay is live now. Facebook, OfferUp, and more are in development. We launch right after the Fourth of July weekend, starting with yards in California and Texas. The first 50 yards to join the waitlist get a full month free with every feature unlocked; later sign-ups get more limited perks.
+                </span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 11, marginTop: 18 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--muted)" }}>Launching in</span>
+                <LaunchCountdown />
+              </div>
+            </Reveal>
           </section>
 
           {/* Partner logos: static row, all visible, logo stacked above the name */}
@@ -205,7 +223,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                 {[
                   { icon: ScanLine, t: "AI grading", d: "A, B, and C condition grades with notes you can edit." },
                   { icon: Send, t: "Cross-post everywhere", d: "Auto-post to eBay and one-tap prep for Facebook, OfferUp, and Craigslist." },
-                  { icon: Tag, t: "Smart pricing", d: "Per-part and whole-car estimates from real market comps." },
+                  { icon: Tag, t: "Smart pricing", d: "Each price is the median of what the same part actually sells for across eBay, Facebook, and OfferUp." },
                   { icon: ShieldCheck, t: "Private by default", d: "VIN and mileage stay hidden until you choose to share." },
                 ].map((f, i) => (
                   <motion.div key={f.t}
@@ -231,17 +249,17 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                 <div className="cs-eyebrow">Marketplace</div>
                 <h2 className="cs-display" style={h2}>A marketplace that works <span className="accent">both ways</span></h2>
                 <p style={{ color: "var(--muted)", fontSize: 16, marginTop: 12, lineHeight: 1.6 }}>
-                  Sellers list parts in seconds with the AI. Buyers search every yard&apos;s inventory in one place and message the seller direct — no middleman, no off-platform hand-off.
+                  Sellers list parts in seconds with the AI. Buyers search every yard&apos;s inventory in one place and message the seller direct, with no middleman and no off-platform hand-off.
                 </p>
               </Reveal>
 
               {/* Buyer / seller split pills */}
               <Reveal i={1} style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", margin: "0 0 34px" }}>
                 <div className="cs-glass" style={{ display: "inline-flex", alignItems: "center", gap: 9, borderRadius: 999, padding: "9px 16px", fontSize: 13.5, fontWeight: 600 }}>
-                  <Compass size={16} color="var(--accent)" /> For buyers — find the exact part
+                  <Compass size={16} color="var(--accent)" /> For buyers: find the exact part
                 </div>
                 <div className="cs-glass" style={{ display: "inline-flex", alignItems: "center", gap: 9, borderRadius: 999, padding: "9px 16px", fontSize: 13.5, fontWeight: 600 }}>
-                  <ShoppingBag size={16} color="var(--accent)" /> For sellers — reach every buyer
+                  <ShoppingBag size={16} color="var(--accent)" /> For sellers: reach every buyer
                 </div>
               </Reveal>
 
@@ -297,10 +315,15 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
             <Reveal style={{ textAlign: "center" }}>
               <div className="cs-eyebrow">Pricing</div>
               <h2 className="cs-display" style={h2}>Simple, transparent pricing</h2>
-              <p style={{ color: "var(--muted)", fontSize: 15, marginTop: 10 }}>Start with a free trial. No card to begin, cancel anytime.</p>
+              <p style={{ color: "var(--muted)", fontSize: 15, marginTop: 10 }}>Free for the first 50 yards: a full month, up to 2 cars, every feature unlocked. No card to begin, cancel anytime.</p>
             </Reveal>
             <Reveal i={1} style={{ maxWidth: 1180, margin: "34px auto 0" }}>
               <PricingPlans onChoose={onGetStarted} />
+            </Reveal>
+            <Reveal i={2} style={{ maxWidth: 680, margin: "30px auto 0", textAlign: "center" }}>
+              <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.65 }}>
+                <strong style={{ color: "var(--foreground)" }}>No email or website? Most dismantlers don&apos;t.</strong> On the Ultimate plan we build and host one for you (a professional site, custom domain, and business email) so customers can find you, reach you, and keep coming back.
+              </p>
             </Reveal>
           </section>
 
@@ -318,7 +341,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
               <div className="cs-feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 28 }}>
                 {[
                   { icon: Wrench, t: "Knows every part", d: "Names and grades every sellable part straight from a photo." },
-                  { icon: Tag, t: "Prices from real comps", d: "Each suggestion is sourced from the live market, not a guess." },
+                  { icon: Tag, t: "Priced from real sales", d: "The median of what the same part sells for across platforms. Not a guess, and not dragged down by lowball listings." },
                   { icon: DollarSign, t: "Learns from your sales", d: "Every sale you make sharpens the next price it suggests." },
                   { icon: Send, t: "Connected everywhere", d: "One brain behind every marketplace you list on." },
                 ].map((f, i) => (
@@ -407,7 +430,8 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
             <div style={{ borderTop: "1px solid var(--line)" }}>
               <div style={{ maxWidth: 1080, margin: "0 auto", padding: "18px 24px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 12.5, color: "var(--muted)" }}>© {new Date().getFullYear()} Ahlam. All rights reserved.</span>
-                <a href={`mailto:${CONTACT_RECIPIENTS}`} style={{ ...navLink, marginLeft: "auto" }}>{CONTACT_EMAIL}</a>
+                <a href="mailto:andygarcia@ahlam.io" style={{ ...navLink, marginLeft: "auto" }}>andygarcia@ahlam.io</a>
+                <a href={`mailto:${CONTACT_RECIPIENTS}`} style={navLink}>{CONTACT_EMAIL}</a>
                 <button onClick={onSignIn} style={ghostBtnSm}>Sign in</button>
               </div>
             </div>
@@ -753,7 +777,7 @@ function PriceVisual() {
   return (
     <div className="cs-glass" style={{ borderRadius: "var(--radius-xl)", padding: 20 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-        <Tag size={16} color="var(--accent)" /><span style={{ fontWeight: 600, fontSize: 13 }}>Live market comps</span>
+        <Tag size={16} color="var(--accent)" /><span style={{ fontWeight: 600, fontSize: 13 }}>What this part sells for</span>
         <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "var(--success)" }}>Suggested $85</span>
       </div>
       <div style={{ display: "grid", gap: 9 }}>
@@ -767,7 +791,7 @@ function PriceVisual() {
           </div>
         ))}
       </div>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 12, lineHeight: 1.5 }}>Priced at the middle of real sold listings, never a lowball.</div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 12, lineHeight: 1.5 }}>We suggest the median of real sales, so lowball or knock-off listings can&apos;t drag it down.</div>
     </div>
   );
 }
@@ -804,7 +828,7 @@ function PostVisual() {
 const STEPS = [
   { eyebrow: "Capture", title: "Snap a few photos", body: "Use your phone or upload from the lot: the exterior, the parts, the engine bay, the dashboard. Up to 8 shots per vehicle. No special setup, just point and shoot.", visual: () => <ScanVisual /> },
   { eyebrow: "Identify", title: "AI catalogs every part", body: "The AI reads each photo, names every sellable part, and grades its condition on a consistent A, B, and C rubric. It even reads the VIN and odometer when they show.", visual: () => <PartsVisual /> },
-  { eyebrow: "Price", title: "Priced from the live market", body: "Each part gets a suggested price pulled from real sold and active comps, set at the middle of the range so you never leave money on the bench. Edit any number freely.", visual: () => <PriceVisual /> },
+  { eyebrow: "Price", title: "Priced from real sales", body: "We check what the same part actually sells for across eBay, Facebook, and OfferUp, then suggest the median of those real sales. Using the median (not the average) keeps a few stolen or knock-off listings from dragging your price down. Edit any number freely.", visual: () => <PriceVisual /> },
   { eyebrow: "Publish", title: "Post everywhere at once", body: "Auto-post to eBay and copy clean, ready-to-paste listings for Facebook, OfferUp, and Craigslist, plus your own Ahlam storefront. One scan, every channel.", visual: () => <PostVisual /> },
 ] as const;
 
