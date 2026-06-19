@@ -22,26 +22,16 @@ export interface Plan {
 export const PLANS: Plan[] = [
   {
     id: "starter",
-    name: "Starter",
+    name: "Free trial",
     price: "$0",
-    per: "/mo",
-    desc: "Get started with Ahlam — list a couple of cars and explore the platform at no cost.",
-    features: ["2 car listings per month", "Access to Ahlam marketplace"],
-  },
-  {
-    // Usage-based plan (AHLAM-65): no monthly commitment, billed per car scanned —
-    // undercuts per-seat incumbents and keeps "no card to start". Activating live
-    // billing needs a Stripe metered price wired into PLAN_PRODUCTS.payg.
-    id: "payg",
-    name: "Pay as you go",
-    price: "$6",
-    per: "/car scanned",
-    desc: "No monthly commitment — pay only for the cars you scan. Ideal for small or seasonal yards.",
+    per: "/first month",
+    desc: "The first 50 yards to join get a full month free, with every feature unlocked and no card required. Try the whole platform, not a stripped-down version.",
     features: [
-      "Billed per car scanned — no monthly fee",
+      "Free for your first month",
+      "Up to 2 cars",
+      "Every feature we've built, included",
       "AI scan & auto-pricing (photo-to-listing)",
       "Access to Ahlam marketplace",
-      "Upgrade to a monthly plan anytime",
     ],
   },
   {
@@ -53,7 +43,7 @@ export const PLANS: Plan[] = [
     features: [
       "10 car listings per month",
       "AI scan & auto-pricing (photo-to-listing)",
-      "Team access — Owner & Editor",
+      "Team access: Owner & Editor",
       "AI Interchange Assistant",
       "Inventory analytics",
       "eBay listing integration",
@@ -69,7 +59,7 @@ export const PLANS: Plan[] = [
     features: [
       "50 car listings per month",
       "AI scan & auto-pricing (photo-to-listing)",
-      "Team access — Owner & Unlimited Editors",
+      "Team access: Owner & Unlimited Editors",
       "AI Interchange Assistant",
       "Full inventory analytics & profit tracking",
       "Cross-platform export (eBay, Facebook, OfferUp, Craigslist)",
@@ -80,15 +70,15 @@ export const PLANS: Plan[] = [
     name: "Ultimate",
     price: "$350",
     per: "/mo",
-    desc: "Everything in Max, plus we build and host a professional website for your business with your own custom domain — fully managed by Ahlam.",
+    desc: "Everything in Max, plus we build and host a professional website for your business with your own custom domain, fully managed by Ahlam.",
     features: [
       "Unlimited car listings per month",
       "AI scan & auto-pricing (photo-to-listing)",
-      "Team access — Owner & Unlimited Editors",
+      "Team access: Owner & Unlimited Editors",
       "AI Interchange Assistant",
       "Full inventory analytics & profit tracking",
       "Cross-platform export (eBay, Facebook, OfferUp, Craigslist)",
-      "Custom business website — built for you",
+      "Custom business website, built for you",
       "Managed domain registration & hosting · priority support",
     ],
   },
