@@ -84,7 +84,7 @@ function Reveal({ children, i = 0, style, className }: { children: React.ReactNo
   );
 }
 
-export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; onSignIn: () => void }) {
+export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?: () => void }) {
   const { lang, setLang } = useI18n();
   const [scrolled, setScrolled] = React.useState(false);
   const { scrollY } = useScroll();
@@ -129,8 +129,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                 ))}
               </span>
               <ThemeToggle size={31} />
-              <button onClick={onSignIn} style={ghostBtnSm} className="cs-pill-links">Sign in</button>
-              <button onClick={onGetStarted} className="cs-raise" style={solidBtnSm}>Get started</button>
+              <button onClick={onGetStarted} className="cs-raise" style={solidBtnSm}>Join the waitlist</button>
             </motion.header>
           </div>
 
@@ -442,7 +441,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                 <span style={{ fontSize: 12.5, color: "var(--muted)" }}>© {new Date().getFullYear()} Ahlam. All rights reserved.</span>
                 <a href="mailto:andygarcia@ahlam.io" style={{ ...navLink, marginLeft: "auto" }}>andygarcia@ahlam.io</a>
                 <a href={`mailto:${CONTACT_RECIPIENTS}`} style={navLink}>{CONTACT_EMAIL}</a>
-                <button onClick={onSignIn} style={ghostBtnSm}>Sign in</button>
+                <a href="/waitlist" style={ghostBtnSm}>Join the waitlist</a>
               </div>
             </div>
           </footer>

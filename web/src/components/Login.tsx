@@ -77,7 +77,7 @@ function Field({ label, icon, right, children }: { label: string; icon: string; 
   );
 }
 
-export function Login({ onLogin, onClose }: { onLogin: () => void; onClose?: () => void }) {
+export function Login({ onLogin, onClose, signInOnly }: { onLogin: () => void; onClose?: () => void; signInOnly?: boolean }) {
   // Return to the marketing landing. onClose flips the parent back to <Landing>
   // (SPA, keeps state); fall back to a hard nav to "/" if it isn't provided.
   const goHome = () => { if (onClose) onClose(); else window.location.href = "/"; };
@@ -252,12 +252,14 @@ export function Login({ onLogin, onClose }: { onLogin: () => void; onClose?: () 
               <>
                 <div style={lx.divider}><span style={lx.divLine} /> <span style={lx.or}>or</span> <span style={lx.divLine} /></div>
                 <button style={lx.google} disabled={busy} onClick={googleSignIn}><GoogleG /> Continue with Google</button>
-                <p style={lx.switch}>
-                  {mode === "signin" ? "New to Ahlam? " : "Already have an account? "}
-                  <a href="#" style={{ color: "var(--accent)", fontWeight: 600 }} onClick={(e) => { e.preventDefault(); setError(""); setNotice(""); setMode(mode === "signin" ? "signup" : "signin"); }}>
-                    {mode === "signin" ? "Create an account" : "Sign in"}
-                  </a>
-                </p>
+                {!signInOnly && (
+                  <p style={lx.switch}>
+                    {mode === "signin" ? "New to Ahlam? " : "Already have an account? "}
+                    <a href="#" style={{ color: "var(--accent)", fontWeight: 600 }} onClick={(e) => { e.preventDefault(); setError(""); setNotice(""); setMode(mode === "signin" ? "signup" : "signin"); }}>
+                      {mode === "signin" ? "Create an account" : "Sign in"}
+                    </a>
+                  </p>
+                )}
               </>
             ) : mode === "forgot" ? (
               <p style={lx.switch}>

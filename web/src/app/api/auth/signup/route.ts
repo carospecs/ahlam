@@ -3,7 +3,20 @@ import { supabaseAdmin } from "@/lib/supabase";
 
 const signupCooldowns = new Map<string, number>();
 
+// Public signups are CLOSED pre-launch — the only public action is joining the
+// waitlist. (This route uses the service-role admin API, which bypasses the
+// Supabase "disable signup" auth setting, so it must be gated here too.)
+// Admins/test accounts are created directly in Supabase, not through this route.
+const SIGNUPS_OPEN = false;
+
 export async function POST(req: NextRequest) {
+  if (!SIGNUPS_OPEN) {
+    return NextResponse.json(
+      { error: "Signups are closed. Join the waitlist at /waitlist." },
+      { status: 403 }
+    );
+  }
+
   let body: { email?: string; password?: string; displayName?: string };
   try {
     body = await req.json();

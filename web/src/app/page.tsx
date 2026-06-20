@@ -92,6 +92,11 @@ export default function Home() {
   }
 
   if (authed) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Dashboard onSignOut={() => { supabaseBrowser().auth.signOut(); closeLogin(); setAuthed(false); }} /></Suspense>;
+  // Auth screen stays reachable here only for OAuth-callback / password-recovery
+  // links (?signin / type=recovery). The public landing no longer links to it.
   if (showLogin) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Login onLogin={() => setAuthed(true)} onClose={closeLogin} /></Suspense>;
-  return <I18nProvider><Landing onGetStarted={openLogin} onSignIn={openLogin} /></I18nProvider>;
+  // Sign in / sign up are closed to the public pre-launch: every landing CTA goes
+  // to the waitlist. Admins log in via the hidden /adminhost route.
+  const goWaitlist = () => { window.location.href = "/waitlist"; };
+  return <I18nProvider><Landing onGetStarted={goWaitlist} onSignIn={goWaitlist} /></I18nProvider>;
 }
