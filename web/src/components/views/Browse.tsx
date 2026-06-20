@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import { Camera, Car, Wrench, MapPin, Store, Search, MessageSquare, X, Send, LoaderCircle, Eye, SlidersHorizontal, ChevronDown, Phone, MessageCircle, ShieldCheck, ShoppingBag } from "lucide-react";
 import { PhotoCell, ConditionBadge, conditionColorOf, Stars, VerifiedBadge } from "../UI";
 import { csToast } from "../Dashboard";
@@ -434,14 +435,29 @@ export function Browse() {
   );
 }
 
+// Render overlays to document.body. The Browse view lives inside .cs-content,
+// whose direct children run the `cs-rise` transform animation — a transformed
+// ancestor becomes the containing block for `position: fixed`, so an in-tree
+// overlay would center against the (tall) content box instead of the viewport
+// and land off-screen. Portaling out keeps the modal pinned to the viewport,
+// matching how Dashboard mounts its own modals at the layout root.
+function Portal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  return createPortal(children, document.body);
+}
+
 function DetailShell({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   return (
-    <div style={ov} onMouseDown={onClose}>
-      <div style={detailModal} className="fade-up" onMouseDown={(e) => e.stopPropagation()}>
-        <button onClick={onClose} style={{ position: "absolute", top: 14, right: 14, zIndex: 2, width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", display: "grid", placeItems: "center" }}><X size={16} color="var(--muted)" /></button>
-        {children}
+    <Portal>
+      <div style={ov} onMouseDown={onClose}>
+        <div style={detailModal} className="fade-up" onMouseDown={(e) => e.stopPropagation()}>
+          <button onClick={onClose} style={{ position: "absolute", top: 14, right: 14, zIndex: 2, width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", display: "grid", placeItems: "center" }}><X size={16} color="var(--muted)" /></button>
+          {children}
+        </div>
       </div>
-    </div>
+    </Portal>
   );
 }
 
@@ -548,6 +564,7 @@ function ContactModal({ target, onClose }: { target: { listingId?: string; shopI
   const waHref = waNumber ? `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}` : null;
 
   return (
+    <Portal>
     <div style={ov} onMouseDown={onClose}>
       <div style={modal} className="fade-up" onMouseDown={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
@@ -568,6 +585,7 @@ function ContactModal({ target, onClose }: { target: { listingId?: string; shopI
         </div>
       </div>
     </div>
+    </Portal>
   );
 }
 
