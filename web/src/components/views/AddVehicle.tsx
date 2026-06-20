@@ -5,7 +5,8 @@ import { ImageUp, Upload, ScanLine, Sparkles, Check, Info, CircleCheck, Car, Wre
 import { Card, PhotoCell, ConditionBadge } from "../UI";
 import { SELL_MODE } from "../data";
 import { csToast } from "../Dashboard";
-import { looksLikeImage, normalizeImageFile, fileToJpegDataUrl } from "@/lib/image";
+import { looksLikeScannable, isPdf, normalizeImageFile, fileToJpegDataUrl, fileToAIDataUrl } from "@/lib/image";
+import { playSonarPing } from "@/lib/sound";
 import { ManualListing } from "./ManualListing";
 import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, type ScanSession } from "@/lib/scanSession";
 import type { VinInfo } from "@/lib/vin";
@@ -28,7 +29,9 @@ interface AIPart {
   _aiPrice?: number | null; // the AI's original suggestion, kept for batch "% of suggested"
 }
 
-const MAX_PHOTOS = 8;
+// More photos = more parts found and a truer price. We accept up to 15 (the AI
+// cost is slightly higher, but accuracy matters more than a few cents per scan).
+const MAX_PHOTOS = 15;
 interface VehicleEstimate {
   vin: string | null; make: string | null; model: string | null; yearStart: number | null; yearEnd: number | null;
   bodyStyle: string | null; mileage: string | null; suggestedWholeCarPriceUsd: number | null; confidence: "high" | "medium" | "low";
@@ -310,8 +313,8 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   // what each photo is; HEIC is converted to JPEG so it previews & uploads fine.
   async function addFiles(list: FileList | null) {
     if (!list) return;
-    const imgs = Array.from(list).filter(looksLikeImage);
-    if (!imgs.length) { csToast("Those files weren't images. Add JPG, PNG or HEIC photos"); return; }
+    const imgs = Array.from(list).filter(looksLikeScannable);
+    if (!imgs.length) { csToast("Those files weren't supported. Add JPG, PNG, HEIC, or PDF files"); return; }
     const room = MAX_PHOTOS - photos.length;
     if (room <= 0) { csToast(`You can add up to ${MAX_PHOTOS} photos`); return; }
     const take = imgs.slice(0, room);
@@ -341,7 +344,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
     try {
       const results = await Promise.all(
         photos.map(async (photo) => {
-          const dataUrl = await fileToJpegDataUrl(photo.file);
+          const dataUrl = await fileToAIDataUrl(photo.file);
           const res = await fetch("/api/identify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -417,6 +420,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       }
       setParts(deduped);
       setPhase("results");
+      playSonarPing(); // sonar ring: the scan is done, results are ready
     } catch (e) {
       if (!isScanRun(myToken)) return; // cancelled / superseded
       setError("We couldn't reach the analysis server. Check your connection and try again.");
@@ -469,10 +473,12 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
     setSaving(true);
     setSavingKind(draft ? "draft" : "post");
     try {
-      // Encode every uploaded photo to a JPEG data URL so the server can persist
-      // them — this is what makes each post carry a real picture.
-      const images = await Promise.all(photos.map((p) => fileToJpegDataUrl(p.file)));
-      const idxOf = new Map(photos.map((p, i) => [p.url, i]));
+      // Encode every uploaded PHOTO to a JPEG data URL so the server can persist
+      // them — this is what makes each post carry a real picture. PDFs are scanned
+      // for identification but are never stored as listing images.
+      const imagePhotos = photos.filter((p) => !isPdf(p.file));
+      const images = await Promise.all(imagePhotos.map((p) => fileToJpegDataUrl(p.file)));
+      const idxOf = new Map(imagePhotos.map((p, i) => [p.url, i]));
       const heroIndex = mainPhoto && idxOf.has(mainPhoto) ? idxOf.get(mainPhoto)! : 0;
 
       const payload = {
@@ -568,7 +574,13 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
 
       {phase === "upload" && (
         <Card pad={22} style={{ display: "grid", gap: 18 }}>
-          <input ref={fileRef} type="file" accept="image/*,.heic,.heif" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+          <input ref={fileRef} type="file" accept="image/*,.heic,.heif,application/pdf,.pdf" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+
+          {/* VIN reminder — the single highest-leverage shot for fitment + pricing */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderRadius: 11, background: "var(--accent-tint)", border: "1px solid color-mix(in srgb, var(--accent) 26%, transparent)", fontSize: 13, lineHeight: 1.5 }}>
+            <ScanLine size={17} color="var(--accent)" style={{ flexShrink: 0 }} />
+            <span><strong style={{ color: "var(--foreground)" }}>Don&apos;t forget the VIN.</strong> Take a clear picture of the VIN plate on the front windshield (driver&apos;s-side base). It locks in exact fitment and noticeably better pricing.</span>
+          </div>
 
           {/* One box — drop every photo in; the AI defines what each one is */}
           <div
@@ -599,8 +611,15 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 10 }}>
               {photos.map((f, i) => (
                 <div key={i} style={{ position: "relative", aspectRatio: "1", borderRadius: 10, overflow: "hidden", border: "1px solid var(--line)" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={f.url} alt={f.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  {isPdf(f.file) ? (
+                    <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", gap: 4, background: "var(--surface2)", padding: 6, textAlign: "center" }}>
+                      <FileText size={22} color="var(--accent)" />
+                      <span style={{ fontSize: 9.5, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{f.name}</span>
+                    </div>
+                  ) : (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={f.url} alt={f.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  )}
                   <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: 999, border: "none", background: "rgba(7,11,22,0.7)", display: "grid", placeItems: "center", cursor: "pointer" }}><X size={13} color="#fff" /></button>
                 </div>
               ))}

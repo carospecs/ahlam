@@ -5,6 +5,7 @@ import { motion, AnimatePresence, MotionConfig, useScroll, useMotionValueEvent, 
 import { ScanLine, Sparkles, Send, ArrowRight, Tag, ShieldCheck, Check, ChevronDown, CalendarCheck, Mail, MessageSquare, Compass, Wrench, DollarSign, Brain, Download, ShoppingBag, BarChart3, Users, Building2, X } from "lucide-react";
 import { BrandChip, BrandMark, BetaBadge } from "./BrandMark";
 import { LaunchCountdown } from "./LaunchCountdown";
+import { useI18n } from "@/lib/i18n";
 import { ThemeToggle } from "./ThemeToggle";
 import { CONDITION_COLOR } from "./data";
 import { PricingPlans } from "./PricingPlans";
@@ -38,13 +39,13 @@ const FAQS = [
 // Sample marketplace listings for the public landing — varied vehicles and a
 // deliberate mix of A/B/C grades so the grade system is visible at a glance.
 // Demo data only; the real grid is powered by live listings in the app.
-const MARKET_SAMPLE: { part: string; side?: string; vehicle: string; grade: "A" | "B" | "C"; price: number; views: number; loc: string }[] = [
-  { part: "Front Bumper Cover", vehicle: "2018 Honda Civic", grade: "A", price: 240, views: 142, loc: "Long Beach, CA" },
+const MARKET_SAMPLE: { part: string; side?: string; vehicle: string; grade: "A" | "B" | "C"; price: number; views: number; loc: string; img?: string }[] = [
+  { part: "Front Bumper Cover", vehicle: "2018 Honda Civic", grade: "A", price: 240, views: 142, loc: "Long Beach, CA", img: "/marketplace/bumper.webp" },
   { part: "Tailgate Assembly", vehicle: "2013 Ford F-150", grade: "B", price: 410, views: 318, loc: "Phoenix, AZ" },
-  { part: "Hood", vehicle: "2016 Chevy Silverado", grade: "C", price: 120, views: 73, loc: "Houston, TX" },
-  { part: "Headlight Assembly", side: "Right", vehicle: "2019 Toyota RAV4", grade: "A", price: 185, views: 96, loc: "Dallas, TX" },
-  { part: "Alloy Wheel (Set of 4)", vehicle: "2017 Toyota Camry", grade: "B", price: 300, views: 204, loc: "Atlanta, GA" },
-  { part: "Engine 2.4L", vehicle: "2015 Nissan Altima", grade: "C", price: 880, views: 58, loc: "Denver, CO" },
+  { part: "Hood", vehicle: "2016 Chevy Silverado", grade: "C", price: 120, views: 73, loc: "Houston, TX", img: "/marketplace/hood.webp" },
+  { part: "Headlight Assembly", side: "Right", vehicle: "2019 Toyota RAV4", grade: "A", price: 185, views: 96, loc: "Dallas, TX", img: "/marketplace/headlight.webp" },
+  { part: "Alloy Wheel (Set of 4)", vehicle: "2017 Toyota Camry", grade: "B", price: 300, views: 204, loc: "Atlanta, GA", img: "/marketplace/wheel.webp" },
+  { part: "Engine 2.4L", vehicle: "2015 Nissan Altima", grade: "C", price: 880, views: 58, loc: "Denver, CO", img: "/marketplace/engine.webp" },
 ];
 
 // Real marketplace logo glyphs (single-path, rendered monochrome) for the
@@ -84,6 +85,7 @@ function Reveal({ children, i = 0, style, className }: { children: React.ReactNo
 }
 
 export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; onSignIn: () => void }) {
+  const { lang, setLang } = useI18n();
   const [scrolled, setScrolled] = React.useState(false);
   const { scrollY } = useScroll();
   useMotionValueEvent(scrollY, "change", (v) => setScrolled(v > 12));
@@ -121,6 +123,11 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                 <a href="/waitlist" style={{ ...navLink, color: "var(--accent)", background: "var(--accent-tint)", fontWeight: 700 }}>Waitlist</a>
               </nav>
               <span style={navDivider} />
+              <span data-no-i18n style={{ display: "inline-flex", alignItems: "center", border: "1px solid var(--line)", borderRadius: 999, overflow: "hidden" }}>
+                {(["en", "es"] as const).map((l) => (
+                  <button key={l} onClick={() => setLang(l)} aria-label={l === "en" ? "English" : "Español"} style={{ padding: "6px 9px", fontSize: 11.5, fontWeight: 700, border: "none", cursor: "pointer", background: lang === l ? "var(--accent)" : "transparent", color: lang === l ? "#fff" : "var(--muted)" }}>{l.toUpperCase()}</button>
+                ))}
+              </span>
               <ThemeToggle size={31} />
               <button onClick={onSignIn} style={ghostBtnSm} className="cs-pill-links">Sign in</button>
               <button onClick={onGetStarted} className="cs-raise" style={solidBtnSm}>Get started</button>
@@ -132,7 +139,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
             <div className="cs-hero-grid" style={{ maxWidth: 1080, margin: "0 auto", padding: "78px 24px 80px", display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 48, alignItems: "center" }}>
               <div>
                 <motion.span variants={reveal} custom={0} initial="hidden" animate="show" className="cs-eyebrow" style={{ display: "inline-block" }}>
-                  For salvage yards, mechanics, and individual sellers
+                  For anyone buying or selling cars or parts, new or used
                 </motion.span>
                 <motion.h1 className="cs-display" variants={reveal} custom={1} initial="hidden" animate="show" style={{ margin: "20px 0 0", fontSize: "clamp(40px, 4.9vw, 60px)", fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em" }}>
                   Photograph a car.<br />
@@ -287,10 +294,13 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                       </span>
                       <span className="cs-display" style={{ fontSize: 21, fontWeight: 700 }}>${l.price}</span>
                     </div>
-                    {/* photo placeholder */}
+                    {/* part photo (representative), with a graceful placeholder fallback */}
                     <div className="photo-cell" style={{ height: 100, borderRadius: 10, background: "color-mix(in srgb, var(--surface2) 70%, transparent)", display: "grid", placeItems: "center", position: "relative", overflow: "hidden" }}>
                       <span aria-hidden="true" style={{ position: "absolute", inset: 0, background: `radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, ${CONDITION_COLOR[l.grade]} 14%, transparent), transparent 60%)` }} />
-                      <ShoppingBag size={26} color="var(--muted)" style={{ opacity: 0.4 }} />
+                      {l.img
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={l.img} alt={`${l.side ? `${l.side} ` : ""}${l.part} — ${l.vehicle}`} loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                        : <ShoppingBag size={26} color="var(--muted)" style={{ opacity: 0.4 }} />}
                     </div>
                     <div style={{ fontSize: 15, fontWeight: 600 }}>{l.side ? `${l.side} ` : ""}{l.part}</div>
                     <div style={{ fontSize: 12.5, color: "var(--muted)" }}>Fits {l.vehicle}</div>
@@ -826,7 +836,7 @@ function PostVisual() {
 }
 
 const STEPS = [
-  { eyebrow: "Capture", title: "Snap a few photos", body: "Use your phone or upload from the lot: the exterior, the parts, the engine bay, the dashboard. Up to 8 shots per vehicle. No special setup, just point and shoot.", visual: () => <ScanVisual /> },
+  { eyebrow: "Capture", title: "Snap a few photos", body: "Use your phone or upload from the lot: the exterior, the parts, the engine bay, the dashboard, and the VIN plate on the windshield. Up to 15 shots per vehicle. More angles mean more parts found and a truer price.", visual: () => <ScanVisual /> },
   { eyebrow: "Identify", title: "AI catalogs every part", body: "The AI reads each photo, names every sellable part, and grades its condition on a consistent A, B, and C rubric. It even reads the VIN and odometer when they show.", visual: () => <PartsVisual /> },
   { eyebrow: "Price", title: "Priced from real sales", body: "We check what the same part actually sells for across eBay, Facebook, and OfferUp, then suggest the median of those real sales. Using the median (not the average) keeps a few stolen or knock-off listings from dragging your price down. Edit any number freely.", visual: () => <PriceVisual /> },
   { eyebrow: "Publish", title: "Post everywhere at once", body: "Auto-post to eBay and copy clean, ready-to-paste listings for Facebook, OfferUp, and Craigslist, plus your own Ahlam storefront. One scan, every channel.", visual: () => <PostVisual /> },

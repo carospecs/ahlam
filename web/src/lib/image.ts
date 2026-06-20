@@ -14,6 +14,17 @@ function isHeic(file: File): boolean {
   return /image\/(heic|heif)/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
 }
 
+// True for a PDF. Gemini reads PDFs natively, so we send these straight through
+// as application/pdf rather than trying to rasterize them in the browser.
+export function isPdf(file: File): boolean {
+  return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+}
+
+// Anything the AI scanner can ingest: a photo (JPG/PNG/HEIC/WEBP…) or a PDF.
+export function looksLikeScannable(file: File): boolean {
+  return looksLikeImage(file) || isPdf(file);
+}
+
 // Convert HEIC/HEIF to a JPEG File so browsers can preview/encode it. Other
 // formats pass through untouched. Never throws — falls back to the original.
 export async function normalizeImageFile(file: File): Promise<File> {
@@ -36,6 +47,14 @@ function readAsDataUrl(file: File): Promise<string> {
     r.onerror = () => reject(new Error("read failed"));
     r.readAsDataURL(file);
   });
+}
+
+// Turn any scanner input into a data URL the /api/identify route can forward to
+// Gemini. PDFs go through as application/pdf (Gemini parses them natively); every
+// image type is normalized + downscaled to JPEG.
+export async function fileToAIDataUrl(file: File): Promise<string> {
+  if (isPdf(file)) return readAsDataUrl(file); // data:application/pdf;base64,...
+  return fileToJpegDataUrl(file);
 }
 
 // Downscale + re-encode any image to a JPEG data URL. Used both for the AI call
