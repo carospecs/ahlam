@@ -138,7 +138,7 @@ function GettingStarted({ go, firstName, shopName, hasVehicle, hasListing, hasPo
 }) {
   const steps = [
     { done: true, label: "Create your shop", sub: shopName ? `${shopName} is set up` : "Workspace ready", nav: "shop" },
-    { done: hasVehicle, label: "Add your first vehicle", sub: "Snap or upload up to 8 photos, and AI grades the parts", nav: "add" },
+    { done: hasVehicle, label: "Add your first vehicle", sub: "Snap or upload up to 15 photos, and AI grades the parts", nav: "add" },
     { done: hasListing, label: "Review your AI-graded parts", sub: "Check names, fitment, and suggested prices", nav: "parts" },
     { done: hasPosted, label: "Post a listing", sub: "Copy the text and cross-post everywhere you sell", nav: "export" },
   ];

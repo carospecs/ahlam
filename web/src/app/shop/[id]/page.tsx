@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import { PublicHeader } from "@/components/PublicHeader";
+import { ReportBusiness } from "@/components/ReportBusiness";
 import { normalizeGrade } from "@/lib/grade";
 
 export const dynamic = "force-dynamic";
@@ -109,6 +110,7 @@ export default async function ShopStorefront({ params }: Params) {
                 {shop.location && <span>📍 {shop.location}</span>}
                 <span>{count} active listing{count === 1 ? "" : "s"}</span>
                 {shop.website && <a href={shop.website} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "none" }}>Website ↗</a>}
+                <ReportBusiness shopId={id} businessName={shop.name} />
               </div>
             </div>
           </div>

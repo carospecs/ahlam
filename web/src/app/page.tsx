@@ -2,6 +2,7 @@
 
 import { useState, useEffect, lazy, Suspense } from "react";
 import { Landing } from "@/components/Landing";
+import { I18nProvider } from "@/lib/i18n";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
 const Login = lazy(() => import("@/components/Login").then((m) => ({ default: m.Login })));
@@ -92,5 +93,5 @@ export default function Home() {
 
   if (authed) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Dashboard onSignOut={() => { supabaseBrowser().auth.signOut(); closeLogin(); setAuthed(false); }} /></Suspense>;
   if (showLogin) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Login onLogin={() => setAuthed(true)} onClose={closeLogin} /></Suspense>;
-  return <Landing onGetStarted={openLogin} onSignIn={openLogin} />;
+  return <I18nProvider><Landing onGetStarted={openLogin} onSignIn={openLogin} /></I18nProvider>;
 }

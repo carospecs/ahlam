@@ -62,7 +62,7 @@ const META: Record<string, { title: string; sub: string }> = {
   orders: { title: "Orders", sub: "Purchases, sales, and escrow — pay and get paid securely" },
   vehicles: { title: "Vehicles posted", sub: "Your cars — drafts, parting out, whole, or both" },
   parts: { title: "Parts posted", sub: "Your parts — drafts, posted, and sold" },
-  add: { title: "Add a vehicle", sub: "Snap or upload up to 8 photos + VIN — AI does the rest" },
+  add: { title: "Add a vehicle", sub: "Snap or upload up to 15 photos + VIN — AI does the rest" },
   analytics: { title: "Analytics", sub: "Views, inquiries, and sales at a glance" },
   aichat: { title: "AI assistant", sub: "Ask about pricing, fitment, and listings" },
   export: { title: "Export & posting", sub: "Cross-post your listings to Facebook, OfferUp, eBay & more" },
