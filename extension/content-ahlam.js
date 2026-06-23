@@ -28,4 +28,13 @@ window.addEventListener("message", (event) => {
       }
     );
   }
+  // Post everywhere: one listing -> an ordered run of marketplaces.
+  if (d.kind === "postAll" && d.listing) {
+    chrome.runtime.sendMessage(
+      { type: "ahlam-stage-queue", listing: d.listing, channels: d.channels },
+      (resp) => {
+        window.postMessage({ __ahlamAutopostReply: true, queued: !!resp?.ok, channels: resp?.channels || [] }, "*");
+      }
+    );
+  }
 });

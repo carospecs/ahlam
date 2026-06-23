@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ahlam Auto-Poster</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0B1220; color: #E6EDF6; padding: 14px;
+    }
+    h1 { font-size: 15px; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
+    .brand { width: 22px; height: 22px; border-radius: 7px; background: linear-gradient(135deg,#D8392E,#F2683C); display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 12px; }
+    .muted { color: #8a98ad; }
+    .card { background: #101A2C; border: 1px solid #22304a; border-radius: 12px; padding: 12px; margin-top: 12px; }
+    .listing-title { font-weight: 700; font-size: 14px; margin: 0 0 3px; }
+    .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #1b2740; color: #aab8d0; }
+    button { font: inherit; cursor: pointer; border-radius: 9px; border: 1px solid #2c3650; }
+    .primary { width: 100%; padding: 11px; border: none; background: #D8392E; color: #fff; font-weight: 700; font-size: 13.5px; margin-top: 12px; }
+    .primary:disabled { opacity: .5; cursor: not-allowed; }
+    .chan { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid #1b2740; }
+    .chan:first-child { border-top: none; }
+    .chan .name { flex: 1; font-weight: 600; }
+    .chan button { padding: 6px 11px; background: #18233b; color: #dfe7f3; }
+    .chan .status { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+    .s-done { background: #14331f; color: #4ade80; }
+    .s-current { background: #33270f; color: #fbbf24; }
+    .s-pending { background: #1b2740; color: #8a98ad; }
+    .empty { text-align: center; padding: 18px 8px; }
+    .step { font-size: 12px; color: #aab8d0; margin-top: 10px; }
+    a { color: #f2845f; }
+  </style>
+</head>
+<body>
+  <h1><span class="brand">A</span> Auto-Poster</h1>
+  <div class="muted">Fills your post on each marketplace. You review and hit Publish. We never post for you.</div>
+
+  <div id="empty" class="empty card" style="display:none">
+    <div style="font-weight:700;margin-bottom:6px">No listing yet</div>
+    <div class="muted">In Ahlam, open a part, choose <b>Post elsewhere</b>, then <b>Auto-post everywhere</b>. It shows up here.</div>
+  </div>
+
+  <div id="content" style="display:none">
+    <div class="card">
+      <div id="listingTitle" class="listing-title"></div>
+      <div><span id="listingPrice" class="pill"></span> <span id="listingPhotos" class="muted"></span></div>
+    </div>
+
+    <div class="card" id="channels"></div>
+
+    <button id="postAll" class="primary">Post to all marketplaces</button>
+    <div id="step" class="step"></div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { supabaseAdmin } from "@/lib/supabase";
 import { GUIDES } from "@/content/guides";
+import { BLOG } from "@/content/blog";
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://ahlam.io").replace(/\/$/, "");
 
@@ -12,11 +13,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 },
     { url: `${SITE_URL}/guides`, changeFrequency: "weekly", priority: 0.8 },
+    { url: `${SITE_URL}/blog`, changeFrequency: "weekly", priority: 0.8 },
+    { url: `${SITE_URL}/guidance`, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${SITE_URL}/privacy`, changeFrequency: "yearly", priority: 0.3 },
   ];
 
   const guideRoutes: MetadataRoute.Sitemap = GUIDES.map((g) => ({
     url: `${SITE_URL}/guides/${g.slug}`,
     lastModified: new Date(g.updated),
+    changeFrequency: "monthly",
+    priority: 0.7,
+  }));
+
+  const blogRoutes: MetadataRoute.Sitemap = BLOG.map((p) => ({
+    url: `${SITE_URL}/blog/${p.slug}`,
+    lastModified: new Date(p.published),
     changeFrequency: "monthly",
     priority: 0.7,
   }));
@@ -47,5 +58,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // If the DB is unreachable at build/runtime, still return the static routes.
   }
 
-  return [...staticRoutes, ...guideRoutes, ...shopRoutes, ...listingRoutes];
+  return [...staticRoutes, ...guideRoutes, ...blogRoutes, ...shopRoutes, ...listingRoutes];
 }

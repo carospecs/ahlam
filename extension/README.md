@@ -36,6 +36,18 @@ Reload ahlam.io. The Export & posting "Post elsewhere" sheet button now says
 4. Review everything and click the marketplace's Publish/Post button. (We never
    auto-publish on these sites — you stay in control.)
 
+### Post everywhere (one after another)
+Click **Auto-post everywhere** in the same sheet. The extension opens **Facebook
+first**, fills it, and shows an **"I posted — open Craigslist →"** button. After
+you publish Facebook, click it to move to Craigslist, then OfferUp. You publish
+each one yourself; nothing posts automatically.
+
+### Side panel (the "mini bot")
+Click the **Ahlam Auto-Poster toolbar icon** to open the side panel. It shows the
+current listing, the status of each marketplace (Queued / Open now / Filled), an
+**Open** button per marketplace, and a **Post to all** button — so you can drive
+the whole run from one place without going back to the Ahlam tab.
+
 ## Privacy
 
 The extension only runs on `ahlam.io` and the marketplace post pages. It receives
@@ -45,9 +57,11 @@ clears the staged data. It sends nothing anywhere else.
 ## Files
 
 - `manifest.json` — permissions + which pages each script runs on
-- `background.js` — downloads photos to data URLs, stages the listing, opens the tab
-- `content-ahlam.js` — on ahlam.io: announces the extension + relays the listing
+- `background.js` — downloads photos, stages the listing, opens tabs, runs the queue
+- `content-ahlam.js` — on ahlam.io: announces the extension + relays the listing(s)
+- `content-banner.js` — shared status banner + the "open next marketplace" button
 - `content-facebook.js` / `content-offerup.js` / `content-craigslist.js` — fill each form
+- `sidepanel.html` / `sidepanel.js` — the side-panel mini bot (status + Post to all)
 
 ## Notes / maintenance
 

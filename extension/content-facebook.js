@@ -84,11 +84,12 @@
   }
 
   const filled = [title && "title", price && "price", desc && "description"].filter(Boolean);
-  banner(
+  window.ahlamShowResult(
+    "facebook",
     filled.length
       ? `Ahlam filled: ${filled.join(", ")}. Pick Category/Condition, then Publish. (Full text copied — paste if anything's missing.)`
       : `Ahlam couldn't find the fields automatically — the full text is on your clipboard, just paste it.`,
-    filled.length ? "ok" : "warn"
+    filled.length > 0
   );
 
   // ---- tiny status banner -------------------------------------------------

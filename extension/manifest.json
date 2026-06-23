@@ -3,7 +3,8 @@
   "name": "Ahlam Auto-Poster",
   "version": "1.0.0",
   "description": "Auto-fills Facebook Marketplace, OfferUp & Craigslist new-post forms with listings from your Ahlam shop.",
-  "permissions": ["storage"],
+  "permissions": ["storage", "sidePanel"],
+  "icons": { "16": "icons/icon-16.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
   "host_permissions": [
     "https://ahlam.io/*",
     "https://*.supabase.co/*",
@@ -20,19 +21,23 @@
     },
     {
       "matches": ["https://www.facebook.com/marketplace/create/*"],
-      "js": ["content-facebook.js"],
+      "js": ["content-banner.js", "content-facebook.js"],
       "run_at": "document_idle"
     },
     {
       "matches": ["https://offerup.com/post/*", "https://offerup.com/sell/*"],
-      "js": ["content-offerup.js"],
+      "js": ["content-banner.js", "content-offerup.js"],
       "run_at": "document_idle"
     },
     {
       "matches": ["https://*.craigslist.org/*"],
-      "js": ["content-craigslist.js"],
+      "js": ["content-banner.js", "content-craigslist.js"],
       "run_at": "document_idle"
     }
   ],
-  "action": { "default_title": "Ahlam Auto-Poster" }
+  "action": {
+    "default_title": "Ahlam Auto-Poster",
+    "default_icon": { "16": "icons/icon-16.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" }
+  },
+  "side_panel": { "default_path": "sidepanel.html" }
 }

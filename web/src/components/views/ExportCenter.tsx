@@ -679,6 +679,20 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
     }
   }
 
+  // With the extension: hand the listing to every no-API marketplace in order.
+  // The extension opens Facebook first; after the seller posts it they advance
+  // to Craigslist, then OfferUp (via the banner button or the side panel).
+  async function confirmAndOpenAll() {
+    const titleText = isCar ? (f.title || `${entity.year || ""} ${entity.make || ""} ${entity.model || ""}`.trim()) : f.part;
+    try { await navigator.clipboard?.writeText(text); } catch {}
+    window.postMessage({
+      __ahlamAutopost: true, kind: "postAll", channels: ["facebook", "craigslist", "offerup"],
+      listing: { title: titleText, price: f.price || "", description: text, text, photos: valid, location: shop?.location || "" },
+    }, "*");
+    setCopied(true);
+    csToast("Posting everywhere — Facebook opens first, then Craigslist and OfferUp");
+  }
+
   return (
     <Portal><div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="fade-up" style={{ width: "min(480px, 100%)", maxHeight: "90vh", overflowY: "auto", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16, boxShadow: "0 40px 80px -30px rgba(0,0,0,0.6)", display: "grid", gap: 0 }}>
@@ -747,12 +761,17 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
         </details>
 
         {/* Confirm & copy button */}
-        <div style={{ padding: "12px 16px" }}>
+        <div style={{ padding: "12px 16px", display: "grid", gap: 8 }}>
           <button onClick={confirmAndOpen} style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 0", borderRadius: 11, border: "none", background: copied ? "var(--success)" : channel.color, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
             {copied
               ? <><Check size={18} /> {ext ? "Sent — check the new tab" : isMobileDevice() ? "Shared" : "Copied & opened"}</>
               : <><ExternalLink size={18} /> {ext ? `Auto-fill on ${channel.name}` : isMobileDevice() ? `Share to ${channel.name}` : `Copy & post to ${channel.name}`}</>}
           </button>
+          {ext && (
+            <button onClick={confirmAndOpenAll} title="Opens Facebook, then Craigslist, then OfferUp — you publish each one" style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 0", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
+              <Send size={16} /> Auto-post everywhere
+            </button>
+          )}
         </div>
 
         {/* Edit fields toggle */}

@@ -41,9 +41,9 @@
   let desc = fieldBy(["description", "describe"]) || document.querySelector("textarea");
   if (desc) set(desc, L.description || L.text || "");
 
-  const el = document.createElement("div");
-  el.style.cssText = "position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483647;max-width:520px;padding:11px 16px;border-radius:12px;font:600 13px -apple-system,sans-serif;color:#fff;background:#101A2C;border:1px solid #2c3650;box-shadow:0 12px 40px rgba(0,0,0,.4)";
-  el.textContent = (title ? "Ahlam filled the listing — review and publish." : "Ahlam couldn't match the fields — full text is on your clipboard, just paste.") ;
-  document.documentElement.appendChild(el);
-  setTimeout(() => el.remove(), 14000);
+  window.ahlamShowResult(
+    "offerup",
+    title ? "Ahlam filled the listing — review and publish." : "Ahlam couldn't match the fields — full text is on your clipboard, just paste.",
+    !!title
+  );
 })();

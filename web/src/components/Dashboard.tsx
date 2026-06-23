@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { useState, useEffect, useRef, createContext, useContext, useSyncExternalStore } from "react";
 import {
   LayoutDashboard, Store, Car, Wrench, CirclePlus, Images, Sparkles,
   MessageSquare, X, Menu, Bell, Plus, Search, ChevronsUpDown, LogOut,
@@ -9,6 +9,7 @@ import {
   CheckCheck, Info, Copy, ExternalLink, ChevronLeft, ChevronRight, LoaderCircle,
   Sun, Moon, TrendingUp, BookOpen, FolderClosed, MapPin, Trash2, Maximize2,
 } from "lucide-react";
+import { armAudio, playMessageChime } from "@/lib/notifySound";
 import { buildListingText, buildVehicleText, partsForVehicle } from "./data";
 import { Overview } from "./views/Overview";
 import { Vehicles } from "./views/Vehicles";
@@ -141,6 +142,7 @@ function Topbar({ meta, onMenu, onSignOut, onNav, onToggleAssistant }: {
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <NotificationBell onNav={onNav} />
         <button
           title={t("AI assistant")}
           aria-label={t("AI assistant")}
@@ -269,6 +271,100 @@ function ToastHost() {
         </div>
       ))}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// New-message notifications (AHLAM-73): an unread store the bell reads, plus a
+// background poller that fires a toast + chime + browser notification the moment
+// a new buyer message lands. Email is sent server-side (api/marketplace/contact),
+// so a seller is reached three ways: in-app, sound, and email.
+let _unread = 0;
+let _latestId: string | null = null;
+const unreadSubs = new Set<() => void>();
+function setUnread(n: number) {
+  if (n === _unread) return;
+  _unread = n;
+  unreadSubs.forEach((f) => f());
+}
+function subscribeUnread(cb: () => void) { unreadSubs.add(cb); return () => unreadSubs.delete(cb); }
+function useUnreadCount() {
+  return useSyncExternalStore(subscribeUnread, () => _unread, () => 0);
+}
+
+// Ask once for browser-notification permission (best effort).
+function requestNotifyPermission() {
+  try {
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission === "default") Notification.requestPermission().catch(() => {});
+  } catch {}
+}
+
+function fireBrowserNotification(title: string, body: string) {
+  try {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    // Skip if the tab is focused — the toast already covers that case.
+    if (typeof document !== "undefined" && document.visibilityState === "visible") return;
+    const n = new Notification(title, { body, icon: "/icon.svg", tag: "ahlam-message" });
+    n.onclick = () => { window.focus(); try { (window as any).csGoMessages?.(); } catch {} n.close(); };
+  } catch {}
+}
+
+// Mounted once at the dashboard shell. Polls a tiny endpoint and alerts on a new
+// inbound message. Seeds a baseline on first poll so it never fires for history.
+function MessageNotifier() {
+  useEffect(() => {
+    armAudio();
+    requestNotifyPermission();
+    let seeded = false;
+    let stopped = false;
+
+    async function poll() {
+      try {
+        const r = await fetch("/api/messages/unread", { cache: "no-store" });
+        if (!r.ok) return;
+        const d = await r.json();
+        setUnread(d.total || 0);
+        if (!seeded) { seeded = true; _latestId = d.latestId || null; return; }
+        if (d.latestId && d.latestId !== _latestId) {
+          _latestId = d.latestId;
+          const name = d.latest?.name || "A buyer";
+          const preview = d.latest?.preview || "sent you a new message";
+          playMessageChime();
+          csToast(`New message from ${name}`);
+          fireBrowserNotification(`New message from ${name}`, preview);
+        } else {
+          _latestId = d.latestId || _latestId;
+        }
+      } catch {}
+    }
+
+    poll();
+    const iv = setInterval(() => { if (!stopped) poll(); }, 20_000);
+    const onFocus = () => { if (!stopped) poll(); };
+    window.addEventListener("focus", onFocus);
+    return () => { stopped = true; clearInterval(iv); window.removeEventListener("focus", onFocus); };
+  }, []);
+  return null;
+}
+
+// A topbar bell that shows the unread badge and jumps to Messages.
+function NotificationBell({ onNav }: { onNav?: (id: string) => void }) {
+  const unread = useUnreadCount();
+  return (
+    <button
+      title="Messages"
+      aria-label={unread > 0 ? `${unread} unread messages` : "Messages"}
+      onClick={() => onNav?.("messages")}
+      style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", cursor: "pointer" }}
+    >
+      <Bell size={17} />
+      {unread > 0 && (
+        <span style={{ position: "absolute", top: -5, right: -5, minWidth: 17, height: 17, padding: "0 4px", borderRadius: 999, background: "var(--danger)", color: "#fff", fontSize: 10.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--background)" }}>
+          {unread > 9 ? "9+" : unread}
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -761,6 +857,9 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 
   function navTo(id: string) { setVehicle(null); setActive(id); setNavOpen(false); }
 
+  // Let a browser notification click jump straight to the inbox.
+  useEffect(() => { (window as any).csGoMessages = () => navTo("messages"); }, []);
+
   return (
     <DataContext.Provider value={data}>
       <I18nProvider>
@@ -784,6 +883,7 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
         </main>
         <ExportModal />
         <ToastHost />
+        <MessageNotifier />
         <AssistantDrawer open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       </div>
       </I18nProvider>
