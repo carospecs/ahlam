@@ -81,6 +81,25 @@
     document.body.click(); // close popup if nothing matched
     return false;
   }
+  // Category is a special case: opening it lists plain <div> rows (not role=option),
+  // e.g. "Auto parts", "Vehicles". Open it and click the row whose text matches.
+  async function pickCategory(value) {
+    if (!value) return false;
+    const combo = findCombo(["category"]);
+    if (!combo) return false;
+    combo.click();
+    const want = String(value).toLowerCase();
+    const row = await waitFor(() => {
+      const rows = [...document.querySelectorAll('div,li,span')].filter((e) => {
+        const t = (e.textContent || "").trim().toLowerCase();
+        return (t === want || (want.length > 4 && t.includes(want))) && e.querySelectorAll("*").length <= 2;
+      });
+      return rows.length ? rows[rows.length - 1] : null;
+    }, 3500, 200);
+    if (row) { row.click(); return true; }
+    document.body.click();
+    return false;
+  }
 
   // ---- 1. Photos (FB often reveals the text fields only after a photo) ----
   if (Array.isArray(L.photoData) && L.photoData.length) {
@@ -113,10 +132,9 @@
   }
 
   // ---- 3. Condition / Category (comboboxes) ------------------------------
-  // Condition first: it's a simple listbox that fills reliably. Category opens a
-  // searchable panel that can overlay the form, so attempt it last (best-effort).
+  // Condition first (simple listbox), then Category (its own div-row picker).
   const cond = await pickCombo(["condition"], L.condition);
-  const cat = await pickCombo(["category"], L.category);
+  const cat = await pickCategory(L.category);
 
   // ---- 4. Location (typeahead — fill, then pick the first suggestion) -----
   let loc = false;
