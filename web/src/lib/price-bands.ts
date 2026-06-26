@@ -1,10 +1,14 @@
-// Layer 1 of the pricing pipeline: static used-OEM price bands.
+// Static used-OEM price bands.
 //
-// These bands are the fallback FLOOR (and a sanity ceiling) for every part. The
-// AI model estimate (Layer 2) is clamped into them, and they anchor the prompt's
-// pricing guidance. DEFAULT_BANDS are the original training-era anchors; the
-// periodic recalibration job (scripts/recalibrate-bands.mjs) overwrites
-// ./price-bands.generated.ts with fresh post-2021 numbers that take precedence.
+// The AI scan no longer prices from these — it uses the deterministic age ×
+// condition model in ./age-pricing.ts. These bands now serve two narrower roles:
+//   • floorPrice — a positive, band-sane floor when SAVING a listing
+//     (/api/listings).
+//   • isSanePrice — a sanity gate on the manual grounded-search live lookup
+//     (pricing.ts).
+// DEFAULT_BANDS are the original training-era anchors; the recalibration job
+// (scripts/recalibrate-bands.mjs) overwrites ./price-bands.generated.ts with
+// fresh numbers that take precedence.
 import { GENERATED_BANDS, GENERATED_AT } from "./price-bands.generated";
 
 export interface PriceBand {
