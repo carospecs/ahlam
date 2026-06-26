@@ -592,6 +592,10 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   const toggleAsIs = () => { setAsIs((p) => !p); setDirty(true); };
   const [saving, setSaving] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
+  // Which no-API marketplaces to open & fill (extension flow). Seeded with the
+  // channel the seller entered from; they can tick on the others.
+  const [selected, setSelected] = React.useState<Set<string>>(() => new Set([(data.channel as any).key]));
+  const toggleSel = (k: string) => setSelected((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
   // Detect the Ahlam Auto-Poster browser extension (it sets this attribute on
   // ahlam.io). When present we hand it the listing and it fills the form for you.
@@ -639,17 +643,9 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   async function confirmAndOpen() {
     const titleText = isCar ? (f.title || `${entity.year || ""} ${entity.make || ""} ${entity.model || ""}`.trim()) : f.part;
 
-    // 1) Desktop with the Auto-Poster extension → it fills the marketplace form.
-    if (ext) {
-      try { await navigator.clipboard?.writeText(text); } catch {}
-      window.postMessage({
-        __ahlamAutopost: true, kind: "post", channel: (channel as any).key || "facebook",
-        listing: { title: titleText, price: f.price || "", description: text, text, photos: valid, location: shop?.location || "" },
-      }, "*");
-      setCopied(true);
-      csToast(`Sending to ${channel.name} — the extension will fill the form`);
-      return;
-    }
+    // (With the extension installed, the primary button calls
+    // confirmAndOpenSelected instead — opens every chosen marketplace and fills
+    // each. This path is the no-extension fallback: share / copy-and-open.)
 
     // 2) Phone → native share sheet so the photos + text go into the real APP.
     if (isMobileDevice() && typeof navigator !== "undefined" && (navigator as any).share) {
@@ -679,18 +675,21 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
     }
   }
 
-  // With the extension: hand the listing to every no-API marketplace in order.
-  // The extension opens Facebook first; after the seller posts it they advance
-  // to Craigslist, then OfferUp (via the banner button or the side panel).
-  async function confirmAndOpenAll() {
+  // The listing payload handed to the extension.
+  function buildExtListing() {
     const titleText = isCar ? (f.title || `${entity.year || ""} ${entity.make || ""} ${entity.model || ""}`.trim()) : f.part;
+    return { title: titleText, price: f.price || "", description: text, text, photos: valid, location: shop?.location || "", grade: (f as any).grade, category: isCar ? "Cars & Trucks" : "Auto Parts & Accessories" };
+  }
+
+  // With the extension: open EVERY selected marketplace at once and fill each.
+  // The seller reviews and clicks Publish on each tab; nothing posts on its own.
+  async function confirmAndOpenSelected() {
+    const channels = [...selected];
+    if (!channels.length) { csToast("Pick at least one marketplace"); return; }
     try { await navigator.clipboard?.writeText(text); } catch {}
-    window.postMessage({
-      __ahlamAutopost: true, kind: "postAll", channels: ["facebook", "craigslist", "offerup"],
-      listing: { title: titleText, price: f.price || "", description: text, text, photos: valid, location: shop?.location || "" },
-    }, "*");
+    window.postMessage({ __ahlamAutopost: true, kind: "postAll", channels, listing: buildExtListing() }, "*");
     setCopied(true);
-    csToast("Posting everywhere — Facebook opens first, then Craigslist and OfferUp");
+    csToast(channels.length > 1 ? `Opening ${channels.length} marketplaces and filling each` : `Opening ${channel.name} and filling it`);
   }
 
   return (
@@ -760,18 +759,29 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
           <textarea readOnly value={text} style={{ width: "100%", height: 120, marginTop: 6, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 12.5, lineHeight: 1.5, padding: "9px 11px", fontFamily: "inherit", resize: "vertical" }} />
         </details>
 
-        {/* Confirm & copy button */}
-        <div style={{ padding: "12px 16px", display: "grid", gap: 8 }}>
-          <button onClick={confirmAndOpen} style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 0", borderRadius: 11, border: "none", background: copied ? "var(--success)" : channel.color, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
-            {copied
-              ? <><Check size={18} /> {ext ? "Sent — check the new tab" : isMobileDevice() ? "Shared" : "Copied & opened"}</>
-              : <><ExternalLink size={18} /> {ext ? `Auto-fill on ${channel.name}` : isMobileDevice() ? `Share to ${channel.name}` : `Copy & post to ${channel.name}`}</>}
-          </button>
+        {/* Pick where to post (extension only) + the open-&-fill button */}
+        <div style={{ padding: "12px 16px", display: "grid", gap: 10 }}>
           {ext && (
-            <button onClick={confirmAndOpenAll} title="Opens Facebook, then Craigslist, then OfferUp — you publish each one" style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 0", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
-              <Send size={16} /> Auto-post everywhere
-            </button>
+            <div style={{ display: "grid", gap: 7 }}>
+              <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 700 }}>Post to (tap to choose):</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {PREPARE_CHANNELS.map((c) => {
+                  const on = selected.has(c.key);
+                  return (
+                    <button key={c.key} onClick={() => toggleSel(c.key)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 12px", borderRadius: 999, border: `1.5px solid ${on ? c.color : "var(--line)"}`, background: on ? `color-mix(in srgb, ${c.color} 14%, transparent)` : "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                      <c.icon size={14} color={c.color} /> {c.name.replace(" Marketplace", "")} {on ? "✓" : ""}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
+          <button onClick={ext ? confirmAndOpenSelected : confirmAndOpen} disabled={ext && selected.size === 0} style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 0", borderRadius: 11, border: "none", background: copied ? "var(--success)" : channel.color, color: "#fff", fontSize: 15, fontWeight: 700, cursor: ext && selected.size === 0 ? "not-allowed" : "pointer", opacity: ext && selected.size === 0 ? 0.6 : 1, boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
+            {copied
+              ? <><Check size={18} /> {ext ? "Opening tabs — fill in progress" : isMobileDevice() ? "Shared" : "Copied & opened"}</>
+              : <><ExternalLink size={18} /> {ext ? `Open & fill ${selected.size} marketplace${selected.size === 1 ? "" : "s"}` : isMobileDevice() ? `Share to ${channel.name}` : `Copy & post to ${channel.name}`}</>}
+          </button>
+          {ext && <div style={{ fontSize: 11.5, color: "var(--muted)", textAlign: "center" }}>Opens each tab and fills the form. You review and hit Publish — we never post for you.</div>}
         </div>
 
         {/* Edit fields toggle */}

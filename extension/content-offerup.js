@@ -4,10 +4,12 @@
 // fallback for anything that can't be matched.
 
 (async function () {
-  const { ahlamStaged: s } = await chrome.storage.local.get("ahlamStaged");
-  if (!s || s.channel !== "offerup") return;
-  if (Date.now() - (s.ts || 0) > 5 * 60 * 1000) { chrome.storage.local.remove("ahlamStaged"); return; }
-  chrome.storage.local.remove("ahlamStaged");
+  const data = await chrome.storage.local.get("ahlamStaged");
+  const map = data.ahlamStaged || {};
+  const s = map.offerup;
+  if (!s) return;
+  delete map.offerup; chrome.storage.local.set({ ahlamStaged: map }); // one-shot, our entry only
+  if (Date.now() - (s.ts || 0) > 5 * 60 * 1000) return;
 
   const L = s.listing || {};
   try { await navigator.clipboard.writeText(L.text || L.description || ""); } catch {}

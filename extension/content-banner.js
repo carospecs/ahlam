@@ -1,18 +1,9 @@
-// Shared status banner shown on each marketplace once the form is filled. When
-// the fill is part of a "post everywhere" run, it adds an "Open next" button so
-// the seller moves on to the next marketplace AFTER they publish this one. We
-// never advance or submit on our own.
+// Shared status banner shown on each marketplace once the form is filled. All
+// selected marketplaces open at once now, so there's no "open next" step — each
+// tab just reports it was filled and reminds the seller to review and Publish.
+// We never advance or submit on our own.
 window.ahlamShowResult = async function (channel, text, ok) {
-  const LABEL = { facebook: "Facebook Marketplace", offerup: "OfferUp", craigslist: "Craigslist" };
-  let nextCh = null;
-  try {
-    chrome.runtime.sendMessage({ type: "ahlam-filled", channel });
-    const { ahlamQueue: q } = await chrome.storage.local.get("ahlamQueue");
-    if (q && !q.done && Array.isArray(q.channels)) {
-      const i = q.channels.indexOf(channel);
-      if (i >= 0 && i + 1 < q.channels.length) nextCh = q.channels[i + 1];
-    }
-  } catch {}
+  try { chrome.runtime.sendMessage({ type: "ahlam-filled", channel }); } catch {}
 
   const old = document.getElementById("__ahlam_banner");
   if (old) old.remove();
@@ -28,14 +19,6 @@ window.ahlamShowResult = async function (channel, text, ok) {
   msg.lastChild.textContent = text;
   wrap.appendChild(msg);
 
-  if (nextCh) {
-    const btn = document.createElement("button");
-    btn.textContent = `I posted — open ${LABEL[nextCh] || nextCh} →`;
-    btn.style.cssText = "margin-left:4px;white-space:nowrap;padding:7px 12px;border-radius:9px;border:none;cursor:pointer;background:#D8392E;color:#fff;font:700 12.5px -apple-system,sans-serif";
-    btn.onclick = () => { chrome.runtime.sendMessage({ type: "ahlam-next" }); wrap.remove(); };
-    wrap.appendChild(btn);
-  }
-
   const close = document.createElement("button");
   close.textContent = "✕";
   close.setAttribute("aria-label", "Dismiss");
@@ -44,6 +27,5 @@ window.ahlamShowResult = async function (channel, text, ok) {
   wrap.appendChild(close);
 
   document.documentElement.appendChild(wrap);
-  // A queue step waits for the seller; a one-off banner auto-hides.
-  if (!nextCh) setTimeout(() => wrap.remove(), 15000);
+  setTimeout(() => wrap.remove(), 18000);
 };

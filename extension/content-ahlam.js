@@ -20,6 +20,16 @@ window.addEventListener("message", (event) => {
     window.postMessage({ __ahlamAutopostReply: true, installed: true }, "*");
     return;
   }
+  if (d.kind === "load" && d.listing) {
+    // Load into the side-panel editor (no marketplace tab opens yet).
+    chrome.runtime.sendMessage(
+      { type: "ahlam-load", listing: d.listing },
+      (resp) => {
+        window.postMessage({ __ahlamAutopostReply: true, loaded: !!resp?.ok, photos: resp?.photos || 0 }, "*");
+      }
+    );
+    return;
+  }
   if (d.kind === "post" && d.listing) {
     chrome.runtime.sendMessage(
       { type: "ahlam-stage", channel: d.channel || "facebook", listing: d.listing },

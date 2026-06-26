@@ -1,15 +1,13 @@
 // Ahlam Auto-Poster — background service worker.
 //
-// Two ways to drive it:
-//   1. Single channel  — the ahlam.io page (or the side panel) sends one listing
-//      for one marketplace. We stage it and open that tab.
-//   2. Post everywhere — the page sends one listing for an ordered list of
-//      marketplaces (Facebook -> Craigslist -> OfferUp). We download the photos
-//      once, open the first marketplace, and after the seller posts it they hit
-//      "Open next" (banner button or side panel) to advance. We NEVER auto-submit.
+// Flow: in Ahlam the seller picks one or more no-API marketplaces and posts.
+// We download the listing's photos once, stage the listing PER CHANNEL, and open
+// every selected marketplace tab AT ONCE. Each marketplace's content script reads
+// its own staged entry and fills its form. The seller reviews and clicks Publish
+// on each tab. We NEVER auto-submit.
 //
-// Photos are downloaded here (the worker has host permissions + dodges CORS) to
-// data URLs so the marketplace content script can attach them as real files.
+// (The side panel can also load a listing for editing first, then fire the same
+// open-and-fill.)
 
 const MARKET_URL = {
   facebook: "https://www.facebook.com/marketplace/create/item",
@@ -17,7 +15,7 @@ const MARKET_URL = {
   craigslist: "https://post.craigslist.org/",
 };
 
-// Let clicking the toolbar icon open the side-panel "mini bot".
+// Let clicking the toolbar icon open the side panel.
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch(() => {});
 });
@@ -39,8 +37,8 @@ async function toDataUrl(url) {
   } catch { return null; }
 }
 
-// Download up to 10 photos once and cache them on the stored listing so each
-// marketplace in a "post everywhere" run reuses them without re-fetching.
+// Download up to 10 photos once and cache them on the listing as data URLs so each
+// marketplace can attach them as real files.
 async function withPhotoData(listing) {
   if (Array.isArray(listing.photoData) && listing.photoData.length) return listing;
   const urls = Array.isArray(listing.photos) ? listing.photos.slice(0, 10) : [];
@@ -48,35 +46,17 @@ async function withPhotoData(listing) {
   return { ...listing, photoData };
 }
 
-// Stage one channel for its content script to read, then open its tab.
-async function openChannel(channel, listing) {
-  const ch = MARKET_URL[channel] ? channel : "facebook";
-  await chrome.storage.local.set({ ahlamStaged: { channel: ch, listing, ts: Date.now() } });
-  return chrome.tabs.create({ url: MARKET_URL[ch] });
-}
-
-async function startQueue(listing, channels) {
+// Stage the listing for each selected channel, then open every tab at once.
+async function openAll(listing, channels) {
   const withData = await withPhotoData(listing);
   const list = (channels || []).filter((c) => MARKET_URL[c]);
-  const queue = { channels: list, index: 0, filled: [], done: false, ts: Date.now() };
-  await chrome.storage.local.set({ ahlamQueue: queue, ahlamListing: withData });
-  if (list.length) await openChannel(list[0], withData);
-  return queue;
-}
-
-async function advanceQueue() {
-  const { ahlamQueue: q, ahlamListing } = await chrome.storage.local.get(["ahlamQueue", "ahlamListing"]);
-  if (!q || q.done) return q || null;
-  const next = q.index + 1;
-  if (next >= q.channels.length) {
-    const done = { ...q, done: true };
-    await chrome.storage.local.set({ ahlamQueue: done });
-    return done;
-  }
-  const updated = { ...q, index: next };
-  await chrome.storage.local.set({ ahlamQueue: updated });
-  if (ahlamListing) await openChannel(q.channels[next], await withPhotoData(ahlamListing));
-  return updated;
+  const staged = {};
+  for (const ch of list) staged[ch] = { listing: withData, ts: Date.now() };
+  const queue = { channels: list, filled: [], ts: Date.now() };
+  await chrome.storage.local.set({ ahlamStaged: staged, ahlamListing: withData, ahlamQueue: queue });
+  // Open them all; the content scripts each pick up their own staged entry.
+  for (const ch of list) { try { await chrome.tabs.create({ url: MARKET_URL[ch] }); } catch {} }
+  return list;
 }
 
 function summary(listing) {
@@ -91,51 +71,51 @@ function summary(listing) {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   const type = msg?.type;
 
-  // Single channel (legacy + side-panel "open one").
-  if (type === "ahlam-stage") {
+  // Open & fill one or more marketplaces at once.
+  if (type === "ahlam-stage" || type === "ahlam-stage-queue" || type === "ahlam-open-all") {
+    (async () => {
+      let listing = msg.listing;
+      if (!listing) { const r = await chrome.storage.local.get("ahlamListing"); listing = r.ahlamListing; }
+      if (!listing) { sendResponse({ ok: false, error: "No listing staged yet" }); return; }
+      // Single-channel callers pass `channel`; multi callers pass `channels`.
+      const channels = msg.channels && msg.channels.length
+        ? msg.channels
+        : [msg.channel || "facebook"];
+      const list = await openAll(listing, channels);
+      sendResponse({ ok: true, channels: list });
+    })();
+    return true;
+  }
+
+  // Load a listing into the side-panel editor WITHOUT opening a marketplace yet.
+  if (type === "ahlam-load") {
     (async () => {
       const listing = await withPhotoData(msg.listing || {});
-      await chrome.storage.local.set({ ahlamListing: listing });
-      const tab = await openChannel(msg.channel || "facebook", listing);
-      sendResponse({ ok: true, tabId: tab.id, photos: (listing.photoData || []).length });
+      await chrome.storage.local.set({ ahlamListing: listing, ahlamQueue: null, ahlamStaged: {} });
+      try { if (_sender?.tab?.id != null) await chrome.sidePanel.open({ tabId: _sender.tab.id }); } catch {}
+      sendResponse({ ok: true, photos: (listing.photoData || []).length });
     })();
     return true;
   }
 
-  // Post everywhere — ordered queue.
-  if (type === "ahlam-stage-queue") {
-    (async () => {
-      const channels = msg.channels && msg.channels.length ? msg.channels : ["facebook", "craigslist", "offerup"];
-      const q = await startQueue(msg.listing || {}, channels);
-      sendResponse({ ok: true, channels: q.channels });
-    })();
-    return true;
-  }
-
-  // Post everywhere using the last listing (side panel "Post to all" button).
-  if (type === "ahlam-open-all") {
+  // Editor asked us to download original photos into data URLs for editing.
+  if (type === "ahlam-prep") {
     (async () => {
       const { ahlamListing } = await chrome.storage.local.get("ahlamListing");
-      if (!ahlamListing) { sendResponse({ ok: false, error: "No listing staged yet" }); return; }
-      const channels = msg.channels && msg.channels.length ? msg.channels : ["facebook", "craigslist", "offerup"];
-      const q = await startQueue(ahlamListing, channels);
-      sendResponse({ ok: true, channels: q.channels });
+      if (!ahlamListing) { sendResponse({ ok: false }); return; }
+      const withData = await withPhotoData(ahlamListing);
+      await chrome.storage.local.set({ ahlamListing: withData });
+      sendResponse({ ok: true, photos: (withData.photoData || []).length });
     })();
     return true;
   }
 
-  // Advance to the next marketplace (from a banner button or the panel).
-  if (type === "ahlam-next") {
-    (async () => { const q = await advanceQueue(); sendResponse({ ok: true, queue: q }); })();
-    return true;
-  }
-
-  // Open a specific channel using the last listing (side panel buttons).
+  // Open one specific channel using the last listing (side-panel "Open" buttons).
   if (type === "ahlam-open") {
     (async () => {
       const { ahlamListing } = await chrome.storage.local.get("ahlamListing");
       if (!ahlamListing) { sendResponse({ ok: false, error: "No listing staged yet" }); return; }
-      await openChannel(msg.channel, await withPhotoData(ahlamListing));
+      await openAll(ahlamListing, [msg.channel]);
       sendResponse({ ok: true });
     })();
     return true;
@@ -150,11 +130,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
-  // A content script finished filling a marketplace form.
+  // A content script finished filling a marketplace form → mark it for the panel.
   if (type === "ahlam-filled") {
     (async () => {
       const { ahlamQueue: q } = await chrome.storage.local.get("ahlamQueue");
-      if (q && !q.done) {
+      if (q) {
         const filled = new Set(q.filled || []);
         filled.add(msg.channel);
         await chrome.storage.local.set({ ahlamQueue: { ...q, filled: [...filled] } });

@@ -6,11 +6,13 @@
 
 (async function () {
   const data = await chrome.storage.local.get("ahlamStaged");
-  const staged = data.ahlamStaged;
-  if (!staged || staged.channel !== "facebook") return;
+  const map = data.ahlamStaged || {};
+  const staged = map.facebook;
+  if (!staged) return;
+  // Clear only our own entry (other open tabs keep theirs). One-shot.
+  delete map.facebook; chrome.storage.local.set({ ahlamStaged: map });
   // Ignore stale hand-offs (older than 5 minutes).
-  if (Date.now() - (staged.ts || 0) > 5 * 60 * 1000) { chrome.storage.local.remove("ahlamStaged"); return; }
-  chrome.storage.local.remove("ahlamStaged"); // one-shot
+  if (Date.now() - (staged.ts || 0) > 5 * 60 * 1000) return;
 
   const L = staged.listing || {};
   banner("Ahlam — filling your listing…");
@@ -52,6 +54,31 @@
       return new File([arr], name, { type: mime });
     } catch { return null; }
   }
+  // Facebook's Category/Condition are comboboxes (a button that opens a listbox).
+  // Best-effort: find by label text, open it, click the option whose text matches.
+  function findCombo(labels) {
+    const cands = [...document.querySelectorAll('[role="combobox"],[aria-haspopup="listbox"],[role="button"],label')];
+    for (const lbl of labels) {
+      const el = cands.find((e) => ((e.getAttribute("aria-label") || e.textContent || "").toLowerCase().includes(lbl)));
+      if (el) return el;
+    }
+    return null;
+  }
+  async function pickCombo(labels, optionText) {
+    if (!optionText) return false;
+    const combo = findCombo(labels);
+    if (!combo) return false;
+    combo.click();
+    const want = String(optionText).toLowerCase();
+    const opt = await waitFor(() => {
+      const opts = [...document.querySelectorAll('[role="option"],[role="menuitemradio"],[role="menuitem"]')];
+      return opts.find((o) => o.textContent.trim().toLowerCase() === want)
+          || opts.find((o) => o.textContent.trim().toLowerCase().includes(want));
+    }, 3500, 200);
+    if (opt) { opt.click(); return true; }
+    document.body.click(); // close popup if nothing matched
+    return false;
+  }
 
   // ---- 1. Photos (FB often reveals the text fields only after a photo) ----
   if (Array.isArray(L.photoData) && L.photoData.length) {
@@ -83,11 +110,28 @@
     else setNativeValue(desc, L.description || L.text || "");
   }
 
-  const filled = [title && "title", price && "price", desc && "description"].filter(Boolean);
+  // ---- 3. Category / Condition (comboboxes) ------------------------------
+  const cat = await pickCombo(["category"], L.category);
+  const cond = await pickCombo(["condition"], L.condition);
+
+  // ---- 4. Location (typeahead — fill, then pick the first suggestion) -----
+  let loc = false;
+  if (L.location) {
+    const locField = fieldBy(["location"]);
+    if (locField) {
+      setNativeValue(locField, String(L.location));
+      locField.focus();
+      const sugg = await waitFor(() => document.querySelector('ul[role="listbox"] [role="option"],[role="option"]'), 2500, 200);
+      if (sugg) { sugg.click(); loc = true; } else { loc = true; }
+    }
+  }
+
+  const filled = [title && "title", price && "price", desc && "description", cat && "category", cond && "condition", loc && "location"].filter(Boolean);
+  const missing = ["category", "condition"].filter((f) => !filled.includes(f));
   window.ahlamShowResult(
     "facebook",
     filled.length
-      ? `Ahlam filled: ${filled.join(", ")}. Pick Category/Condition, then Publish. (Full text copied — paste if anything's missing.)`
+      ? `Ahlam filled: ${filled.join(", ")}.${missing.length ? ` Set ${missing.join(" & ")} yourself,` : ""} review, then Publish. (Full text copied as backup.)`
       : `Ahlam couldn't find the fields automatically — the full text is on your clipboard, just paste it.`,
     filled.length > 0
   );

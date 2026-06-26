@@ -3,9 +3,16 @@
 // (after picking your category & area). Photos are added via the photo step.
 
 (async function () {
-  const { ahlamStaged: s } = await chrome.storage.local.get("ahlamStaged");
-  if (!s || s.channel !== "craigslist") return;
-  if (Date.now() - (s.ts || 0) > 30 * 60 * 1000) { chrome.storage.local.remove("ahlamStaged"); return; }
+  const data = await chrome.storage.local.get("ahlamStaged");
+  const map = data.ahlamStaged || {};
+  const s = map.craigslist;
+  if (!s) return;
+  // Remove only the craigslist entry (other open tabs keep theirs).
+  const clearMine = async () => {
+    const m = (await chrome.storage.local.get("ahlamStaged")).ahlamStaged || {};
+    delete m.craigslist; await chrome.storage.local.set({ ahlamStaged: m });
+  };
+  if (Date.now() - (s.ts || 0) > 30 * 60 * 1000) { clearMine(); return; }
 
   const L = s.listing || {};
   try { await navigator.clipboard.writeText(L.text || L.description || ""); } catch {}
@@ -19,8 +26,8 @@
 
   // The posting form only appears after category + area selection — wait for it.
   const titleEl = await waitFor(() => document.querySelector("#PostingTitle, input[name='PostingTitle']"));
-  if (!titleEl) { chrome.storage.local.remove("ahlamStaged"); return; }
-  chrome.storage.local.remove("ahlamStaged");
+  if (!titleEl) { clearMine(); return; }
+  clearMine();
 
   set(titleEl, String(L.title || "").slice(0, 70));
   const priceEl = document.querySelector("#price, input[name='price']");
