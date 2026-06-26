@@ -678,7 +678,9 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   // The listing payload handed to the extension.
   function buildExtListing() {
     const titleText = isCar ? (f.title || `${entity.year || ""} ${entity.make || ""} ${entity.model || ""}`.trim()) : f.part;
-    return { title: titleText, price: f.price || "", description: text, text, photos: valid, location: shop?.location || "", grade: (f as any).grade, category: isCar ? "Cars & Trucks" : "Auto Parts & Accessories" };
+    // Map our grade to the marketplace's Condition options (Facebook's exact labels).
+    const condition = isCar ? "Used - Good" : ({ A: "Used - Like New", B: "Used - Good", C: "Used - Fair" } as Record<string, string>)[(f as any).grade] || "Used - Good";
+    return { title: titleText, price: f.price || "", description: text, text, photos: valid, location: shop?.location || "", grade: (f as any).grade, condition, category: isCar ? "Cars & Trucks" : "Auto Parts & Accessories" };
   }
 
   // With the extension: open EVERY selected marketplace at once and fill each.

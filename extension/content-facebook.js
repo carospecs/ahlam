@@ -37,7 +37,9 @@
     const els = [...document.querySelectorAll('input[type="text"],input:not([type]),input[type="number"],textarea,[contenteditable="true"]')];
     for (const lbl of labels) {
       const el = els.find((e) => {
-        const a = (e.getAttribute("aria-label") || e.getAttribute("placeholder") || "").toLowerCase();
+        // Facebook leaves aria-label/placeholder empty and puts the field name in
+        // the wrapping <label> (e.g. "Title", "Price"), so check that text too.
+        const a = ((e.getAttribute("aria-label") || "") + " " + (e.getAttribute("placeholder") || "") + " " + (e.closest("label")?.textContent || "")).toLowerCase();
         return a.includes(lbl);
       });
       if (el) return el;
@@ -110,9 +112,11 @@
     else setNativeValue(desc, L.description || L.text || "");
   }
 
-  // ---- 3. Category / Condition (comboboxes) ------------------------------
-  const cat = await pickCombo(["category"], L.category);
+  // ---- 3. Condition / Category (comboboxes) ------------------------------
+  // Condition first: it's a simple listbox that fills reliably. Category opens a
+  // searchable panel that can overlay the form, so attempt it last (best-effort).
   const cond = await pickCombo(["condition"], L.condition);
+  const cat = await pickCombo(["category"], L.category);
 
   // ---- 4. Location (typeahead — fill, then pick the first suggestion) -----
   let loc = false;
