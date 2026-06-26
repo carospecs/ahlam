@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion, AnimatePresence, MotionConfig, useScroll, useMotionValueEvent, useTransform, type Variants } from "framer-motion";
-import { ScanLine, Sparkles, Send, ArrowRight, Tag, ShieldCheck, Check, ChevronDown, CalendarCheck, Mail, MessageSquare, Compass, Wrench, DollarSign, Brain, Download, ShoppingBag, BarChart3, Users, Building2, X } from "lucide-react";
+import { ScanLine, Sparkles, Send, ArrowRight, Tag, ShieldCheck, Check, ChevronDown, CalendarCheck, Mail, MessageSquare, Compass, Wrench, DollarSign, Brain, Download, ShoppingBag, BarChart3, Users, Building2, X, Car } from "lucide-react";
 import { BrandChip, BrandMark, BetaBadge } from "./BrandMark";
 import { LaunchCountdown } from "./LaunchCountdown";
 import { useI18n } from "@/lib/i18n";
@@ -47,18 +47,6 @@ const MARKET_SAMPLE: { part: string; side?: string; vehicle: string; grade: "A" 
   { part: "Alloy Wheel (Set of 4)", vehicle: "2017 Toyota Camry", grade: "B", price: 300, views: 204, loc: "Atlanta, GA", img: "/marketplace/wheel.webp" },
   { part: "Engine 2.4L", vehicle: "2015 Nissan Altima", grade: "C", price: 880, views: 58, loc: "Denver, CO", img: "/marketplace/engine.webp" },
 ];
-
-// Real marketplace logo glyphs (single-path, rendered monochrome) for the
-// "works with" strip. Brand marks shown only to indicate integrations.
-const LOGO_GOOGLE = "M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z";
-
-function Glyph({ d, size = 26, color }: { d: string; size?: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={color || "currentColor"} aria-hidden="true" style={{ display: "block" }}>
-      <path d={d} />
-    </svg>
-  );
-}
 
 // Real brand logo (SVG file in /public/logos), rendered at a fixed height.
 function LogoImg({ src, alt, h = 24 }: { src: string; alt: string; h?: number }) {
@@ -152,14 +140,25 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?:
                   <a href="#how" className="cs-textlink" style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 15, fontWeight: 600, color: "var(--foreground)", textDecoration: "none" }}>See how it works <ArrowRight size={15} style={{ opacity: 0.6 }} /></a>
                 </motion.div>
                 <motion.div variants={reveal} custom={4} initial="hidden" animate="show" style={{ marginTop: 20, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
-                  <PoweredByGoogle />
                   <span style={{ fontSize: 13, color: "var(--muted)", display: "inline-flex", gap: 6, alignItems: "center" }}><Check size={14} color="var(--success)" /> Free first month, no card</span>
                 </motion.div>
               </div>
 
-              <motion.div style={{ y: previewY }} initial={{ opacity: 0, scale: 0.94, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.7, ease: EASE, delay: 0.15 }}>
-                <ReviewCard onPost={onGetStarted} float />
-              </motion.div>
+              <div style={{ position: "relative" }}>
+                {/* Editorial collage behind the review card: a black & white photo and
+                    flat color blocks (lime / orange / periwinkle) peek out from behind
+                    the card so the hero reads as a designed page, not a generic AI UI. */}
+                <div aria-hidden style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
+                  {/* Brand-color blocks (Signal Red + Sand) peek out from behind the
+                      card. The photo now lives inside the card itself. */}
+                  <span style={{ position: "absolute", top: 40, right: -50, width: 116, height: 128, background: "var(--sand)", borderRadius: 4 }} />
+                  <span style={{ position: "absolute", bottom: -36, left: -16, width: 112, height: 112, borderRadius: "50%", background: "var(--accent)" }} />
+                  <span style={{ position: "absolute", bottom: -40, right: 26, width: 150, height: 72, background: "var(--sand)", borderRadius: 4 }} />
+                </div>
+                <motion.div style={{ y: previewY, position: "relative", zIndex: 1 }} initial={{ opacity: 0, scale: 0.94, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.7, ease: EASE, delay: 0.15 }}>
+                  <ReviewCard onPost={onGetStarted} float />
+                </motion.div>
+              </div>
             </div>
           </section>
 
@@ -406,7 +405,6 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?:
               <div style={{ maxWidth: 300 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9 }}><BrandChip size={28} /><span style={{ fontSize: 16, fontWeight: 700 }}>Ahlam</span></div>
                 <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6, margin: "14px 0 0" }}>Snap a photo. List every part everywhere: eBay, Facebook, OfferUp, Craigslist, and your own storefront.</p>
-                <div style={{ marginTop: 16 }}><PoweredByGoogle /></div>
               </div>
               {[
                 { h: "Product", links: [["How it works", "#how"], ["Pricing", "#pricing"], ["The brain", "#faq"], ["Get started", "#"]] },
@@ -448,15 +446,6 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?:
         </div>
       </div>
     </MotionConfig>
-  );
-}
-
-// "AI powered by Google" badge (Gemini behind the scenes, surfaced as Google AI).
-function PoweredByGoogle() {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 11px 5px 9px", borderRadius: 999, border: "1px solid var(--line)", background: "color-mix(in srgb, var(--surface) 60%, transparent)", fontSize: 12.5, fontWeight: 600, color: "var(--muted)" }}>
-      <Glyph d={LOGO_GOOGLE} size={15} color="#4285F4" /> AI powered by Google
-    </span>
   );
 }
 
@@ -673,13 +662,27 @@ function FAQ() {
 // The AI review card shown in the hero and the pricing step.
 function ReviewCard({ onPost, float }: { onPost?: () => void; float?: boolean }) {
   return (
-    <div className={`cs-glass${float ? " cs-float" : ""}`} style={{ borderRadius: "var(--radius-xl)", padding: 20, position: "relative", overflow: "hidden" }}>
+    <div className={`cs-glass${float ? " cs-float" : ""}`} style={{ borderRadius: "var(--radius-xl)", padding: 20, position: "relative", overflow: "hidden", ...(float ? { background: "var(--surface)", backdropFilter: "none" } : null) }}>
       <div className="cs-scanline" aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 64, background: "linear-gradient(180deg, color-mix(in srgb, var(--sand) 26%, transparent), transparent)", pointerEvents: "none" }} />
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, position: "relative" }}>
         <ScanLine size={16} color="var(--accent)" /><span style={{ fontWeight: 600, fontSize: 13 }}>AI review card</span>
-        <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "var(--success)", background: "color-mix(in srgb, var(--success) 16%, transparent)", borderRadius: 999, padding: "2px 9px" }}>Grade B</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "var(--success)", background: "color-mix(in srgb, var(--success) 16%, transparent)", borderRadius: 999, padding: "2px 9px" }}>Whole car</span>
       </div>
-      {[["Part", "Alternator"], ["Fits", "2013 to 2017 Accord"], ["Condition", "Grade B, tested"], ["Suggested", "$85"]].map(([k, v]) => (
+      {/* Listing photo, inside the card (B&W to match the editorial look) */}
+      <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
+        <img src="https://loremflickr.com/g/440/240/honda,sedan,car?lock=24" alt="Scanned car" style={{ display: "block", width: "100%", height: 150, objectFit: "cover", filter: "grayscale(1) contrast(1.05)" }} />
+        <span style={{ position: "absolute", top: 10, left: 10, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#fff", background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", borderRadius: 999, padding: "3px 9px" }}><Tag size={11} /> 2016 Honda Accord</span>
+      </div>
+      {/* Vehicle module: the scanned car + how many parts the AI found */}
+      <div style={{ display: "flex", alignItems: "center", gap: 11, border: "1px solid var(--line)", background: "var(--accent-tint)", borderRadius: 12, padding: "11px 13px", marginBottom: 8 }}>
+        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 9, background: "color-mix(in srgb, var(--accent) 16%, transparent)", color: "var(--accent)", flexShrink: 0 }}><Car size={18} /></span>
+        <div style={{ lineHeight: 1.25 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--muted)" }}>Vehicle</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700 }}>2016 Honda Accord EX</div>
+        </div>
+        <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 12%, transparent)", borderRadius: 999, padding: "3px 9px", flexShrink: 0 }}>42 parts</span>
+      </div>
+      {[["Condition", "Runs & drives"], ["Est. value", "$4,250"]].map(([k, v]) => (
         <div key={k} style={previewRow}><span style={{ color: "var(--muted)" }}>{k}</span><span style={{ fontWeight: 600 }}>{v}</span></div>
       ))}
       {onPost && <button onClick={onPost} style={{ ...solidBtn, width: "100%", justifyContent: "center", marginTop: 14 }}><Send size={15} /> Post listing</button>}
