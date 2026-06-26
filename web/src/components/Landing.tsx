@@ -1,30 +1,31 @@
 "use client";
 
 import React from "react";
-import { motion, AnimatePresence, MotionConfig, useScroll, useMotionValueEvent, useTransform, type Variants } from "framer-motion";
-import { ScanLine, Sparkles, Send, ArrowRight, Tag, ShieldCheck, Check, ChevronDown, CalendarCheck, Mail, MessageSquare, Compass, Wrench, DollarSign, Brain, Download, ShoppingBag, BarChart3, Users, Building2, X, Car } from "lucide-react";
-import { BrandChip, BrandMark, BetaBadge } from "./BrandMark";
+import { motion, AnimatePresence, MotionConfig, type Variants } from "framer-motion";
+import { ScanLine, Send, ArrowRight, Tag, Check, ChevronDown, CalendarCheck, Mail, MessageSquare, Compass, Wrench, DollarSign, ShoppingBag, BarChart3, Download, Users, Building2, X, Camera, Boxes } from "lucide-react";
+import { BrandMark } from "./BrandMark";
 import { LaunchCountdown } from "./LaunchCountdown";
 import { useI18n } from "@/lib/i18n";
-import { ThemeToggle } from "./ThemeToggle";
 import { CONDITION_COLOR } from "./data";
 import { PricingPlans } from "./PricingPlans";
+import { SiteHeader } from "./SiteHeader";
+import { SiteFooter } from "./SiteFooter";
 
-// Public marketing page shown to unauthenticated visitors, so the product
-// explains itself before asking anyone to sign up. Motion is gated behind
-// prefers-reduced-motion via MotionConfig + the global CSS guard.
+// Public marketing page shown to unauthenticated visitors. Editorial, photo-led
+// design: solid surfaces, hairline structure, real (AI-generated) salvage-yard
+// part photography, and numbered sections — deliberately not the translucent /
+// glowing "AI template" look. Motion is gated behind prefers-reduced-motion.
 
 const EASE = [0.22, 0.8, 0.26, 1] as const;
 
-// Contact inbox for the demo/contact/feedback buttons. Swap for a real shared
-// inbox or a booking link (Calendly, Cal.com) when ready.
-const CONTACT_EMAIL = "mohammadabbas@ahlam.io";
-// Mail goes to both founders (comma-separated for mailto; separate params for Gmail).
-const CONTACT_RECIPIENTS = "mohammadabbas@ahlam.io,andygarcia@ahlam.io";
-// Gmail compose URL (opens in browser instead of default mail client).
+// Pricing is hidden on the public landing for now (pre-launch). Flip to true to
+// bring the Pricing section + nav links back. The PricingPlans component and the
+// plan data stay in the codebase either way.
+const SHOW_PRICING = false;
+
+const RECIPIENTS = "mohammadabbas@ahlam.io,andygarcia@ahlam.io";
 const GMAIL_COMPOSE = (to: string, subject: string) =>
   `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}`;
-// "Book a demo" opens the Cal.com team scheduling page.
 const CAL_DEMO_URL = "https://cal.com/team/ahlam-team";
 
 const FAQS = [
@@ -33,15 +34,14 @@ const FAQS = [
   { q: "Which marketplaces can I post to?", a: "Auto-post to eBay, and one-tap copy clean listings for Facebook Marketplace, OfferUp, Craigslist, and Car-Part.com, plus your own Ahlam storefront." },
   { q: "Can I list a part or car manually?", a: "Yes. AI scanning is the fast path, but you can type in a vehicle or a single part by hand any time, with the AI helping write and price it." },
   { q: "Is my VIN and mileage private?", a: "Yes. VIN and mileage are read for accuracy but stay hidden on public listings until you choose to share them." },
-  { q: "What does it cost to start?", a: "Nothing. Start free with no card. The Pro plan is one flat monthly price with everything included." },
+  { q: "What does it cost to start?", a: "Nothing. Start free with no card. The first 50 yards get a full month with every feature unlocked." },
 ];
 
-// Sample marketplace listings for the public landing — varied vehicles and a
-// deliberate mix of A/B/C grades so the grade system is visible at a glance.
-// Demo data only; the real grid is powered by live listings in the app.
-const MARKET_SAMPLE: { part: string; side?: string; vehicle: string; grade: "A" | "B" | "C"; price: number; views: number; loc: string; img?: string }[] = [
+// Sample marketplace listings — varied vehicles and a deliberate A/B/C grade mix.
+// Photos are real (AI-generated) salvage-yard part shots in /public/marketplace.
+const MARKET_SAMPLE: { part: string; side?: string; vehicle: string; grade: "A" | "B" | "C"; price: number; views: number; loc: string; img: string }[] = [
   { part: "Front Bumper Cover", vehicle: "2018 Honda Civic", grade: "A", price: 240, views: 142, loc: "Long Beach, CA", img: "/marketplace/bumper.webp" },
-  { part: "Tailgate Assembly", vehicle: "2013 Ford F-150", grade: "B", price: 410, views: 318, loc: "Phoenix, AZ" },
+  { part: "Tailgate Assembly", vehicle: "2013 Ford F-150", grade: "B", price: 410, views: 318, loc: "Phoenix, AZ", img: "/marketplace/tailgate.webp" },
   { part: "Hood", vehicle: "2016 Chevy Silverado", grade: "C", price: 120, views: 73, loc: "Houston, TX", img: "/marketplace/hood.webp" },
   { part: "Headlight Assembly", side: "Right", vehicle: "2019 Toyota RAV4", grade: "A", price: 185, views: 96, loc: "Dallas, TX", img: "/marketplace/headlight.webp" },
   { part: "Alloy Wheel (Set of 4)", vehicle: "2017 Toyota Camry", grade: "B", price: 300, views: 204, loc: "Atlanta, GA", img: "/marketplace/wheel.webp" },
@@ -55,18 +55,13 @@ function LogoImg({ src, alt, h = 24 }: { src: string; alt: string; h?: number })
 }
 
 const reveal: Variants = {
-  // Quick opacity-only fade — no slide/blur — so content is "just there" during
-  // fast scroll instead of animating into place (which read as lag).
-  hidden: { opacity: 0 },
-  show: (i = 0) => ({ opacity: 1, transition: { duration: 0.25, ease: EASE, delay: i * 0.03 } }),
+  hidden: { opacity: 0, y: 10 },
+  show: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE, delay: i * 0.04 } }),
 };
 
-// Scroll-reveal wrapper: a gentle lift into view once. Trigger margin is positive
-// so a section starts animating slightly BEFORE its top reaches the viewport,
-// which keeps content from ever reading as an empty/blurred void while scrolling.
 function Reveal({ children, i = 0, style, className }: { children: React.ReactNode; i?: number; style?: React.CSSProperties; className?: string }) {
   return (
-    <motion.div variants={reveal} custom={i} initial="hidden" whileInView="show" viewport={{ once: true, margin: "120px 0px" }} style={style} className={className}>
+    <motion.div variants={reveal} custom={i} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-60px 0px" }} style={style} className={className}>
       {children}
     </motion.div>
   );
@@ -74,290 +69,107 @@ function Reveal({ children, i = 0, style, className }: { children: React.ReactNo
 
 export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?: () => void }) {
   const { lang, setLang } = useI18n();
-  const [scrolled, setScrolled] = React.useState(false);
-  const { scrollY } = useScroll();
-  useMotionValueEvent(scrollY, "change", (v) => setScrolled(v > 12));
-  const previewY = useTransform(scrollY, [0, 500], [0, -46]);
 
   return (
-    <MotionConfig reducedMotion="always">
+    <MotionConfig reducedMotion="user">
       <div style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)", position: "relative" }}>
-        {/* Animated aurora wash (fixed + clipped, so it never adds page scroll) */}
-        <div className="aurora" aria-hidden="true">
-          <div className="aurora-blob aurora-1" />
-          <div className="aurora-blob aurora-2" />
-          <div className="aurora-blob aurora-3" />
-        </div>
+        <div className="cs-page-wash" aria-hidden="true" />
 
         <div className="cs-landing-body" style={{ position: "relative", zIndex: 1 }}>
-          {/* Floating pill nav: compact, centered, follows on scroll, gently compacts */}
-          <div style={{ position: "sticky", top: 14, zIndex: 30, display: "flex", justifyContent: "center", padding: "0 16px" }}>
-            <motion.header
-              initial={{ opacity: 0, y: -18 }}
-              animate={{ opacity: 1, y: 0, scale: scrolled ? 0.97 : 1 }}
-              transition={{ duration: 0.5, ease: EASE }}
-              className={`cs-pill${scrolled ? " is-scrolled" : ""}`}
-              style={{ borderRadius: 999, padding: "8px 10px 8px 13px", display: "inline-flex", alignItems: "center", gap: 9 }}
-            >
-              <span className="cs-brand-ring" style={{ width: 30, height: 30 }}><BrandMark size={19} /></span>
-              <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span>
-              <BetaBadge />
-              <span style={navDivider} className="cs-pill-links" />
-              <nav className="cs-pill-links" style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <a href="#how" style={navLink}>How it works</a>
-                <a href="#marketplace" style={navLink}>Marketplace</a>
-                <a href="#pricing" style={navLink}>Pricing</a>
-                <a href="/guides" style={navLink}>Guides</a>
-                <a href="/waitlist" style={{ ...navLink, color: "var(--accent)", background: "var(--accent-tint)", fontWeight: 700 }}>Waitlist</a>
-              </nav>
-              <span style={navDivider} />
-              <span data-no-i18n style={{ display: "inline-flex", alignItems: "center", border: "1px solid var(--line)", borderRadius: 999, overflow: "hidden" }}>
-                {(["en", "es"] as const).map((l) => (
-                  <button key={l} onClick={() => setLang(l)} aria-label={l === "en" ? "English" : "Español"} style={{ padding: "6px 9px", fontSize: 11.5, fontWeight: 700, border: "none", cursor: "pointer", background: lang === l ? "var(--accent)" : "transparent", color: lang === l ? "#fff" : "var(--muted)" }}>{l.toUpperCase()}</button>
-                ))}
-              </span>
-              <ThemeToggle size={31} />
-              <button onClick={onGetStarted} className="cs-raise" style={solidBtnSm}>Join the waitlist</button>
-            </motion.header>
-          </div>
+          <SiteHeader onGetStarted={onGetStarted} lang={lang} setLang={setLang} />
 
-          {/* Hero: side-by-side (copy left, AI review card right) */}
+          {/* Hero — asymmetric: copy left, framed real photo + review card right */}
           <section style={{ borderBottom: "1px solid var(--line)" }}>
-            <div className="cs-hero-grid" style={{ maxWidth: 1080, margin: "0 auto", padding: "78px 24px 80px", display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 48, alignItems: "center" }}>
+            <div className="cs-hero-grid" style={{ maxWidth: 1140, margin: "0 auto", padding: "70px 24px 78px", display: "grid", gridTemplateColumns: "1.05fr 0.95fr", gap: 56, alignItems: "center" }}>
               <div>
-                <motion.span variants={reveal} custom={0} initial="hidden" animate="show" className="cs-eyebrow" style={{ display: "inline-block" }}>
-                  For anyone buying or selling cars or parts, new or used
+                <motion.span variants={reveal} custom={0} initial="hidden" animate="show" className="cs-kicker" style={{ display: "inline-block" }}>
+                  For salvage yards & anyone selling car parts
                 </motion.span>
-                <motion.h1 className="cs-display" variants={reveal} custom={1} initial="hidden" animate="show" style={{ margin: "20px 0 0", fontSize: "clamp(40px, 4.9vw, 60px)", fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em" }}>
+                <motion.h1 className="cs-display" variants={reveal} custom={1} initial="hidden" animate="show" style={{ margin: "18px 0 0", fontSize: "clamp(40px, 5vw, 62px)", fontWeight: 700, lineHeight: 1.0, letterSpacing: "-0.035em" }}>
                   Photograph a car.<br />
                   <span className="accent">List every part in seconds.</span>
                 </motion.h1>
-                <motion.p variants={reveal} custom={2} initial="hidden" animate="show" style={{ margin: "22px 0 0", fontSize: 17, color: "var(--muted)", lineHeight: 1.6, maxWidth: 520 }}>
-                  Ahlam&apos;s AI identifies every part, grades its condition, and prices it straight from your photos. Then with a few clicks, it posts straight to eBay, with Facebook and OfferUp coming soon. The hours you spend cataloging and typing listings are gone.
+                <motion.p variants={reveal} custom={2} initial="hidden" animate="show" style={{ margin: "22px 0 0", fontSize: 17.5, color: "var(--muted)", lineHeight: 1.62, maxWidth: 500 }}>
+                  Ahlam&apos;s AI names every sellable part, grades its condition, and prices it from your photos. Then it posts to eBay in a tap, with Facebook and OfferUp next. The hours you lose cataloging and typing listings are gone.
                 </motion.p>
-                <motion.div variants={reveal} custom={3} initial="hidden" animate="show" style={{ display: "flex", gap: 20, marginTop: 32, flexWrap: "wrap", alignItems: "center" }}>
+                <motion.div variants={reveal} custom={3} initial="hidden" animate="show" style={{ display: "flex", gap: 16, marginTop: 30, flexWrap: "wrap", alignItems: "center" }}>
                   <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtn, padding: "14px 26px", fontSize: 15.5 }}>Start free <ArrowRight size={17} /></button>
                   <a href="#how" className="cs-textlink" style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 15, fontWeight: 600, color: "var(--foreground)", textDecoration: "none" }}>See how it works <ArrowRight size={15} style={{ opacity: 0.6 }} /></a>
                 </motion.div>
-                <motion.div variants={reveal} custom={4} initial="hidden" animate="show" style={{ marginTop: 20, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ fontSize: 13, color: "var(--muted)", display: "inline-flex", gap: 6, alignItems: "center" }}><Check size={14} color="var(--success)" /> Free first month, no card</span>
+                <motion.div variants={reveal} custom={4} initial="hidden" animate="show" style={{ marginTop: 22, display: "flex", gap: 18, flexWrap: "wrap", alignItems: "center" }}>
+                  {["Free first month, no card", "Posts to eBay today", "Built for two-person yards"].map((t) => (
+                    <span key={t} style={{ fontSize: 13, color: "var(--muted)", display: "inline-flex", gap: 7, alignItems: "center" }}><Check size={14} color="var(--success)" /> {t}</span>
+                  ))}
                 </motion.div>
               </div>
 
               <div style={{ position: "relative" }}>
-                {/* Editorial collage behind the review card: a black & white photo and
-                    flat color blocks (lime / orange / periwinkle) peek out from behind
-                    the card so the hero reads as a designed page, not a generic AI UI. */}
-                <div aria-hidden style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
-                  {/* Brand-color blocks (Signal Red + Sand) peek out from behind the
-                      card. The photo now lives inside the card itself. */}
-                  <span style={{ position: "absolute", top: 40, right: -50, width: 116, height: 128, background: "var(--sand)", borderRadius: 4 }} />
-                  <span style={{ position: "absolute", bottom: -36, left: -16, width: 112, height: 112, borderRadius: "50%", background: "var(--accent)" }} />
-                  <span style={{ position: "absolute", bottom: -40, right: 26, width: 150, height: 72, background: "var(--sand)", borderRadius: 4 }} />
-                </div>
-                <motion.div style={{ y: previewY, position: "relative", zIndex: 1 }} initial={{ opacity: 0, scale: 0.94, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.7, ease: EASE, delay: 0.15 }}>
-                  <ReviewCard onPost={onGetStarted} float />
+                {/* No decorative blocks behind the card. The card itself gently
+                    floats (cs-float) so the hero has motion without clutter. */}
+                <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE, delay: 0.1 }} style={{ position: "relative", zIndex: 1 }}>
+                  <div className="cs-float">
+                    <HeroShowcase onPost={onGetStarted} />
+                  </div>
                 </motion.div>
               </div>
             </div>
           </section>
 
-          {/* Beta notice: free trial + roadmap, sets expectations honestly */}
+          {/* Beta notice + launch countdown */}
           <section style={{ borderBottom: "1px solid var(--line)" }}>
-            <Reveal style={{ maxWidth: 900, margin: "0 auto", padding: "22px 24px" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 13, justifyContent: "center", flexWrap: "wrap", background: "var(--accent-tint)", border: "1px solid color-mix(in srgb, var(--accent) 28%, transparent)", borderRadius: 14, padding: "15px 22px" }}>
-                <span style={{ marginTop: 1 }}><BetaBadge size={11} /></span>
-                <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.6, maxWidth: 720 }}>
-                  <strong style={{ color: "var(--foreground)" }}>Ahlam is in beta.</strong> Posting to eBay is live now. Facebook, OfferUp, and more are in development. We launch right after the Fourth of July weekend, starting with yards in California and Texas. The first 50 yards to join the waitlist get a full month free with every feature unlocked; later sign-ups get more limited perks.
+            <Reveal style={{ maxWidth: 940, margin: "0 auto", padding: "24px 24px" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 13, justifyContent: "center", flexWrap: "wrap", background: "var(--accent-tint)", border: "1px solid color-mix(in srgb, var(--accent) 26%, transparent)", borderRadius: 14, padding: "15px 22px" }}>
+                <span style={{ display: "inline-flex", marginTop: 1, fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)", borderRadius: 999, padding: "2px 8px", flexShrink: 0 }}>BETA</span>
+                <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.6, maxWidth: 740 }}>
+                  <strong style={{ color: "var(--foreground)" }}>Ahlam is in beta.</strong> Posting to eBay is live now. Facebook, OfferUp, and more are in development. We launch right after the Fourth of July weekend, starting with yards in California and Texas. The first 50 yards to join the waitlist get a full month free with every feature unlocked.
                 </span>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 11, marginTop: 18 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--muted)" }}>Launching in</span>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 11, marginTop: 20 }}>
+                <span className="cs-kicker">Launching in</span>
                 <LaunchCountdown />
               </div>
             </Reveal>
           </section>
 
-          {/* Partner logos: static row, all visible, logo stacked above the name */}
+          {/* Channel logos — calm static row */}
           <section style={{ borderBottom: "1px solid var(--line)" }}>
-            <div style={{ maxWidth: 1080, margin: "0 auto", padding: "32px 24px" }}>
-              <Reveal style={{ textAlign: "center", marginBottom: 26 }}>
-                <div className="cs-eyebrow">Posts to the places buyers already shop</div>
+            <div style={{ maxWidth: 1080, margin: "0 auto", padding: "30px 24px" }}>
+              <Reveal style={{ textAlign: "center", marginBottom: 22 }}>
+                <div className="cs-kicker">Posts to the places buyers already shop</div>
               </Reveal>
-              <div className="cs-marquee">
-                <div className="cs-marquee-track">
-                  {[0, 1].map((dup) => (
-                    <React.Fragment key={dup}>
-                      {PARTNERS.map((p) => (
-                        <div key={p.caption + dup} style={{ flexShrink: 0 }}>
-                          <Partner logo={p.logo} caption={p.caption} />
-                        </div>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* How it works: step-by-step with bespoke visuals */}
-          <section id="how" style={{ maxWidth: 1080, margin: "0 auto", padding: "78px 24px 40px" }}>
-            <Reveal style={{ textAlign: "center", maxWidth: 640, margin: "0 auto" }}>
-              <div className="cs-eyebrow">How it works</div>
-              <h2 className="cs-display" style={h2}>From a photo to posted, in four steps</h2>
-              <p style={{ color: "var(--muted)", fontSize: 16, marginTop: 12, lineHeight: 1.6 }}>
-                Snap photos and let the AI do the cataloging, grading, and pricing. Prefer to type it in? Manual entry is there whenever you want it.
-              </p>
-            </Reveal>
-
-            <div style={{ display: "grid", gap: 22, marginTop: 48 }}>
-              {STEPS.map((s, i) => (
-                <Step key={s.title} index={i} eyebrow={s.eyebrow} title={s.title} body={s.body} visual={s.visual()} flip={i % 2 === 1} />
-              ))}
-            </div>
-          </section>
-
-          {/* Features */}
-          <section style={{ borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)", background: "color-mix(in srgb, var(--surface) 40%, transparent)" }}>
-            <div style={{ maxWidth: 1080, margin: "0 auto", padding: "64px 24px" }}>
-              <Reveal style={{ textAlign: "center", marginBottom: 36 }}>
-                <div className="cs-eyebrow">Built for sellers</div>
-                <h2 className="cs-display" style={h2}>Everything the listing takes, automated</h2>
-              </Reveal>
-              <div className="cs-feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
-                {[
-                  { icon: ScanLine, t: "AI grading", d: "A, B, and C condition grades with notes you can edit." },
-                  { icon: Send, t: "Cross-post everywhere", d: "Auto-post to eBay and one-tap prep for Facebook, OfferUp, and Craigslist." },
-                  { icon: Tag, t: "Smart pricing", d: "Each price is the median of what the same part actually sells for across eBay, Facebook, and OfferUp." },
-                  { icon: ShieldCheck, t: "Private by default", d: "VIN and mileage stay hidden until you choose to share." },
-                ].map((f, i) => (
-                  <motion.div key={f.t}
-                    initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }}
-                    transition={{ delay: i * 0.1, duration: 0.5, ease: EASE }}
-                    whileHover={{ y: -6 }}
-                    className="cs-glass" style={{ borderRadius: "var(--radius-lg)", padding: 22, height: "100%", position: "relative", overflow: "hidden" }}
-                  >
-                    <span aria-hidden="true" style={{ position: "absolute", top: 0, left: 22, right: 22, height: 2, background: "linear-gradient(90deg, transparent, var(--accent), transparent)", opacity: 0.55 }} />
-                    <span style={featIconBig}><f.icon size={21} color="var(--accent)" /></span>
-                    <div className="cs-display" style={{ fontSize: 19, fontWeight: 600, marginTop: 16, paddingBottom: 9, borderBottom: "1px solid var(--line)" }}>{f.t}</div>
-                    <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 10, lineHeight: 1.55 }}>{f.d}</div>
-                  </motion.div>
+              <Reveal i={1} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 44, flexWrap: "wrap" }}>
+                {PARTNERS.map((p) => (
+                  <div key={p.caption} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 9, opacity: 0.9 }}>
+                    <div style={{ height: 26, display: "flex", alignItems: "center" }}>{p.logo}</div>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)" }}>{p.caption}</span>
+                  </div>
                 ))}
-              </div>
+              </Reveal>
             </div>
           </section>
 
-          {/* Marketplace — the two-sided buy & sell side of Ahlam */}
-          <section id="marketplace" style={{ borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)" }}>
-            <div style={{ maxWidth: 1080, margin: "0 auto", padding: "78px 24px" }}>
-              <Reveal style={{ textAlign: "center", maxWidth: 680, margin: "0 auto 14px" }}>
-                <div className="cs-eyebrow">Marketplace</div>
-                <h2 className="cs-display" style={h2}>A marketplace that works <span className="accent">both ways</span></h2>
-                <p style={{ color: "var(--muted)", fontSize: 16, marginTop: 12, lineHeight: 1.6 }}>
-                  Sellers list parts in seconds with the AI. Buyers search every yard&apos;s inventory in one place and message the seller direct, with no middleman and no off-platform hand-off.
+          {/* The problem — one editorial statement */}
+          <section style={{ borderBottom: "1px solid var(--line)" }}>
+            <div style={{ maxWidth: 1080, margin: "0 auto", padding: "76px 24px" }}>
+              <Reveal style={{ maxWidth: 760 }}>
+                <div className="cs-kicker" style={{ color: "var(--accent)" }}>The bottleneck</div>
+                <h2 className="cs-display" style={{ ...h2, maxWidth: 720 }}>
+                  The slow part was never typing. It was knowing <span className="accent">what the part is</span>.
+                </h2>
+                <p style={{ color: "var(--muted)", fontSize: 17, lineHeight: 1.65, marginTop: 16, maxWidth: 640 }}>
+                  A car has hundreds of sellable parts. Pricing each one means knowing the fitment, the condition, and what it actually sells for. That expertise is the real reason cars sit and parts get scrapped. Ahlam puts it in your pocket.
                 </p>
               </Reveal>
-
-              {/* Buyer / seller split pills */}
-              <Reveal i={1} style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", margin: "0 0 34px" }}>
-                <div className="cs-glass" style={{ display: "inline-flex", alignItems: "center", gap: 9, borderRadius: 999, padding: "9px 16px", fontSize: 13.5, fontWeight: 600 }}>
-                  <Compass size={16} color="var(--accent)" /> For buyers: find the exact part
-                </div>
-                <div className="cs-glass" style={{ display: "inline-flex", alignItems: "center", gap: 9, borderRadius: 999, padding: "9px 16px", fontSize: 13.5, fontWeight: 600 }}>
-                  <ShoppingBag size={16} color="var(--accent)" /> For sellers: reach every buyer
-                </div>
-              </Reveal>
-
-              {/* Mock browse search bar */}
-              <Reveal i={2} style={{ maxWidth: 760, margin: "0 auto 22px" }}>
-                <div className="cs-glass" style={{ display: "flex", alignItems: "center", gap: 10, borderRadius: 999, padding: "12px 18px" }}>
-                  <Compass size={18} color="var(--muted)" />
-                  <span style={{ color: "var(--muted)", fontSize: 14.5 }}>Search “2014 Honda Accord front bumper”, a VIN, or a part number…</span>
-                  <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Browse</span>
-                </div>
-              </Reveal>
-
-              {/* Live-listing grid (buyer view) */}
-              <div className="cs-feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-                {MARKET_SAMPLE.map((l, i) => (
-                  <motion.div key={l.part + l.vehicle}
-                    initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "80px 0px" }}
-                    transition={{ delay: (i % 3) * 0.08, duration: 0.5, ease: EASE }}
-                    whileHover={{ y: -5 }}
-                    className="cs-glass" style={{ borderRadius: "var(--radius-lg)", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: CONDITION_COLOR[l.grade], background: `color-mix(in srgb, ${CONDITION_COLOR[l.grade]} 16%, transparent)` }}>
-                        <span style={{ width: 7, height: 7, borderRadius: 999, background: CONDITION_COLOR[l.grade] }} /> Grade {l.grade}
-                      </span>
-                      <span className="cs-display" style={{ fontSize: 21, fontWeight: 700 }}>${l.price}</span>
-                    </div>
-                    {/* part photo (representative), with a graceful placeholder fallback */}
-                    <div className="photo-cell" style={{ height: 100, borderRadius: 10, background: "color-mix(in srgb, var(--surface2) 70%, transparent)", display: "grid", placeItems: "center", position: "relative", overflow: "hidden" }}>
-                      <span aria-hidden="true" style={{ position: "absolute", inset: 0, background: `radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, ${CONDITION_COLOR[l.grade]} 14%, transparent), transparent 60%)` }} />
-                      {l.img
-                        // eslint-disable-next-line @next/next/no-img-element
-                        ? <img src={l.img} alt={`${l.side ? `${l.side} ` : ""}${l.part} — ${l.vehicle}`} loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-                        : <ShoppingBag size={26} color="var(--muted)" style={{ opacity: 0.4 }} />}
-                    </div>
-                    <div style={{ fontSize: 15, fontWeight: 600 }}>{l.side ? `${l.side} ` : ""}{l.part}</div>
-                    <div style={{ fontSize: 12.5, color: "var(--muted)" }}>Fits {l.vehicle}</div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2, paddingTop: 10, borderTop: "1px solid var(--line)" }}>
-                      <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{l.views} views · {l.loc}</span>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 700, color: "var(--accent)" }}>
-                        <MessageSquare size={13} /> Message
-                      </span>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-
-              <Reveal i={1} style={{ display: "flex", justifyContent: "center", marginTop: 32 }}>
-                <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtn, padding: "13px 24px", fontSize: 15 }}>Browse the marketplace <ArrowRight size={17} /></button>
-              </Reveal>
-            </div>
-          </section>
-
-          {/* Pricing */}
-          <section id="pricing" style={{ maxWidth: 1200, margin: "0 auto", padding: "72px 24px" }}>
-            <Reveal style={{ textAlign: "center" }}>
-              <div className="cs-eyebrow">Pricing</div>
-              <h2 className="cs-display" style={h2}>Simple, transparent pricing</h2>
-              <p style={{ color: "var(--muted)", fontSize: 15, marginTop: 10 }}>Free for the first 50 yards: a full month, up to 2 cars, every feature unlocked. No card to begin, cancel anytime.</p>
-            </Reveal>
-            <Reveal i={1} style={{ maxWidth: 1180, margin: "34px auto 0" }}>
-              <PricingPlans onChoose={onGetStarted} />
-            </Reveal>
-            <Reveal i={2} style={{ maxWidth: 680, margin: "30px auto 0", textAlign: "center" }}>
-              <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.65 }}>
-                <strong style={{ color: "var(--foreground)" }}>No email or website? Most dismantlers don&apos;t.</strong> On the Ultimate plan we build and host one for you (a professional site, custom domain, and business email) so customers can find you, reach you, and keep coming back.
-              </p>
-            </Reveal>
-          </section>
-
-          {/* How Ahlam works (capability graph) */}
-          <section id="works" style={{ borderTop: "1px solid var(--line)" }}>
-            <div style={{ maxWidth: 1080, margin: "0 auto", padding: "80px 24px" }}>
-              <Reveal style={{ textAlign: "center", maxWidth: 680, margin: "0 auto 40px" }}>
-                <div className="cs-eyebrow">How Ahlam works</div>
-                <h2 className="cs-display" style={h2}>Everything it takes to sell, in one place</h2>
-                <p style={{ color: "var(--muted)", fontSize: 16.5, lineHeight: 1.6, marginTop: 14 }}>
-                  From scanning and pricing to messaging, orders, and analytics, Ahlam runs the whole operation. Tap any capability to see what it does.
-                </p>
-              </Reveal>
-              <Reveal i={1} style={{ maxWidth: 760, margin: "0 auto" }}><BrainVisual /></Reveal>
-              <div className="cs-feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 28 }}>
+              <div className="cs-feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 22, marginTop: 44 }}>
                 {[
-                  { icon: Wrench, t: "Knows every part", d: "Names and grades every sellable part straight from a photo." },
-                  { icon: Tag, t: "Priced from real sales", d: "The median of what the same part sells for across platforms. Not a guess, and not dragged down by lowball listings." },
-                  { icon: DollarSign, t: "Learns from your sales", d: "Every sale you make sharpens the next price it suggests." },
-                  { icon: Send, t: "Connected everywhere", d: "One brain behind every marketplace you list on." },
-                ].map((f, i) => (
-                  <Reveal key={f.t} i={i}>
-                    <div style={{ padding: "18px 4px", height: "100%" }}>
-                      <span style={featIconBig}><f.icon size={20} color="var(--accent)" /></span>
-                      <div style={{ fontSize: 15, fontWeight: 700, marginTop: 13 }}>{f.t}</div>
-                      <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 6, lineHeight: 1.55 }}>{f.d}</div>
+                  { n: "Hundreds", l: "of sellable parts on an average car, most of them never listed." },
+                  { n: "Minutes", l: "to scan a whole vehicle into priced, ready-to-post listings." },
+                  { n: "5 places", l: "to sell at once: eBay, Facebook, OfferUp, Craigslist, your storefront." },
+                ].map((s) => (
+                  <Reveal key={s.n}>
+                    <div style={{ paddingTop: 18, borderTop: "2px solid var(--accent)" }}>
+                      <div className="cs-display" style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em" }}>{s.n}</div>
+                      <div style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.55, marginTop: 8, maxWidth: 280 }}>{s.l}</div>
                     </div>
                   </Reveal>
                 ))}
@@ -365,97 +177,176 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?:
             </div>
           </section>
 
-          {/* FAQ / questions */}
-          <section id="faq" style={{ borderTop: "1px solid var(--line)" }}>
-            <div style={{ maxWidth: 760, margin: "0 auto", padding: "72px 24px" }}>
-              <Reveal style={{ textAlign: "center", marginBottom: 32 }}>
-                <div className="cs-eyebrow">Questions</div>
-                <h2 className="cs-display" style={h2}>Answers before you ask</h2>
-              </Reveal>
-              <FAQ />
-            </div>
-          </section>
+          {/* How it works — numbered steps */}
+          <section id="how" style={{ maxWidth: 1080, margin: "0 auto", padding: "80px 24px 30px" }}>
+            <Reveal style={{ maxWidth: 660 }}>
+              <div className="cs-kicker">How it works</div>
+              <h2 className="cs-display" style={h2}>From a photo to posted, in four steps</h2>
+              <p style={{ color: "var(--muted)", fontSize: 16.5, marginTop: 12, lineHeight: 1.6 }}>
+                Snap photos and let the AI catalog, grade, and price. Prefer to type it in? Manual entry is there whenever you want it.
+              </p>
+            </Reveal>
 
-          {/* Book a demo / contact / feedback */}
-          <section id="contact" style={{ borderTop: "1px solid var(--line)" }}>
-            <div style={{ maxWidth: 1080, margin: "0 auto", padding: "72px 24px" }}>
-              <Reveal>
-                <div className="cs-glass" style={{ borderRadius: "var(--radius-xl)", padding: "44px 32px", textAlign: "center", border: "1.5px solid color-mix(in srgb, var(--accent) 32%, var(--line))" }}>
-                  <div className="cs-eyebrow">Get in touch</div>
-                  <h2 className="cs-display" style={{ ...h2, margin: "10px 0 0" }}>See Ahlam on your own inventory</h2>
-                  <p style={{ color: "var(--muted)", fontSize: 16, lineHeight: 1.6, margin: "12px auto 0", maxWidth: 520 }}>
-                    Book a quick walkthrough, reach out with a question, or take a look around. We answer fast.
-                  </p>
-                  <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 26 }}>
-                    <a href={CAL_DEMO_URL} target="_blank" rel="noopener noreferrer" className="cs-raise" style={{ ...solidBtn, padding: "13px 24px", fontSize: 15 }}><CalendarCheck size={17} /> Book a demo</a>
-                    <button onClick={() => window.open(GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question"), "_blank", "noopener")} style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15, cursor: "pointer" }}><Mail size={16} /> Contact us</button>
-                    <a href="#how" style={{ ...ghostBtn, padding: "13px 22px", fontSize: 15 }}><Compass size={16} /> Explore the product</a>
-                  </div>
-                  <div style={{ marginTop: 22, paddingTop: 20, borderTop: "1px solid var(--line)", fontSize: 14, color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-                    <MessageSquare size={15} color="var(--accent)" /> Have feedback or a feature request?
-                    <button onClick={() => window.open(GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam feedback"), "_blank", "noopener")} style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600, cursor: "pointer", background: "none", border: "none", fontSize: 14, fontFamily: "inherit", padding: 0 }}>Tell us what you think</button>
-                  </div>
-                </div>
-              </Reveal>
-            </div>
-          </section>
-
-          <footer style={{ borderTop: "1px solid var(--line)" }}>
-            <div className="cs-footer-grid" style={{ maxWidth: 1080, margin: "0 auto", padding: "52px 24px 28px", display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr 1fr", gap: 36 }}>
-              <div style={{ maxWidth: 300 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 9 }}><BrandChip size={28} /><span style={{ fontSize: 16, fontWeight: 700 }}>Ahlam</span></div>
-                <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6, margin: "14px 0 0" }}>Snap a photo. List every part everywhere: eBay, Facebook, OfferUp, Craigslist, and your own storefront.</p>
-              </div>
-              {[
-                { h: "Product", links: [["How it works", "#how"], ["Pricing", "#pricing"], ["The brain", "#faq"], ["Get started", "#"]] },
-                { h: "Resources", links: [["Guides", "/guides"], ["FAQ", "#faq"], ["Waitlist", "/waitlist"]] },
-                { h: "Company", links: [
-                  ["Book a demo", CAL_DEMO_URL, true],
-                  ["Contact us", null, false, () => window.open(GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam question"), "_blank", "noopener")],
-                  ["Feedback", null, false, () => window.open(GMAIL_COMPOSE(CONTACT_RECIPIENTS, "Ahlam feedback"), "_blank", "noopener")],
-                ]},
-              ].map((col) => (
-                <div key={col.h}>
-                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>{col.h}</div>
-                  <div style={{ display: "grid", gap: 10 }}>
-                    {col.links.map((link) => {
-                      const [label, href, external, onClick] = link;
-                      if (onClick) return (
-                        <button key={label} onClick={onClick} style={{ fontSize: 13.5, color: "var(--foreground)", textDecoration: "none", opacity: 0.82, background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit", padding: 0, width: "fit-content" }}>{label}</button>
-                      );
-                      if (external) return (
-                        <a key={label} href={href} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13.5, color: "var(--foreground)", textDecoration: "none", opacity: 0.82, width: "fit-content" }}>{label}</a>
-                      );
-                      return (
-                        <a key={label} href={href} style={{ fontSize: 13.5, color: "var(--foreground)", textDecoration: "none", opacity: 0.82, width: "fit-content" }}>{label}</a>
-                      );
-                    })}
-                  </div>
-                </div>
+            <div style={{ display: "grid", gap: 28, marginTop: 52 }}>
+              {STEPS.map((s, i) => (
+                <Step key={s.title} index={i} eyebrow={s.eyebrow} title={s.title} body={s.body} visual={s.visual()} flip={i % 2 === 1} />
               ))}
             </div>
-            <div style={{ borderTop: "1px solid var(--line)" }}>
-              <div style={{ maxWidth: 1080, margin: "0 auto", padding: "18px 24px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 12.5, color: "var(--muted)" }}>© {new Date().getFullYear()} Ahlam. All rights reserved.</span>
-                <a href="mailto:andygarcia@ahlam.io" style={{ ...navLink, marginLeft: "auto" }}>andygarcia@ahlam.io</a>
-                <a href={`mailto:${CONTACT_RECIPIENTS}`} style={navLink}>{CONTACT_EMAIL}</a>
-                <a href="/waitlist" style={ghostBtnSm}>Join the waitlist</a>
+          </section>
+
+          {/* Marketplace */}
+          <section id="marketplace" style={{ borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)", background: "color-mix(in srgb, var(--surface) 50%, var(--background))" }}>
+            <div style={{ maxWidth: 1080, margin: "0 auto", padding: "80px 24px" }}>
+              <Reveal style={{ maxWidth: 700 }}>
+                <div className="cs-kicker">Marketplace</div>
+                <h2 className="cs-display" style={h2}>A marketplace that works <span className="accent">both ways</span></h2>
+                <p style={{ color: "var(--muted)", fontSize: 16.5, marginTop: 12, lineHeight: 1.6, maxWidth: 640 }}>
+                  Sellers list parts in seconds with the AI. Buyers search every yard&apos;s inventory in one place and message the seller direct, with no middleman and no off-platform hand-off.
+                </p>
+              </Reveal>
+
+              <Reveal i={1} style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "26px 0 28px" }}>
+                <div className="cs-well" style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "9px 15px", fontSize: 13.5, fontWeight: 600 }}>
+                  <Compass size={16} color="var(--accent)" /> For buyers: find the exact part
+                </div>
+                <div className="cs-well" style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "9px 15px", fontSize: 13.5, fontWeight: 600 }}>
+                  <ShoppingBag size={16} color="var(--accent)" /> For sellers: reach every buyer
+                </div>
+              </Reveal>
+
+              <Reveal i={2} style={{ marginBottom: 22 }}>
+                <div className="cs-well" style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", maxWidth: 720 }}>
+                  <Compass size={18} color="var(--muted)" />
+                  <span style={{ color: "var(--muted)", fontSize: 14.5 }}>Search &ldquo;2014 Honda Accord front bumper&rdquo;, a VIN, or a part number&hellip;</span>
+                  <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Browse</span>
+                </div>
+              </Reveal>
+
+              <div className="cs-feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+                {MARKET_SAMPLE.map((l, i) => (
+                  <motion.div key={l.part + l.vehicle}
+                    initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px 0px" }}
+                    transition={{ delay: (i % 3) * 0.06, duration: 0.4, ease: EASE }}
+                    className="cs-card-btn cs-panel" style={{ padding: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}
+                  >
+                    <div className="cs-photo" style={{ height: 168, borderRadius: 0, border: "none", borderBottom: "1px solid var(--line)" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={l.img} alt={`${l.side ? `${l.side} ` : ""}${l.part} — ${l.vehicle}`} loading="lazy" />
+                      <span style={{ position: "absolute", top: 10, left: 10, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: "#fff", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}>
+                        <span style={{ width: 7, height: 7, borderRadius: 999, background: CONDITION_COLOR[l.grade] }} /> Grade {l.grade}
+                      </span>
+                      <span style={{ position: "absolute", top: 10, right: 10, fontSize: 13, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", borderRadius: 8, padding: "3px 9px" }}>${l.price}</span>
+                    </div>
+                    <div style={{ padding: 15, display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600 }}>{l.side ? `${l.side} ` : ""}{l.part}</div>
+                      <div style={{ fontSize: 12.5, color: "var(--muted)" }}>Fits {l.vehicle}</div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, paddingTop: 11, borderTop: "1px solid var(--line)" }}>
+                        <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{l.views} views · {l.loc}</span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 700, color: "var(--accent)" }}>
+                          <MessageSquare size={13} /> Message
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              <Reveal i={1} style={{ display: "flex", justifyContent: "center", marginTop: 34 }}>
+                <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtn, padding: "13px 24px", fontSize: 15 }}>Browse the marketplace <ArrowRight size={17} /></button>
+              </Reveal>
+            </div>
+          </section>
+
+          {/* How Ahlam works — the interactive capability "brain" + a flat capability row */}
+          <section id="works" style={{ borderBottom: "1px solid var(--line)" }}>
+            <div style={{ maxWidth: 1080, margin: "0 auto", padding: "80px 24px" }}>
+              <Reveal style={{ textAlign: "center", maxWidth: 680, margin: "0 auto" }}>
+                <div className="cs-kicker">The whole operation</div>
+                <h2 className="cs-display" style={h2}>Everything it takes to sell, in one place</h2>
+                <p style={{ color: "var(--muted)", fontSize: 16.5, lineHeight: 1.6, marginTop: 12 }}>
+                  From scanning and pricing to messaging, orders, and analytics, Ahlam runs the whole operation. Tap any capability to see what it does.
+                </p>
+              </Reveal>
+              <Reveal i={1} style={{ maxWidth: 760, margin: "40px auto 0" }}><BrainVisual /></Reveal>
+              <div className="cs-feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 28 }}>
+                {[
+                  { icon: Wrench, t: "Knows every part", d: "Names and grades every sellable part straight from a photo." },
+                  { icon: Tag, t: "Priced from real sales", d: "The median of what the same part sells for across platforms, never dragged down by lowball listings." },
+                  { icon: DollarSign, t: "Learns from your sales", d: "Every sale you make sharpens the next price it suggests." },
+                  { icon: Send, t: "Connected everywhere", d: "One brain behind every marketplace you list on." },
+                ].map((f, i) => (
+                  <Reveal key={f.t} i={i}>
+                    <div style={{ padding: "18px 2px", height: "100%" }}>
+                      <span style={flatIcon}><f.icon size={18} color="var(--accent)" /></span>
+                      <div style={{ fontSize: 15, fontWeight: 600, marginTop: 13 }}>{f.t}</div>
+                      <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 5, lineHeight: 1.55 }}>{f.d}</div>
+                    </div>
+                  </Reveal>
+                ))}
               </div>
             </div>
-          </footer>
+          </section>
+
+          {/* Pricing (hidden pre-launch via SHOW_PRICING) */}
+          {SHOW_PRICING && (
+            <section id="pricing" style={{ maxWidth: 1200, margin: "0 auto", padding: "78px 24px" }}>
+              <Reveal style={{ textAlign: "center", maxWidth: 680, margin: "0 auto" }}>
+                <div className="cs-kicker">Pricing</div>
+                <h2 className="cs-display" style={h2}>Simple, transparent pricing</h2>
+                <p style={{ color: "var(--muted)", fontSize: 15.5, marginTop: 10, lineHeight: 1.6 }}>Free for the first 50 yards, or go Solo for $19/mo if it&apos;s just you. No card to begin, cancel anytime.</p>
+              </Reveal>
+              <Reveal i={1} style={{ maxWidth: 1180, margin: "38px auto 0" }}>
+                <PricingPlans onChoose={onGetStarted} />
+              </Reveal>
+              <Reveal i={2} style={{ maxWidth: 680, margin: "30px auto 0", textAlign: "center" }}>
+                <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.65 }}>
+                  <strong style={{ color: "var(--foreground)" }}>No email or website? Most dismantlers don&apos;t.</strong> On the Ultimate plan we build and host one for you (a professional site, custom domain, and business email) so customers can find you, reach you, and keep coming back.
+                </p>
+              </Reveal>
+            </section>
+          )}
+
+          {/* FAQ */}
+          <section id="faq" style={{ borderTop: "1px solid var(--line)" }}>
+            <div style={{ maxWidth: 1080, margin: "0 auto", padding: "78px 24px", display: "grid", gridTemplateColumns: "0.7fr 1.3fr", gap: 44 }} className="cs-faq-grid">
+              <Reveal>
+                <div className="cs-kicker">Questions</div>
+                <h2 className="cs-display" style={{ ...h2, fontSize: 32 }}>Answers before you ask</h2>
+                <p style={{ color: "var(--muted)", fontSize: 15, lineHeight: 1.6, marginTop: 12 }}>Still wondering something? <a href={GMAIL_COMPOSE(RECIPIENTS, "Ahlam question")} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "none" }}>Ask us directly.</a></p>
+              </Reveal>
+              <Reveal i={1}><FAQ /></Reveal>
+            </div>
+          </section>
+
+          {/* CTA band */}
+          <section id="contact" style={{ borderTop: "1px solid var(--line)" }}>
+            <div style={{ maxWidth: 1080, margin: "0 auto", padding: "76px 24px" }}>
+              <Reveal>
+                <div style={{ borderRadius: "var(--radius-xl)", padding: "52px 40px", background: "var(--surface)", border: "1px solid var(--line)", position: "relative", overflow: "hidden" }}>
+                  <span aria-hidden style={{ position: "absolute", top: 0, left: 0, width: 6, height: "100%", background: "var(--accent)" }} />
+                  <div style={{ display: "grid", gridTemplateColumns: "1.3fr 0.7fr", gap: 36, alignItems: "center" }} className="cs-cta-grid">
+                    <div>
+                      <div className="cs-kicker">Get started</div>
+                      <h2 className="cs-display" style={{ ...h2, margin: "10px 0 0" }}>See Ahlam on your own inventory</h2>
+                      <p style={{ color: "var(--muted)", fontSize: 16, lineHeight: 1.6, margin: "12px 0 0", maxWidth: 520 }}>
+                        Join the waitlist for the free first month, or book a 15-minute walkthrough and we&apos;ll scan one of your cars live.
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtn, justifyContent: "center", padding: "14px 24px", fontSize: 15.5 }}>Join the waitlist <ArrowRight size={17} /></button>
+                      <a href={CAL_DEMO_URL} target="_blank" rel="noopener noreferrer" style={{ ...ghostBtn, justifyContent: "center", padding: "13px 22px", fontSize: 15 }}><CalendarCheck size={16} /> Book a demo</a>
+                      <button onClick={() => window.open(GMAIL_COMPOSE(RECIPIENTS, "Ahlam question"), "_blank", "noopener")} style={{ ...ghostBtn, justifyContent: "center", padding: "13px 22px", fontSize: 15, cursor: "pointer" }}><Mail size={16} /> Contact us</button>
+                    </div>
+                  </div>
+                </div>
+              </Reveal>
+            </div>
+          </section>
+
+          <SiteFooter />
         </div>
       </div>
     </MotionConfig>
-  );
-}
-
-// One partner: the brand logo stacked above a short category name.
-function Partner({ logo, caption }: { logo: React.ReactNode; caption: string }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 9, color: "var(--muted)", minWidth: 84 }}>
-      <div style={{ height: 26, display: "flex", alignItems: "center" }}>{logo}</div>
-      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.02em", opacity: 0.85 }}>{caption}</span>
-    </div>
   );
 }
 
@@ -464,13 +355,43 @@ const PARTNERS: { logo: React.ReactNode; caption: string }[] = [
   { logo: <LogoImg src="/logos/facebook.svg" alt="Facebook Marketplace" h={26} />, caption: "Facebook Marketplace" },
   { logo: <LogoImg src="/logos/offerup.svg" alt="OfferUp" h={22} />, caption: "OfferUp" },
   { logo: <LogoImg src="/logos/craigslist.svg" alt="Craigslist" h={19} />, caption: "Craigslist" },
-  // Car-Part.com's logo is dark ink on white, so it sits on a small white chip to
-  // stay legible on the dark strip (and true to brand colors).
   { logo: <span style={{ background: "#fff", borderRadius: 7, padding: "4px 8px", display: "inline-flex", alignItems: "center" }}><LogoImg src="/logos/carpart.jpg" alt="Car-Part.com" h={17} /></span>, caption: "Car-Part.com" },
 ];
 
-// "How Ahlam works": the core node drops in, then each capability builds out one
-// line + node at a time. Click a node for a two-line explainer.
+// --- Hero showcase: framed real photo + a solid AI-review card overlapping ----
+function HeroShowcase({ onPost }: { onPost?: () => void }) {
+  return (
+    <div style={{ position: "relative" }}>
+      <div className="cs-frame">
+        <div className="cs-frame__bar">
+          <span className="cs-frame__dot" style={{ background: "#ff5f57" }} />
+          <span className="cs-frame__dot" style={{ background: "#febc2e" }} />
+          <span className="cs-frame__dot" style={{ background: "#28c840" }} />
+          <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600 }}>Ahlam · New scan</span>
+          <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: "var(--success)", background: "color-mix(in srgb, var(--success) 15%, transparent)", borderRadius: 999, padding: "2px 9px" }}><ScanLine size={11} /> Whole car</span>
+        </div>
+        <div className="cs-photo" style={{ height: 250, borderRadius: 0, border: "none" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/img/hero-car.webp" alt="A 2016 Honda Accord scanned in a salvage yard" />
+          <span style={{ position: "absolute", top: 12, left: 12, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600, color: "#fff", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", borderRadius: 999, padding: "4px 10px" }}><Tag size={11} /> 2016 Honda Accord EX</span>
+        </div>
+        <div style={{ padding: 16 }}>
+          {[["Condition", "Runs & drives"], ["Parts found", "42 sellable"], ["Est. value", "$4,250"]].map(([k, v], i) => (
+            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13.5, padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid var(--line)" }}>
+              <span style={{ color: "var(--muted)" }}>{k}</span><span style={{ fontWeight: 600 }}>{v}</span>
+            </div>
+          ))}
+          {onPost && <button onClick={onPost} style={{ ...solidBtn, width: "100%", justifyContent: "center", marginTop: 10 }}><Send size={15} /> Review &amp; post listings</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- "How Ahlam works": the interactive capability brain --------------------
+// The core node drops in, then each capability builds out one line + node at a
+// time. Click a node for a two-line explainer; click the core to "capture" every
+// capability into the logo. Chips are solid (de-glassed) to match the page.
 const BRAIN_NODES = [
   { label: "Scanning", icon: ScanLine, x: 50, y: 13, desc: "Photograph a car and the AI finds every sellable part. No parts expert on staff required." },
   { label: "Listing", icon: Tag, x: 74, y: 20, desc: "Clean, ready-to-post listings written for you, with titles, fitment, condition, and sorted photos." },
@@ -484,28 +405,22 @@ const BRAIN_NODES = [
   { label: "Enterprise", icon: Building2, x: 26, y: 20, desc: "Multi-yard, SSO, and custom workflows, built to scale with larger operations." },
 ] as const;
 
-const BRAIN_BASE = 0.5; // delay before the build-out starts (after the core drops)
-const BRAIN_STEP = 0.42; // gap between each capability appearing
+const BRAIN_BASE = 0.5;
+const BRAIN_STEP = 0.42;
 
 function BrainVisual() {
   const [active, setActive] = React.useState<number | null>(null);
-  // "Captured": clicking the central aperture pulls every capability node into
-  // the logo (and fades the connectors); clicking again releases them.
   const [captured, setCaptured] = React.useState(false);
   const capturedRef = React.useRef(false);
   React.useEffect(() => { capturedRef.current = captured; }, [captured]);
 
-  // Live node positions in the SVG's 0–100 viewBox units (== % of the box), updated
-  // every frame by one rAF loop, so the connector LINES track the chips as they
-  // orbit — and as they get pulled into the centre on capture. Driving chips and
-  // line endpoints from the SAME numbers keeps them locked together.
   const wrapRef = React.useRef<HTMLDivElement>(null);
   const [pos, setPos] = React.useState<{ x: number; y: number; vis: number }[]>(() => BRAIN_NODES.map((n) => ({ x: n.x, y: n.y, vis: 1 })));
   React.useEffect(() => {
     const reduce = typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const orbit = BRAIN_NODES.map((_, i) => ({
-      r: reduce ? 0 : 3 + (i % 4),                          // orbit radius (~% of box)
-      speed: (0.16 + (i % 3) * 0.05) * (i % 2 ? -1 : 1),    // rad/s, alternating direction
+      r: reduce ? 0 : 3 + (i % 4),
+      speed: (0.16 + (i % 3) * 0.05) * (i % 2 ? -1 : 1),
       phase: (i / BRAIN_NODES.length) * Math.PI * 2,
     }));
     let raf = 0, grab = 0, inView = true;
@@ -516,12 +431,11 @@ function BrainVisual() {
     if (io && wrapRef.current) io.observe(wrapRef.current);
     const loop = (now: number) => {
       const t = (now - start) / 1000;
-      grab += ((capturedRef.current ? 1 : 0) - grab) * 0.12;   // ease toward captured / released
+      grab += ((capturedRef.current ? 1 : 0) - grab) * 0.12;
       if (inView || grab > 0.002) {
         setPos(BRAIN_NODES.map((n, i) => {
           const o = orbit[i], a = o.phase + t * o.speed;
           const ox = n.x + o.r * Math.cos(a), oy = n.y + o.r * Math.sin(a);
-          // Lerp each node from its orbit toward the centre by the capture amount.
           return { x: ox + (50 - ox) * grab, y: oy + (50 - oy) * grab, vis: 1 - grab };
         }));
       }
@@ -531,20 +445,20 @@ function BrainVisual() {
     return () => { cancelAnimationFrame(raf); io?.disconnect(); };
   }, []);
   return (
-    <div className="cs-glass" style={{ borderRadius: "var(--radius-xl)", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", borderBottom: "1px solid var(--line)" }}>
-        <span style={{ display: "flex", gap: 6 }}>
-          {["#ff5f57", "#febc2e", "#28c840"].map((c) => <span key={c} style={{ width: 11, height: 11, borderRadius: 999, background: c, opacity: 0.85 }} />)}
-        </span>
-        <span style={{ fontSize: 13, fontWeight: 600, marginLeft: 4 }}>How Ahlam works</span>
+    <div className="cs-frame">
+      <div className="cs-frame__bar">
+        <span className="cs-frame__dot" style={{ background: "#ff5f57" }} />
+        <span className="cs-frame__dot" style={{ background: "#febc2e" }} />
+        <span className="cs-frame__dot" style={{ background: "#28c840" }} />
+        <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600 }}>How Ahlam works</span>
         <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)" }}>Tap a capability</span>
       </div>
-      <div ref={wrapRef} style={{ position: "relative", height: "clamp(440px, 54vw, 560px)", background: "radial-gradient(60% 60% at 50% 50%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%)" }}>
+      <div ref={wrapRef} style={{ position: "relative", height: "clamp(440px, 54vw, 560px)", background: "radial-gradient(60% 60% at 50% 50%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%)" }}>
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
           {BRAIN_NODES.map((n, i) => {
             const on = active === i;
             const stroke = on ? "color-mix(in srgb, var(--accent) 85%, transparent)"
-              : active == null ? "color-mix(in srgb, var(--accent) 36%, transparent)"
+              : active == null ? "color-mix(in srgb, var(--accent) 34%, transparent)"
               : "color-mix(in srgb, var(--accent) 12%, transparent)";
             return (
               <motion.line key={n.label} x1={50} y1={50} x2={pos[i].x} y2={pos[i].y}
@@ -561,13 +475,9 @@ function BrainVisual() {
           const on = active === i;
           return (
             <div key={n.label} style={{
-              position: "absolute",
-              // Live position from the rAF loop: the chip orbits here, and the
-              // connector line ends at this exact point, so they move together.
-              left: `${pos[i].x}%`, top: `${pos[i].y}%`,
+              position: "absolute", left: `${pos[i].x}%`, top: `${pos[i].y}%`,
               transform: "translate(-50%, -50%)", opacity: pos[i].vis,
-              pointerEvents: captured ? "none" : "auto",
-              zIndex: on ? 6 : 3,
+              pointerEvents: captured ? "none" : "auto", zIndex: on ? 6 : 3,
             }}>
               <motion.button
                 initial={{ opacity: 0, scale: 0.5 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true, margin: "-80px" }}
@@ -577,10 +487,9 @@ function BrainVisual() {
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 12px", borderRadius: 999,
                   fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer", color: "var(--foreground)",
-                  background: on ? "color-mix(in srgb, var(--accent) 22%, var(--surface))" : "color-mix(in srgb, var(--surface) 74%, transparent)",
-                  backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
-                  border: `1px solid ${on ? "color-mix(in srgb, var(--accent) 70%, transparent)" : "color-mix(in srgb, var(--foreground) 12%, transparent)"}`,
-                  boxShadow: on ? "0 0 26px -4px color-mix(in srgb, var(--accent) 60%, transparent)" : "0 12px 26px -18px rgba(0,0,0,0.7)",
+                  background: on ? "color-mix(in srgb, var(--accent) 16%, var(--surface))" : "var(--surface)",
+                  border: `1px solid ${on ? "color-mix(in srgb, var(--accent) 60%, transparent)" : "var(--line)"}`,
+                  boxShadow: on ? "0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent)" : "0 8px 20px -16px rgba(0,0,0,0.7)",
                 }}
               >
                 <Icon size={14} color="var(--accent)" /> {n.label}
@@ -589,14 +498,11 @@ function BrainVisual() {
           );
         })}
 
-        {/* Core node — the aperture. Click to "capture" every capability into the
-            logo; click again to release them. Theme-aware mark (gold in dark, ink
-            in light). */}
+        {/* Core node — click to capture/release every capability into the mark. */}
         <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", zIndex: 7, display: "grid", placeItems: "center" }}>
           <motion.button onClick={() => { setActive(null); setCaptured((c) => !c); }} aria-label={captured ? "Release capabilities" : "Capture capabilities"} title={captured ? "Click to release" : "Click to capture"} aria-pressed={captured}
             initial={{ opacity: 0, y: -52 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-80px" }} transition={{ duration: 0.55, ease: [0.34, 1.3, 0.5, 1] }}
-            className="cs-float"
-            style={{ width: 78, height: 78, borderRadius: 999, display: "grid", placeItems: "center", cursor: "pointer", background: "color-mix(in srgb, var(--accent) 20%, var(--surface))", border: "1.5px solid color-mix(in srgb, var(--accent) 60%, transparent)", boxShadow: captured ? "0 0 70px -2px color-mix(in srgb, var(--accent) 88%, transparent)" : "0 0 48px -8px color-mix(in srgb, var(--accent) 65%, transparent)", transition: "box-shadow 0.45s ease" }}>
+            style={{ width: 78, height: 78, borderRadius: 999, display: "grid", placeItems: "center", cursor: "pointer", background: "color-mix(in srgb, var(--accent) 14%, var(--surface))", border: "1.5px solid color-mix(in srgb, var(--accent) 55%, transparent)", boxShadow: captured ? "0 0 0 6px color-mix(in srgb, var(--accent) 18%, transparent)" : "0 10px 30px -14px rgba(0,0,0,0.6)", transition: "box-shadow 0.45s ease" }}>
             <motion.span animate={{ rotate: captured ? 135 : 0, scale: captured ? 1.12 : 1 }} transition={{ duration: 0.5, ease: EASE }} style={{ display: "grid", placeItems: "center" }}>
               <span className="brand-chip__dark" style={{ placeItems: "center" }}><BrandMark size={38} /></span>
               <span className="brand-chip__light" style={{ placeItems: "center" }}><BrandMark size={38} gold="#101A2C" goldDark="#1E2A40" ring="#101A2C" iris="#D8392E" /></span>
@@ -604,7 +510,6 @@ function BrainVisual() {
           </motion.button>
         </div>
 
-        {/* Click-to-explain popover, anchored between the node and the center */}
         <AnimatePresence>
           {active != null && (() => {
             const n = BRAIN_NODES[active];
@@ -612,9 +517,9 @@ function BrainVisual() {
             const py = n.y + (50 - n.y) * 0.42;
             const Icon = n.icon;
             return (
-              <motion.div key="pop" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ duration: 0.22, ease: EASE }}
+              <motion.div key="pop" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ duration: 0.2, ease: EASE }}
                 style={{ position: "absolute", left: `${px}%`, top: `${py}%`, transform: "translate(-50%, -50%)", zIndex: 10, width: 232 }}>
-                <div className="cs-glass" style={{ borderRadius: "var(--radius-md)", padding: 16, border: "1px solid color-mix(in srgb, var(--accent) 45%, var(--line))", boxShadow: "0 24px 60px -24px rgba(0,0,0,0.8)" }}>
+                <div className="cs-panel" style={{ padding: 16, border: "1px solid color-mix(in srgb, var(--accent) 45%, var(--line))", boxShadow: "0 24px 60px -24px rgba(0,0,0,0.8)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
                     <span style={{ display: "grid", placeItems: "center", width: 26, height: 26, borderRadius: 8, background: "var(--accent-tint)" }}><Icon size={15} color="var(--accent)" /></span>
                     <span style={{ fontSize: 14, fontWeight: 700 }}>{n.label}</span>
@@ -631,152 +536,65 @@ function BrainVisual() {
   );
 }
 
-// FAQ accordion — one open at a time, smooth height animation.
-function FAQ() {
-  const [open, setOpen] = React.useState<number | null>(0);
-  return (
-    <div style={{ display: "grid", gap: 10 }}>
-      {FAQS.map((it, i) => {
-        const on = open === i;
-        return (
-          <motion.div key={it.q} initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px" }} transition={{ delay: i * 0.05, duration: 0.45, ease: EASE }}
-            className="cs-glass" style={{ borderRadius: "var(--radius-md)", overflow: "hidden", borderColor: on ? "color-mix(in srgb, var(--accent) 40%, var(--line))" : undefined }}>
-            <button onClick={() => setOpen(on ? null : i)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, padding: "17px 20px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: "var(--foreground)" }}>
-              <span style={{ fontSize: 15.5, fontWeight: 600 }}>{it.q}</span>
-              <motion.span animate={{ rotate: on ? 180 : 0 }} transition={{ duration: 0.3, ease: EASE }} style={{ display: "grid", placeItems: "center", flexShrink: 0, color: on ? "var(--accent)" : "var(--muted)" }}><ChevronDown size={18} /></motion.span>
-            </button>
-            <AnimatePresence initial={false}>
-              {on && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.32, ease: EASE }} style={{ overflow: "hidden" }}>
-                  <p style={{ margin: 0, padding: "0 20px 18px", fontSize: 14.5, lineHeight: 1.65, color: "var(--muted)" }}>{it.a}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        );
-      })}
-    </div>
-  );
-}
-
-// The AI review card shown in the hero and the pricing step.
-function ReviewCard({ onPost, float }: { onPost?: () => void; float?: boolean }) {
-  return (
-    <div className={`cs-glass${float ? " cs-float" : ""}`} style={{ borderRadius: "var(--radius-xl)", padding: 20, position: "relative", overflow: "hidden", ...(float ? { background: "var(--surface)", backdropFilter: "none" } : null) }}>
-      <div className="cs-scanline" aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 64, background: "linear-gradient(180deg, color-mix(in srgb, var(--sand) 26%, transparent), transparent)", pointerEvents: "none" }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, position: "relative" }}>
-        <ScanLine size={16} color="var(--accent)" /><span style={{ fontWeight: 600, fontSize: 13 }}>AI review card</span>
-        <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "var(--success)", background: "color-mix(in srgb, var(--success) 16%, transparent)", borderRadius: 999, padding: "2px 9px" }}>Whole car</span>
-      </div>
-      {/* Listing photo, inside the card (B&W to match the editorial look) */}
-      <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
-        <img src="https://loremflickr.com/g/440/240/honda,sedan,car?lock=24" alt="Scanned car" style={{ display: "block", width: "100%", height: 150, objectFit: "cover", filter: "grayscale(1) contrast(1.05)" }} />
-        <span style={{ position: "absolute", top: 10, left: 10, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: "#fff", background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", borderRadius: 999, padding: "3px 9px" }}><Tag size={11} /> 2016 Honda Accord</span>
-      </div>
-      {/* Vehicle module: the scanned car + how many parts the AI found */}
-      <div style={{ display: "flex", alignItems: "center", gap: 11, border: "1px solid var(--line)", background: "var(--accent-tint)", borderRadius: 12, padding: "11px 13px", marginBottom: 8 }}>
-        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 9, background: "color-mix(in srgb, var(--accent) 16%, transparent)", color: "var(--accent)", flexShrink: 0 }}><Car size={18} /></span>
-        <div style={{ lineHeight: 1.25 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--muted)" }}>Vehicle</div>
-          <div style={{ fontSize: 13.5, fontWeight: 700 }}>2016 Honda Accord EX</div>
-        </div>
-        <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 12%, transparent)", borderRadius: 999, padding: "3px 9px", flexShrink: 0 }}>42 parts</span>
-      </div>
-      {[["Condition", "Runs & drives"], ["Est. value", "$4,250"]].map(([k, v]) => (
-        <div key={k} style={previewRow}><span style={{ color: "var(--muted)" }}>{k}</span><span style={{ fontWeight: 600 }}>{v}</span></div>
-      ))}
-      {onPost && <button onClick={onPost} style={{ ...solidBtn, width: "100%", justifyContent: "center", marginTop: 14 }}><Send size={15} /> Post listing</button>}
-    </div>
-  );
-}
-
-// --- Step section -----------------------------------------------------------
-
+// --- Numbered step --------------------------------------------------------
 function Step({ index, eyebrow, title, body, visual, flip }: { index: number; eyebrow: string; title: string; body: string; visual: React.ReactNode; flip?: boolean }) {
-  // Copy fades up; the visual slides in from its own side, with a soft blur.
-  const dir = flip ? -36 : 36;
   return (
     <motion.div
-      initial="hidden" whileInView="show" viewport={{ once: true, margin: "-110px" }}
+      initial="hidden" whileInView="show" viewport={{ once: true, margin: "-90px" }}
       className="cs-step-grid"
-      style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40, alignItems: "center" }}
+      style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 44, alignItems: "center" }}
     >
-      <motion.div
-        variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.25, ease: EASE } } }}
-        style={{ order: flip ? 2 : 1 }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 999, background: "var(--accent-tint)", color: "var(--accent)", fontWeight: 800, fontSize: 14 }}>{index + 1}</span>
-          <span className="cs-eyebrow">{eyebrow}</span>
+      <motion.div variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE } } }} style={{ order: flip ? 2 : 1 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+          <span className="cs-index" style={{ fontSize: 30 }}>{String(index + 1).padStart(2, "0")}</span>
+          <span className="cs-kicker" style={{ color: "var(--sand)" }}>{eyebrow}</span>
         </div>
-        <h3 className="cs-display" style={{ fontSize: 27, fontWeight: 600, letterSpacing: "-0.015em", margin: "14px 0 0", lineHeight: 1.2 }}>{title}</h3>
-        <p style={{ fontSize: 15.5, color: "var(--muted)", lineHeight: 1.65, margin: "10px 0 0", maxWidth: 440 }}>{body}</p>
+        <h3 className="cs-display" style={{ fontSize: 28, fontWeight: 600, letterSpacing: "-0.02em", margin: "12px 0 0", lineHeight: 1.18 }}>{title}</h3>
+        <p style={{ fontSize: 15.5, color: "var(--muted)", lineHeight: 1.65, margin: "12px 0 0", maxWidth: 440 }}>{body}</p>
       </motion.div>
-      <motion.div
-        variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.25, ease: EASE, delay: 0.05 } } }}
-        style={{ order: flip ? 1 : 2 }}
-      >
+      <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE, delay: 0.05 } } }} style={{ order: flip ? 1 : 2 }}>
         {visual}
       </motion.div>
     </motion.div>
   );
 }
 
-// Step 1 — scanning a photo
+// Step 1 — capture (framed real photo with subtle reticle)
 function ScanVisual() {
   return (
-    <div className="cs-glass" style={{ borderRadius: "var(--radius-xl)", padding: 16 }}>
-      <div className="photo-cell" style={{ height: 250, borderRadius: "var(--radius-md)", position: "relative", overflow: "hidden", display: "grid", placeItems: "center" }}>
-        <CarArt />
-        {/* scanning reticle */}
-        {[{ t: 14, l: 14, r: "tl" }, { t: 14, l: "auto", r: "tr" }, { b: 14, l: 14, r: "bl" }, { b: 14, l: "auto", r: "br" }].map((c, i) => (
+    <div className="cs-frame">
+      <div className="cs-photo" style={{ height: 252, borderRadius: 0, border: "none" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/img/scan-lot.webp" alt="Cars in a salvage yard lot" />
+        {[{ t: true, l: true }, { t: true, l: false }, { t: false, l: true }, { t: false, l: false }].map((c, i) => (
           <span key={i} style={cornerStyle(c)} />
         ))}
-        <div className="cs-scanline" aria-hidden="true" style={{ position: "absolute", left: 10, right: 10, top: 0, height: 78, background: "linear-gradient(180deg, color-mix(in srgb, var(--accent) 34%, transparent), transparent)" }} />
-        <span style={{ position: "absolute", bottom: 14, left: 14, fontSize: 11.5, fontWeight: 700, color: "#fff", background: "color-mix(in srgb, var(--accent) 86%, transparent)", borderRadius: 999, padding: "4px 11px", display: "inline-flex", gap: 6, alignItems: "center" }}><ScanLine size={12} /> Scanning</span>
+        <span style={{ position: "absolute", bottom: 14, left: 14, fontSize: 11.5, fontWeight: 700, color: "#fff", background: "color-mix(in srgb, var(--accent) 88%, transparent)", borderRadius: 999, padding: "4px 11px", display: "inline-flex", gap: 6, alignItems: "center" }}><Camera size={12} /> Up to 15 photos per car</span>
       </div>
     </div>
   );
 }
 
-// Stylized car illustration used inside the scan frame (self-contained SVG, no
-// external image asset). Easy to swap for a real photo later.
-function CarArt() {
-  return (
-    <svg viewBox="0 0 260 130" width="82%" style={{ maxWidth: 320 }} aria-hidden="true">
-      <ellipse cx="130" cy="113" rx="104" ry="8" fill="rgba(0,0,0,0.28)" />
-      <path d="M22 86 C22 74 30 69 44 67 L74 62 C86 48 104 41 130 41 L160 41 C188 41 210 53 226 70 L236 73 C244 75 246 80 246 86 L246 90 C246 95 242 97 237 97 L31 97 C26 97 22 94 22 89 Z"
-        fill="color-mix(in srgb, var(--accent) 24%, var(--surface2))" stroke="color-mix(in srgb, var(--accent) 55%, transparent)" strokeWidth="1.6" />
-      <path d="M84 60 C94 49 108 44 130 44 L158 44 C178 44 196 53 210 66 L84 66 Z"
-        fill="color-mix(in srgb, var(--background) 72%, transparent)" stroke="color-mix(in srgb, var(--accent) 40%, transparent)" strokeWidth="1.2" />
-      <line x1="135" y1="44" x2="135" y2="66" stroke="color-mix(in srgb, var(--accent) 40%, transparent)" strokeWidth="1.2" />
-      <rect x="231" y="77" width="11" height="7" rx="2.5" fill="color-mix(in srgb, var(--signal) 75%, transparent)" />
-      <circle cx="80" cy="97" r="18" fill="#0d1524" />
-      <circle cx="80" cy="97" r="8" fill="color-mix(in srgb, var(--accent) 62%, var(--surface))" />
-      <circle cx="190" cy="97" r="18" fill="#0d1524" />
-      <circle cx="190" cy="97" r="8" fill="color-mix(in srgb, var(--accent) 62%, var(--surface))" />
-    </svg>
-  );
-}
-
-// Step 2 — detected parts list, staggered
+// Step 2 — detected parts list
 function PartsVisual() {
-  const parts = [["Hood", "Grade A"], ["Left Headlight", "Grade B"], ["Alternator", "Grade B"], ["Front Bumper Cover", "Grade C"]];
+  const parts = [["Hood", "A"], ["Left Headlight", "B"], ["Alternator", "B"], ["Front Bumper Cover", "C"]];
   return (
-    <div className="cs-glass" style={{ borderRadius: "var(--radius-xl)", padding: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <Sparkles size={16} color="var(--accent)" /><span style={{ fontWeight: 600, fontSize: 13 }}>Parts detected</span>
-        <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)" }}>4 found</span>
+    <div className="cs-panel" style={{ padding: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <Boxes size={16} color="var(--accent)" /><span style={{ fontWeight: 600, fontSize: 13 }}>Parts detected</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)" }}>4 of 42 shown</span>
       </div>
       <div style={{ display: "grid", gap: 8 }}>
         {parts.map(([name, grade], i) => (
           <motion.div key={name}
-            initial={{ opacity: 0, x: -12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true, margin: "-60px" }}
-            transition={{ delay: 0.15 + i * 0.12, duration: 0.4, ease: EASE }}
-            style={{ ...previewRow, marginTop: 0 }}
+            initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true, margin: "-50px" }}
+            transition={{ delay: 0.1 + i * 0.1, duration: 0.35, ease: EASE }}
+            className="cs-well" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 13px" }}
           >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><Check size={14} color="var(--success)" /> {name}</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)" }}>{grade}</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 9, fontSize: 13.5 }}><Check size={14} color="var(--success)" /> {name}</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, color: CONDITION_COLOR[grade as string] }}>
+              <span style={{ width: 7, height: 7, borderRadius: 999, background: CONDITION_COLOR[grade as string] }} /> Grade {grade}
+            </span>
           </motion.div>
         ))}
       </div>
@@ -784,26 +602,26 @@ function PartsVisual() {
   );
 }
 
-// Step 3 — pricing from comps (review card + comp bars)
+// Step 3 — pricing from comps
 function PriceVisual() {
   return (
-    <div className="cs-glass" style={{ borderRadius: "var(--radius-xl)", padding: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+    <div className="cs-panel" style={{ padding: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <Tag size={16} color="var(--accent)" /><span style={{ fontWeight: 600, fontSize: 13 }}>What this part sells for</span>
-        <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "var(--success)" }}>Suggested $85</span>
+        <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "var(--success)" }}>Suggested $85</span>
       </div>
-      <div style={{ display: "grid", gap: 9 }}>
+      <div style={{ display: "grid", gap: 10 }}>
         {[["$72", 54], ["$80", 66], ["$85", 78], ["$91", 70], ["$98", 58]].map(([label, w], i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span className="tnum" style={{ fontSize: 12, color: "var(--muted)", width: 34 }}>{label}</span>
             <div style={{ flex: 1, height: 9, borderRadius: 999, background: "var(--surface2)", overflow: "hidden" }}>
-              <motion.div initial={{ width: 0 }} whileInView={{ width: `${w}%` }} viewport={{ once: true, margin: "-60px" }} transition={{ delay: 0.2 + i * 0.1, duration: 0.6, ease: EASE }}
+              <motion.div initial={{ width: 0 }} whileInView={{ width: `${w}%` }} viewport={{ once: true, margin: "-50px" }} transition={{ delay: 0.15 + i * 0.08, duration: 0.55, ease: EASE }}
                 style={{ height: "100%", borderRadius: 999, background: (w as number) >= 78 ? "var(--accent)" : "color-mix(in srgb, var(--accent) 45%, var(--surface2))" }} />
             </div>
           </div>
         ))}
       </div>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 12, lineHeight: 1.5 }}>We suggest the median of real sales, so lowball or knock-off listings can&apos;t drag it down.</div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 14, lineHeight: 1.5 }}>We suggest the median of real sales, so lowball or knock-off listings can&apos;t drag it down.</div>
     </div>
   );
 }
@@ -817,16 +635,17 @@ function PostVisual() {
     <LogoImg key="c" src="/logos/craigslist.svg" alt="Craigslist" h={16} />,
   ];
   return (
-    <div className="cs-glass" style={{ borderRadius: "var(--radius-xl)", padding: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+    <div className="cs-panel" style={{ padding: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <Send size={16} color="var(--accent)" /><span style={{ fontWeight: 600, fontSize: 13 }}>Posted to</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "var(--success)" }}>One scan, every channel</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {channels.map((c, i) => (
           <motion.div key={i}
-            initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true, margin: "-60px" }}
-            transition={{ delay: 0.15 + i * 0.12, duration: 0.4, ease: EASE }}
-            style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between", color: "var(--muted)", background: "color-mix(in srgb, var(--surface2) 70%, transparent)", borderRadius: 10, padding: "12px 14px" }}
+            initial={{ opacity: 0, scale: 0.96 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true, margin: "-50px" }}
+            transition={{ delay: 0.1 + i * 0.1, duration: 0.35, ease: EASE }}
+            className="cs-well" style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between", padding: "12px 14px" }}
           >
             <span style={{ display: "inline-flex", alignItems: "center", color: "var(--foreground)" }}>{c}</span>
             <Check size={15} color="var(--success)" />
@@ -844,33 +663,44 @@ const STEPS = [
   { eyebrow: "Publish", title: "Post everywhere at once", body: "Auto-post to eBay and copy clean, ready-to-paste listings for Facebook, OfferUp, and Craigslist, plus your own Ahlam storefront. One scan, every channel.", visual: () => <PostVisual /> },
 ] as const;
 
-const navLink: React.CSSProperties = { color: "var(--muted)", textDecoration: "none", fontSize: 13.5, fontWeight: 600, padding: "8px 10px", borderRadius: 8 };
-const ghostBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 10, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13.5, fontWeight: 600, cursor: "pointer" };
-const solidBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 18px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer" };
-const ghostBtnSm: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 600, cursor: "pointer" };
-const solidBtnSm: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 15px", borderRadius: 999, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" };
-const navDivider: React.CSSProperties = { width: 1, height: 18, background: "color-mix(in srgb, var(--foreground) 14%, transparent)", margin: "0 3px", flexShrink: 0 };
-const pill: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 8, borderRadius: 999, border: "1px solid color-mix(in srgb, var(--accent) 22%, transparent)", background: "var(--accent-tint)", padding: "5px 13px", fontSize: 12.5, fontWeight: 600, color: "var(--accent)" };
-const pillDot: React.CSSProperties = { width: 6, height: 6, borderRadius: 999, background: "var(--accent)", animation: "pulse-dot 1.8s infinite" };
-const previewRow: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", background: "color-mix(in srgb, var(--surface2) 70%, transparent)", borderRadius: 9, padding: "10px 13px", fontSize: 13, marginTop: 8 };
-const h2: React.CSSProperties = { fontSize: 36, fontWeight: 600, letterSpacing: "-0.015em", margin: "10px 0 0", lineHeight: 1.12 };
-const featIconBig: React.CSSProperties = { display: "inline-grid", placeItems: "center", width: 46, height: 46, borderRadius: 13, background: "linear-gradient(150deg, color-mix(in srgb, var(--accent) 26%, transparent), color-mix(in srgb, var(--accent) 8%, transparent))", border: "1px solid color-mix(in srgb, var(--accent) 28%, transparent)" };
+// FAQ accordion
+function FAQ() {
+  const [open, setOpen] = React.useState<number | null>(0);
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      {FAQS.map((it, i) => {
+        const on = open === i;
+        return (
+          <div key={it.q} className="cs-panel" style={{ overflow: "hidden", borderColor: on ? "color-mix(in srgb, var(--accent) 40%, var(--line))" : undefined }}>
+            <button onClick={() => setOpen(on ? null : i)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, padding: "16px 19px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: "var(--foreground)" }}>
+              <span style={{ fontSize: 15.5, fontWeight: 600 }}>{it.q}</span>
+              <motion.span animate={{ rotate: on ? 180 : 0 }} transition={{ duration: 0.25, ease: EASE }} style={{ display: "grid", placeItems: "center", flexShrink: 0, color: on ? "var(--accent)" : "var(--muted)" }}><ChevronDown size={18} /></motion.span>
+            </button>
+            <AnimatePresence initial={false}>
+              {on && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: EASE }} style={{ overflow: "hidden" }}>
+                  <p style={{ margin: 0, padding: "0 19px 17px", fontSize: 14.5, lineHeight: 1.65, color: "var(--muted)" }}>{it.a}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
-function cornerStyle(c: { t?: number; b?: number; l?: number | string; r: string }): React.CSSProperties {
-  const base: React.CSSProperties = { position: "absolute", width: 22, height: 22, borderColor: "color-mix(in srgb, var(--accent) 80%, transparent)", borderStyle: "solid", borderWidth: 0 };
-  const top = c.r[0] === "t";
-  const left = c.r[1] === "l";
+const ghostBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 10, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13.5, fontWeight: 600, cursor: "pointer", textDecoration: "none" };
+const solidBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer", textDecoration: "none" };
+const h2: React.CSSProperties = { fontSize: 38, fontWeight: 600, letterSpacing: "-0.02em", margin: "14px 0 0", lineHeight: 1.1 };
+const flatIcon: React.CSSProperties = { display: "inline-grid", placeItems: "center", width: 38, height: 38, borderRadius: 10, background: "var(--accent-tint)", border: "1px solid color-mix(in srgb, var(--accent) 22%, transparent)", flexShrink: 0 };
+
+function cornerStyle(c: { t: boolean; l: boolean }): React.CSSProperties {
   return {
-    ...base,
-    [top ? "top" : "bottom"]: 14,
-    [left ? "left" : "right"]: 14,
-    borderTopWidth: top ? 3 : 0,
-    borderBottomWidth: top ? 0 : 3,
-    borderLeftWidth: left ? 3 : 0,
-    borderRightWidth: left ? 0 : 3,
-    borderTopLeftRadius: top && left ? 6 : 0,
-    borderTopRightRadius: top && !left ? 6 : 0,
-    borderBottomLeftRadius: !top && left ? 6 : 0,
-    borderBottomRightRadius: !top && !left ? 6 : 0,
+    position: "absolute", width: 24, height: 24, borderColor: "#fff", borderStyle: "solid", borderWidth: 0,
+    [c.t ? "top" : "bottom"]: 14, [c.l ? "left" : "right"]: 14,
+    borderTopWidth: c.t ? 3 : 0, borderBottomWidth: c.t ? 0 : 3,
+    borderLeftWidth: c.l ? 3 : 0, borderRightWidth: c.l ? 0 : 3,
+    opacity: 0.9,
   };
 }

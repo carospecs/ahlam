@@ -22,6 +22,7 @@ export interface Guide {
   category: string;
   readMinutes: number;
   updated: string; // ISO date
+  image: string; // hero / thumbnail from /public
   intro: string;
   sections: GuideSection[];
   faqs?: { q: string; a: string }[];
@@ -36,6 +37,7 @@ export const GUIDES: Guide[] = [
     category: "Pricing",
     readMinutes: 6,
     updated: "2026-05-01",
+    image: "/marketplace/alternator.webp",
     intro:
       "A used alternator is one of the most commonly pulled and re-sold parts in any yard. Price it too high and it sits. Price it too low and you leave money on the bench. Here is how experienced yards actually land on a number.",
     sections: [
@@ -83,6 +85,7 @@ export const GUIDES: Guide[] = [
     category: "Selling strategy",
     readMinutes: 5,
     updated: "2026-04-15",
+    image: "/img/aud-dealer.webp",
     intro:
       "Used-parts demand is seasonal and predictable. Aligning what you pull and list with the calendar can meaningfully shorten how long inventory sits.",
     sections: [
@@ -123,6 +126,7 @@ export const GUIDES: Guide[] = [
     category: "Software",
     readMinutes: 8,
     updated: "2026-06-01",
+    image: "/img/compare.webp",
     intro:
       "The right software depends on your size and workflow. Here is a candid comparison of the main options yards weigh in 2026, including where each is strong and where it falls short.",
     sections: [

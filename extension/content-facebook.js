@@ -1,8 +1,10 @@
-// Runs on Facebook Marketplace "create item". Reads the staged Ahlam listing and
-// fills Title / Price / Description + attaches the photos. Facebook's form is a
-// dynamic React app with localized, frequently-changing labels, so every step is
-// best-effort with fallbacks; whatever can't be auto-filled is still on the
-// clipboard for a manual paste.
+// Runs on Facebook Marketplace "create item" AND "create vehicle". Reads the
+// staged Ahlam listing and fills the right form: a PART goes to the item form
+// (Title / Price / Description + "Auto parts" category); a whole CAR goes to
+// Facebook's separate Vehicle form (Vehicle type / Year / Make / Model / Mileage
+// / Price / Description). Facebook's form is a dynamic React app with localized,
+// frequently-changing labels, so every step is best-effort with fallbacks;
+// whatever can't be auto-filled is still on the clipboard for a manual paste.
 
 (async function () {
   const data = await chrome.storage.local.get("ahlamStaged");
@@ -15,12 +17,21 @@
   if (Date.now() - (staged.ts || 0) > 5 * 60 * 1000) return;
 
   const L = staged.listing || {};
-  banner("Ahlam — filling your listing…");
+
+  // A whole-car listing → Facebook's Vehicle form. Detect from the URL we were
+  // routed to (background opens /create/vehicle), or from the listing itself.
+  const isVehicle =
+    location.pathname.includes("/create/vehicle") ||
+    L.kind === "vehicle" || L.type === "vehicle" || L.isVehicle === true ||
+    String(L.category || "").toLowerCase().includes("vehicle");
+
+  banner(isVehicle ? "Ahlam — filling your vehicle listing…" : "Ahlam — filling your listing…");
   // Clipboard fallback (so the seller can paste the full text if a field is missed).
   try { await navigator.clipboard.writeText(L.text || L.description || ""); } catch {}
 
   // ---- helpers -----------------------------------------------------------
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const digits = (v) => String(v == null ? "" : v).replace(/[^0-9.]/g, "");
   async function waitFor(fn, timeout = 20000, step = 250) {
     const end = Date.now() + timeout;
     while (Date.now() < end) { const v = fn(); if (v) return v; await sleep(step); }
@@ -56,8 +67,8 @@
       return new File([arr], name, { type: mime });
     } catch { return null; }
   }
-  // Facebook's Category/Condition are comboboxes (a button that opens a listbox).
-  // Best-effort: find by label text, open it, click the option whose text matches.
+  // Facebook's Category/Condition/Vehicle dropdowns are comboboxes (a button that
+  // opens a listbox). Best-effort: find by label text, open it, click the match.
   function findCombo(labels) {
     const cands = [...document.querySelectorAll('[role="combobox"],[aria-haspopup="listbox"],[role="button"],label')];
     for (const lbl of labels) {
@@ -67,7 +78,7 @@
     return null;
   }
   async function pickCombo(labels, optionText) {
-    if (!optionText) return false;
+    if (optionText == null || optionText === "") return false;
     const combo = findCombo(labels);
     if (!combo) return false;
     combo.click();
@@ -79,6 +90,16 @@
     }, 3500, 200);
     if (opt) { opt.click(); return true; }
     document.body.click(); // close popup if nothing matched
+    return false;
+  }
+  // Make/Model on the Vehicle form render as a DROPDOWN once Vehicle type + Year
+  // are set, but can be a plain text input in other states. Try the dropdown
+  // first, then fall back to typing. (Verified against the live FB vehicle form.)
+  async function setComboOrText(labels, value) {
+    if (value == null || value === "") return false;
+    if (await pickCombo(labels, value)) return true;
+    const el = fieldBy(labels);
+    if (el) { setNativeValue(el, String(value)); return true; }
     return false;
   }
   // Category is a special case: opening it lists plain <div> rows (not role=option),
@@ -101,7 +122,7 @@
     return false;
   }
 
-  // ---- 1. Photos (FB often reveals the text fields only after a photo) ----
+  // ---- 1. Photos (FB often reveals the other fields only after a photo) ----
   if (Array.isArray(L.photoData) && L.photoData.length) {
     const input = await waitFor(() =>
       document.querySelector('input[type="file"][accept*="image"]') || document.querySelector('input[type="file"]')
@@ -116,27 +137,70 @@
     }
   }
 
-  // ---- 2. Title / Price / Description ------------------------------------
-  const title = await waitFor(() => fieldBy(["title"]), 20000);
-  if (title) setNativeValue(title, String(L.title || "").slice(0, 100));
+  let filled = [];
+  let missing = [];
 
-  const price = fieldBy(["price"]);
-  if (price && L.price != null && L.price !== "") setNativeValue(price, String(L.price).replace(/[^0-9.]/g, ""));
+  if (isVehicle) {
+    // ---- VEHICLE form (verified live): type → year → make → model → ... -------
+    // Order matters: picking Make re-renders Model, so Make must come BEFORE Model
+    // or Model gets cleared. Each pick needs a beat for the next field to populate.
+    const vtype = L.vehicleType || "Car/Truck";
+    const typeOk = await pickCombo(["vehicle type", "type"], vtype);
+    await sleep(900); // let Year/Make render
 
-  // Description is usually a textarea; fall back to any contenteditable.
-  let desc = fieldBy(["description", "details", "tell"]);
-  if (!desc) desc = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]');
-  if (desc) {
-    if (desc.isContentEditable) { desc.focus(); document.execCommand("insertText", false, L.description || L.text || ""); }
-    else setNativeValue(desc, L.description || L.text || "");
+    const yearOk = await pickCombo(["year"], L.year != null ? String(L.year) : "");
+    await sleep(500);
+    const makeOk = await setComboOrText(["make"], L.make);
+    await sleep(700); // Make selection re-renders Model
+    const modelOk = await setComboOrText(["model"], L.model);
+    await sleep(200);
+
+    const mileageEl = fieldBy(["mileage", "miles", "odometer"]);
+    const mileageVal = digits(L.mileage);
+    if (mileageEl && mileageVal) setNativeValue(mileageEl, mileageVal);
+
+    const priceEl = fieldBy(["price"]);
+    if (priceEl && L.price != null && L.price !== "") setNativeValue(priceEl, digits(L.price));
+
+    // Body style / exterior color are optional on FB; set if we have them.
+    if (L.bodyStyle) await pickCombo(["body style", "body"], L.bodyStyle);
+    if (L.exteriorColor || L.color) await pickCombo(["exterior color", "color"], L.exteriorColor || L.color);
+
+    let descEl = fieldBy(["description", "details", "tell"]);
+    if (!descEl) descEl = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]');
+    if (descEl) {
+      const body = L.description || L.text || "";
+      if (descEl.isContentEditable) { descEl.focus(); document.execCommand("insertText", false, body); }
+      else setNativeValue(descEl, body);
+    }
+
+    filled = [typeOk && "type", yearOk && "year", makeOk && "make", modelOk && "model",
+              (mileageEl && mileageVal) && "mileage", (priceEl && L.price) && "price", descEl && "description"].filter(Boolean);
+    missing = ["type", "year", "make", "model", "mileage"].filter((f) => !filled.includes(f));
+  } else {
+    // ---- ITEM form: title / price / description / condition / category ------
+    const title = await waitFor(() => fieldBy(["title"]), 20000);
+    if (title) setNativeValue(title, String(L.title || "").slice(0, 100));
+
+    const price = fieldBy(["price"]);
+    if (price && L.price != null && L.price !== "") setNativeValue(price, digits(L.price));
+
+    let desc = fieldBy(["description", "details", "tell"]);
+    if (!desc) desc = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]');
+    if (desc) {
+      if (desc.isContentEditable) { desc.focus(); document.execCommand("insertText", false, L.description || L.text || ""); }
+      else setNativeValue(desc, L.description || L.text || "");
+    }
+
+    const cond = await pickCombo(["condition"], L.condition);
+    // Parts default to the "Auto parts" category when the listing didn't set one.
+    const cat = await pickCategory(L.category || "Auto parts & accessories");
+
+    filled = [title && "title", price && "price", desc && "description", cat && "category", cond && "condition"].filter(Boolean);
+    missing = ["category", "condition"].filter((f) => !filled.includes(f));
   }
 
-  // ---- 3. Condition / Category (comboboxes) ------------------------------
-  // Condition first (simple listbox), then Category (its own div-row picker).
-  const cond = await pickCombo(["condition"], L.condition);
-  const cat = await pickCategory(L.category);
-
-  // ---- 4. Location (typeahead — fill, then pick the first suggestion) -----
+  // ---- Location (shared — typeahead: fill, then pick the first suggestion) -
   let loc = false;
   if (L.location) {
     const locField = fieldBy(["location"]);
@@ -144,12 +208,12 @@
       setNativeValue(locField, String(L.location));
       locField.focus();
       const sugg = await waitFor(() => document.querySelector('ul[role="listbox"] [role="option"],[role="option"]'), 2500, 200);
-      if (sugg) { sugg.click(); loc = true; } else { loc = true; }
+      if (sugg) { sugg.click(); }
+      loc = true;
+      filled.push("location");
     }
   }
 
-  const filled = [title && "title", price && "price", desc && "description", cat && "category", cond && "condition", loc && "location"].filter(Boolean);
-  const missing = ["category", "condition"].filter((f) => !filled.includes(f));
   window.ahlamShowResult(
     "facebook",
     filled.length
@@ -172,6 +236,4 @@
     clearTimeout(el._t);
     el._t = setTimeout(() => el.remove(), kind === "ok" || kind === "warn" ? 14000 : 60000);
   }
-  // hoist banner for earlier calls
-  function noop() {}
 })();

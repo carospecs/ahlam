@@ -15,6 +15,26 @@ const MARKET_URL = {
   craigslist: "https://post.craigslist.org/",
 };
 
+// A whole-car listing goes to Facebook's separate Vehicle form (Year/Make/Model/
+// Mileage), not the item form. Detect it from an explicit kind flag or a
+// vehicle category so we open the right create URL.
+function isVehicleListing(listing) {
+  if (!listing) return false;
+  if (listing.kind === "vehicle" || listing.type === "vehicle" || listing.isVehicle) return true;
+  const cat = String(listing.category || "").toLowerCase();
+  return cat.includes("vehicle") || cat === "cars" || cat.includes("car/truck") || cat.includes("car & truck");
+}
+
+// The create URL for a channel, given the listing (Facebook splits item vs vehicle).
+function marketUrlFor(channel, listing) {
+  if (channel === "facebook") {
+    return isVehicleListing(listing)
+      ? "https://www.facebook.com/marketplace/create/vehicle"
+      : "https://www.facebook.com/marketplace/create/item";
+  }
+  return MARKET_URL[channel];
+}
+
 // Let clicking the toolbar icon open the side panel.
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch(() => {});
@@ -55,7 +75,8 @@ async function openAll(listing, channels) {
   const queue = { channels: list, filled: [], ts: Date.now() };
   await chrome.storage.local.set({ ahlamStaged: staged, ahlamListing: withData, ahlamQueue: queue });
   // Open them all; the content scripts each pick up their own staged entry.
-  for (const ch of list) { try { await chrome.tabs.create({ url: MARKET_URL[ch] }); } catch {} }
+  // Facebook routes to the item or vehicle create form based on the listing.
+  for (const ch of list) { try { await chrome.tabs.create({ url: marketUrlFor(ch, withData) }); } catch {} }
   return list;
 }
 

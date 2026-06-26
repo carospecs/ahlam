@@ -681,7 +681,27 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
     // Map our grade to the marketplace's Condition options (Facebook's exact labels).
     const condition = isCar ? "Used - Good" : ({ A: "Used - Like New", B: "Used - Good", C: "Used - Fair" } as Record<string, string>)[(f as any).grade] || "Used - Good";
     // Facebook's exact category labels: car parts -> "Auto parts", whole car -> "Vehicles".
-    return { title: titleText, price: f.price || "", description: text, text, photos: valid, location: shop?.location || "", grade: (f as any).grade, condition, category: isCar ? "Vehicles" : "Auto parts" };
+    const base = { title: titleText, price: f.price || "", description: text, text, photos: valid, location: shop?.location || "", grade: (f as any).grade, condition, category: isCar ? "Vehicles" : "Auto parts" };
+    if (!isCar) return base;
+    // Whole car → Facebook routes to its separate Vehicle form, so carry the
+    // fields it needs (year/make/model/mileage). kind:"vehicle" tells the
+    // extension to open /marketplace/create/vehicle and fill that form.
+    const e = entity as any;
+    const rawMi = String(e.mileage || "");
+    const kMatch = rawMi.match(/([\d.]+)\s*k/i);
+    const mileage = kMatch ? String(Math.round(parseFloat(kMatch[1]) * 1000)) : rawMi.replace(/[^0-9]/g, "");
+    return {
+      ...base,
+      kind: "vehicle",
+      vehicleType: "Car/Truck",
+      year: e.year || "",
+      make: e.make || "",
+      model: e.model || "",
+      trim: e.trim || "",
+      mileage,
+      bodyStyle: e.body || "",
+      exteriorColor: e.color || "",
+    };
   }
 
   // With the extension: open EVERY selected marketplace at once and fill each.

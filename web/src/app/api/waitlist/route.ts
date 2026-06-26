@@ -1,9 +1,68 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseServer } from "@/lib/supabase-server";
 import nodemailer from "nodemailer";
 
 // SMTP runs on Node APIs (net/tls), not the Edge runtime.
 export const runtime = "nodejs";
+
+// Founder / admin allowlist for reading the waitlist. Override with the
+// ADMIN_EMAILS env var (comma-separated) in production.
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "admin@gmail.com,mohammadabbas@ahlam.io,andygarcia@ahlam.io")
+  .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+async function requireAdmin(): Promise<string | null> {
+  // Returns the admin email if the caller is a signed-in allowlisted user, else null.
+  try {
+    const sb = await supabaseServer();
+    const { data: { user } } = await sb.auth.getUser();
+    const email = user?.email?.toLowerCase();
+    return email && ADMIN_EMAILS.includes(email) ? email : null;
+  } catch {
+    return null;
+  }
+}
+
+function csvCell(v: unknown): string {
+  if (v == null) return "";
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/**
+ * GET /api/waitlist  → admin-only list of signups (founders' allowlist).
+ * ?format=csv downloads a spreadsheet. Reads via the service role since the
+ * table is RLS-locked against the anon key.
+ */
+export async function GET(req: Request) {
+  const admin = await requireAdmin();
+  if (!admin) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("waitlist")
+    .select("email, shop_name, location, parts_per_day, source, created_at")
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("waitlist read failed", error);
+    return NextResponse.json({ error: "Failed to load waitlist" }, { status: 500 });
+  }
+  const rows = data ?? [];
+
+  if (new URL(req.url).searchParams.get("format") === "csv") {
+    const cols = ["email", "shop_name", "location", "parts_per_day", "source", "created_at"];
+    const csv = [cols.join(",")]
+      .concat(rows.map((r) => cols.map((c) => csvCell((r as Record<string, unknown>)[c])).join(",")))
+      .join("\n");
+    return new NextResponse(csv, {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="ahlam-waitlist.csv"',
+      },
+    });
+  }
+  return NextResponse.json({ ok: true, count: rows.length, rows });
+}
 
 /**
  * POST /api/waitlist

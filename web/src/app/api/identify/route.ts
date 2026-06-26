@@ -6,6 +6,7 @@ import { loadSoldListings, ownSoldComps, type SoldRow } from "@/lib/own-comps";
 import { getCachedPrice, setCachedPrice } from "@/lib/price-cache";
 import { geminiGenerate } from "@/lib/gemini";
 import { decodeVin, normalizeVin, type VinInfo } from "@/lib/vin";
+import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
 
 export const runtime = "nodejs";
 // Up to 50 parts × a grounded sold-price search each (in bounded batches) can run
@@ -315,6 +316,26 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     return NextResponse.json({ ok: false, userMessage: "Sign in required", internalError: "no auth" }, { status: 401 });
   }
 
+  // Plan usage gate: the Solo plan caps AI scans per month. Resolve the shop +
+  // plan and block when over quota. Fail-open (allows the scan) if usage isn't
+  // migrated yet or the lookup errors.
+  let scanShopId: string | null = null;
+  try {
+    const udb = supabaseAdmin();
+    const { data: prof } = await udb.from("profiles").select("shop_id").eq("id", user.id).single();
+    scanShopId = (prof?.shop_id as string) || null;
+    if (scanShopId) {
+      const { data: shopRow } = await udb.from("shops").select("plan").eq("id", scanShopId).single();
+      const usage = await checkUsage(udb, scanShopId, (shopRow?.plan as string) || null, "scan");
+      if (!usage.allowed) {
+        return NextResponse.json(
+          { ok: false, userMessage: limitMessage("scan", usage.limit ?? 0), internalError: "scan quota exceeded" },
+          { status: 402 },
+        );
+      }
+    }
+  } catch { /* fail-open: never block a scan on a usage-lookup error */ }
+
   let body: { imageBase64?: string; imageUrl?: string; photoContext?: string; vin?: { make?: string; model?: string; year?: number } };
   try {
     body = await req.json();
@@ -592,6 +613,8 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
       } catch { /* cache is best-effort — fall back to the live estimate */ }
     }
 
+    // Count this successful scan against the shop's monthly quota (best-effort).
+    void recordUsage(supabaseAdmin(), scanShopId, "scan");
     return NextResponse.json({ ok: true, data, vehicle, vehicleFront });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
