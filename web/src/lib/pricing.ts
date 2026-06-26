@@ -1,16 +1,14 @@
-// Live used-part pricing. The target signal is SOLD prices — what buyers actually
-// paid — not active asking prices, which skew high because overpriced listings
-// sit unsold. eBay's sold-price API (Marketplace Insights) is closed to new
-// developers, so the pipeline gets sold data two free ways:
+// eBay + grounded-search helpers retained for features OUTSIDE the AI scan:
+//   • suggestLeafCategory — resolves the eBay leaf category when listing a part
+//     (used by /api/ebay/list).
+//   • livePartPrice / groundedMedianPrice — an on-demand "live comp" lookup for a
+//     single query, backed by a Gemini grounded web search (used by the manual
+//     PricingToggle UI).
 //
-//   • Layer 1 (band recalibration) scrapes eBay's PUBLIC sold-listings pages —
-//     see scripts/recalibrate-bands.mjs. Run periodically from a non-cloud IP
-//     (your machine / a cron box); eBay tends to block datacenter IPs.
-//   • Per-request, the live signal is a Gemini GROUNDED WEB SEARCH for sold
-//     prices (groundedMedianPrice) — reliable from Vercel, where scraping isn't.
-//
-// The eBay Browse API (active listings) is retained only for leaf-category
-// lookup during listing. No-ops cleanly (returns []/null) when unconfigured.
+// The AI scan itself no longer prices from comps — it uses the deterministic
+// age × condition model in ./age-pricing.ts. The old comp ladder (eBay listing
+// medians, shop sold-comps, asking-price approximations, price bands) has been
+// removed.
 import { geminiGenerate } from "./gemini";
 import { isSanePrice } from "./price-bands";
 
@@ -41,31 +39,11 @@ async function getAppToken(): Promise<string | null> {
   } catch { return null; }
 }
 
-function median(nums: number[]): number {
-  const s = [...nums].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
-
-// Minimum comps for a median to be trustworthy (used by callers pooling prices).
-export const MIN_COMPS = 4;
-
-// Outlier-trimmed median: drop the extreme 15% on each end (mispriced / wrong-item
-// listings), then take the median. Returns null if empty.
-export function trimmedMedian(prices: number[]): number | null {
-  if (!prices.length) return null;
-  const sorted = [...prices].sort((a, b) => a - b);
-  const cut = Math.floor(sorted.length * 0.15);
-  const trimmed = sorted.slice(cut, sorted.length - cut);
-  return Math.round(median(trimmed.length ? trimmed : sorted));
-}
-
-// Per-request LIVE price signal — a grounded web search for the median SOLD price.
+// On-demand LIVE price signal — a grounded web search for the median SOLD price.
 // Gemini (with Google Search grounding) reads real sold listings off the web, so
 // it works from serverless where scraping eBay would be blocked. `partName` is
 // used only to sanity-check the answer against the band. Returns null if grounding
-// is unavailable, finds no number, or the value is implausible — the caller then
-// falls back to the Layer 2 model estimate.
+// is unavailable, finds no number, or the value is implausible.
 export async function groundedMedianPrice(query: string, partName: string): Promise<number | null> {
   try {
     const res = await geminiGenerate("gemini-2.5-flash", {
@@ -112,102 +90,6 @@ export async function livePartPrice(query: string): Promise<number | null> {
 
 export function livePricingEnabled(): boolean {
   return pricingConfigured();
-}
-
-// Active ASKING prices of USED, fixed-price listings (Browse API). Asking prices
-// skew high, so this is NOT in the default sold-price pipeline — kept only as an
-// optional helper.
-export async function ebayUsedPrices(query: string): Promise<number[]> {
-  const token = await getAppToken();
-  if (!token) return [];
-  try {
-    const url = `${API}/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=40`
-      + `&filter=${encodeURIComponent("conditions:{USED},buyingOptions:{FIXED_PRICE}")}`;
-    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" } });
-    if (!r.ok) return [];
-    const j = await r.json();
-    return (j.itemSummaries || [])
-      .map((i: any) => parseFloat(i.price?.value))
-      .filter((n: number) => Number.isFinite(n) && n > 0);
-  } catch { return []; }
-}
-
-// Pricing ladder — condition adjustment. Market comps (own/grounded/asking) reflect
-// a part in GOOD used condition (~Grade B). Adjust the comp price to the part's
-// actual grade so a clean Grade A part isn't underpriced and a worn Grade C isn't
-// overpriced. (The Layer-2 model estimate is already condition-aware, so it is NOT
-// re-multiplied.)
-// B is the market baseline (comps reflect good/usable parts). A is a +25% premium
-// for like-new; C is a damaged/repairable core at 40% of market.
-export const CONDITION_MULTIPLIER: Record<"A" | "B" | "C", number> = { A: 1.25, B: 1.0, C: 0.4 };
-export function applyCondition(price: number, grade: "A" | "B" | "C"): number {
-  return Math.round(price * (CONDITION_MULTIPLIER[grade] ?? 1));
-}
-
-// Asking-price → sold-price discount. Active asking prices skew high (overpriced
-// listings sit unsold), so a sold approximation discounts the asking median.
-export const ASKING_TO_SOLD = 0.82;
-
-// Ladder rung 3 (between live SOLD comps and the band floor): approximate a sold
-// price from ACTIVE ASKING prices when no sold comps are found. Needs at least
-// MIN_COMPS asking listings, takes their outlier-trimmed median, discounts it, and
-// only returns a band-sane result. Returns null if eBay is unconfigured, there are
-// too few listings, or the result is implausible — caller then falls to the band.
-export async function askingApproxPrice(query: string, partName: string): Promise<number | null> {
-  const asking = await ebayUsedPrices(query);
-  if (asking.length < MIN_COMPS) return null;
-  const med = trimmedMedian(asking);
-  if (med == null) return null;
-  const approx = Math.round(med * ASKING_TO_SOLD);
-  return isSanePrice(approx, partName) ? approx : null;
-}
-
-// Live eBay comp statistics for a part query — the MEDIAN of current US used,
-// fixed-price listings (NOT discounted: this is what comparable parts are listed
-// at right now), plus the listing count and price range. Used both to price the
-// part and to show the seller a "selling on eBay for ~$X" reference note. Returns
-// null if eBay is unconfigured, there are too few listings, or the median is
-// implausible for the part type.
-// Turn a catalog part name into an eBay search phrase that targets the COMPLETE
-// used unit, so the comp median reflects the whole part — not the cheap sub-parts
-// that share its keyword and crater the price. (Measured: "Tacoma front left door"
-// → median $217 from a mix of panels/handles/switches; "Tacoma front door shell"
-// → $750 from actual full doors.) Side (left/right) is dropped — it doesn't move
-// the price and widens the comp set.
-export function partSearchPhrase(name: string): string {
-  const n = name.replace(/\b(left|right|driver|passenger)\b/gi, "").replace(/\s+/g, " ").trim();
-  // A "Door" in our catalog is the door body; sellers list the full used door as a
-  // "door shell". Exclude the door's separately-listed sub-parts.
-  if (/\bdoor\b/i.test(n) && !/\b(panel|window|glass|handle|hinge|latch|lock|regulator|switch|speaker|moulding|molding|trim|sill|seal|wiring|motor|striker|check)\b/i.test(n)) {
-    return `${n} shell`;
-  }
-  return n;
-}
-
-export interface EbayCompStats { median: number; count: number; min: number; max: number; }
-export async function ebayCompStats(query: string, partName: string): Promise<EbayCompStats | null> {
-  const token = await getAppToken();
-  if (!token) return null;
-  try {
-    const url = `${API}/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=50`
-      + `&filter=${encodeURIComponent("conditions:{USED},buyingOptions:{FIXED_PRICE}")}`;
-    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" } });
-    if (!r.ok) return null;
-    const j = await r.json();
-    // `total` is eBay's REAL count of matching listings (not the 50-item page cap),
-    // so the "N listings" the seller sees is honest, not a constant 40/50.
-    const total = Number(j.total) || 0;
-    const prices: number[] = (j.itemSummaries || [])
-      .map((i: { price?: { value?: string } }) => parseFloat(i.price?.value ?? ""))
-      .filter((n: number) => Number.isFinite(n) && n > 0);
-    if (prices.length < MIN_COMPS) return null;
-    const med = trimmedMedian(prices);
-    if (med == null) return null;
-    const median = Math.round(med);
-    if (!isSanePrice(median, partName)) return null;
-    const sorted = [...prices].sort((a, b) => a - b);
-    return { median, count: total || prices.length, min: Math.round(sorted[0]), max: Math.round(sorted[sorted.length - 1]) };
-  } catch { return null; }
 }
 
 // Resolve the eBay LEAF category a part should be listed in by reading the
