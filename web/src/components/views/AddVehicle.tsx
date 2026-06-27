@@ -228,6 +228,7 @@ function reconcileSameTypePrices(parts: AIPart[]): void {
     if (!bases.length) continue;
     const base = median(bases);
     for (const p of g) {
+      if (gradeOf(p) === "C") continue; // Grade C = unpriced, never assign a price
       const np = Math.round(base * (COND_MULT[gradeOf(p)] ?? 1));
       if (np > 0) p.suggestedPriceUsd = np;
       if (p.pricingInsight?.ebayMedian) p.pricingInsight = { ...p.pricingInsight, ebayMedian: Math.round(base) };
