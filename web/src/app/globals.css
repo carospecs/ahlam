@@ -534,8 +534,22 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
 }
 @media (max-width: 560px) {
   .cs-feat-grid { grid-template-columns: 1fr !important; }
-  .cs-pill-links { display: none !important; }
 }
+
+/* ---- Mobile nav: collapse the pill links into a hamburger drawer ---------- */
+/* At <= 900px the horizontal links, language toggle, theme toggle and dividers
+   are hidden and the .cs-burger reveals a full drawer (SiteHeader), so every
+   destination stays reachable on a phone. */
+@media (max-width: 900px) {
+  .cs-pill-links { display: none !important; }
+  .cs-burger { display: inline-flex !important; }
+}
+/* On small phones drop the inline CTA too (it lives in the drawer) so the pill
+   never overflows the viewport. */
+@media (max-width: 430px) {
+  .cs-pill-cta { display: none !important; }
+}
+.cs-mobile-menu { animation: cs-rise 0.18s var(--ease-out) both; }
 @media (max-width: 680px) {
   .cs-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 26px !important; }
 }
