@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { floorPrice } from "@/lib/price-bands";
+import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -51,6 +52,18 @@ export async function POST(req: Request) {
   const stockNumber = typeof vehicle.stockNumber === "string" ? vehicle.stockNumber : null;
   // Save-as-draft keeps everything private (not surfaced in the public market).
   const status = body.draft ? "draft" : "active";
+
+  // Solo plan caps whole-car posts per day. Only an actually-posted (active) car
+  // counts; drafts are free. Fail-open if usage isn't migrated / lookup errors.
+  if (status === "active") {
+    try {
+      const { data: shopRow } = await db.from("shops").select("plan").eq("id", shopId).single();
+      const usage = await checkUsage(db, shopId, (shopRow?.plan as string) || null, "car_post");
+      if (!usage.allowed) {
+        return NextResponse.json({ error: limitMessage("car_post", usage.limit ?? 0), code: "quota" }, { status: 402 });
+      }
+    } catch { /* fail-open: never block a post on a usage-lookup error */ }
+  }
 
   // 0. Upload the photos so every post carries a real picture. Each base64 JPEG
   // goes to the part-photos bucket; we keep the resulting public URLs by index.
@@ -108,6 +121,8 @@ export async function POST(req: Request) {
     ({ data: veh, error: vErr } = await db.from("vehicles").insert(vehRow).select().single());
   }
   if (vErr || !veh) return NextResponse.json({ error: vErr?.message || "Could not save vehicle" }, { status: 500 });
+  // Meter the car post (Solo cap) now that the vehicle is actually live.
+  if (status === "active") void recordUsage(db, shopId, "car_post");
 
   // 2. Part listings — skipped when selling the whole car only.
   let listingCount = 0;

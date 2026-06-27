@@ -709,6 +709,15 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   async function confirmAndOpenSelected() {
     const channels = [...selected];
     if (!channels.length) { csToast("Pick at least one marketplace"); return; }
+    // Solo plan caps exports per month (20 cars / 100 parts). Meter this export
+    // server-side; block when over quota. Fail-open on any network error.
+    try {
+      const m = await fetch("/api/usage/export", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(isCar ? { cars: 1 } : { parts: 1 }),
+      }).then((r) => r.json()).catch(() => null);
+      if (m && m.allowed === false) { csToast(m.message || "Monthly export limit reached"); return; }
+    } catch {}
     try { await navigator.clipboard?.writeText(text); } catch {}
     window.postMessage({ __ahlamAutopost: true, kind: "postAll", channels, listing: buildExtListing() }, "*");
     setCopied(true);

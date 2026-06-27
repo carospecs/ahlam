@@ -14,6 +14,14 @@ Rules:
 - Preserve punctuation, separators (·, –), capitalization style, and any leading/trailing spaces.
 - If a string is already non-translatable (pure number/symbol/name), return it unchanged.
 - Translate the MEANING the way a native Spanish UI would phrase it; don't be literal/robotic.
+DOMAIN — this is software for auto SALVAGE YARDS (selling used car parts). Translate these in the AUTOMOTIVE sense, never literally:
+- "salvage yard" / "yard" / "dismantling yard" / "junkyard" → "desguace" (a place that dismantles cars for parts). NEVER "astillero" (shipyard) and NEVER "patio"/"jardín".
+- "salvage" → "desguace"; a "salvage car" / "salvage vehicle" → "auto siniestrado".
+- "dismantle" / "dismantling" → "desarmar" / "desguace".
+- "part" / "parts" (car parts) → "pieza" / "piezas" (or "refacción/refacciones").
+- "core" (a returnable part) → "núcleo"; "fitment" / "interchange" → "compatibilidad".
+- "listing" → "anuncio"; "cross-post" → "publicar en varios sitios"; "scan" (AI photo) → "escaneo".
+- Brand names stay as-is: eBay, Facebook, OfferUp, Craigslist, Ahlam.
 Return ONLY a JSON object: {"t": string[]} — the translations in the SAME order and SAME length as the input array. No commentary.`;
 
 export async function POST(req: Request) {
