@@ -10,6 +10,7 @@ import { playSonarPing } from "@/lib/sound";
 import { ManualListing } from "./ManualListing";
 import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, type ScanSession } from "@/lib/scanSession";
 import type { VinInfo } from "@/lib/vin";
+import { applyVinEngine } from "@/lib/part-enrich";
 
 interface UploadedPhoto { url: string; name: string; file: File }
 
@@ -334,13 +335,23 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         } else if (!firstError) firstError = r.userMessage;
       }
 
+      // The VIN decode is ground truth for the vehicle, so resolve the aggregate
+      // identity NOW — the VIN may have been legible in a different photo than the
+      // engine bay — and push the VIN-confirmed engine down onto the engine PART
+      // BEFORE dedupe. That way a bare "Engine" from a VIN-less engine shot and an
+      // already-enriched "Engine — …" collapse into one entry.
+      const agg = aggregateVehicle(estimates);
+      const enrichedCollected = agg?.engine
+        ? collected.map((p) => applyVinEngine(p, agg.engine, agg.drivetrain))
+        : collected;
+
       // Dedupe parts seen across multiple photos by name. Prefer the instance the AI
       // was most confident about (the photo that actually shows the part — e.g. the
       // engine-bay shot for "Engine", not a side-profile that hallucinated it), then
       // break ties by the higher price. This keeps each part's thumbnail correct.
       const confRank = (p: AIPart) => (p.confidence === "high" ? 2 : p.confidence === "low" ? 0 : 1);
       const byName = new Map<string, AIPart>();
-      for (const p of collected) {
+      for (const p of enrichedCollected) {
         const key = p.partName.toLowerCase().trim();
         const existing = byName.get(key);
         if (!existing
@@ -363,8 +374,8 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       }
 
       // Prefer the AI's explicit vehicle estimate (incl. whole-car price + mileage);
-      // fall back to fitment-derived identity if the model didn't return one.
-      const agg = aggregateVehicle(estimates);
+      // fall back to fitment-derived identity if the model didn't return one. (agg was
+      // resolved above so the engine part could be enriched before dedupe.)
       if (agg) {
         setVehicle({ label: agg.label, sub: agg.sub || "identified by AI", make: agg.make, model: agg.model, year: agg.year, body: agg.body, trim: agg.trim, engine: agg.engine, drivetrain: agg.drivetrain, vinInfo: agg.vinInfo });
         setSuggestedCarPrice(agg.suggestedPrice);

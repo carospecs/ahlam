@@ -4,6 +4,7 @@ import { vehicleAge, ageFactor, usedPriceFromNew } from "@/lib/age-pricing";
 import { geminiGenerate } from "@/lib/gemini";
 import { decodeVin, normalizeVin, type VinInfo } from "@/lib/vin";
 import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
+import { applyVinEngine } from "@/lib/part-enrich";
 
 export const runtime = "nodejs";
 // Pricing is now a local formula (no per-part web/eBay lookups), so the request is
@@ -503,28 +504,20 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     // When a VIN was decoded, we know the exact engine, drivetrain, and trim.
     // Sync those confirmed specs into the engine/transmission part titles and
     // descriptions so listings reflect ground truth, not the AI's visual guess.
+    // VIN is ground truth — push the decoded engine/drivetrain down onto the matching
+    // parts. applyVinEngine() (shared with the cross-photo aggregator in AddVehicle)
+    // overrides the engine title + description so the model's visual guess can't
+    // contradict the VIN. This is the same-photo case (VIN legible in the engine-bay
+    // shot); the aggregator covers the common case where they're in different photos.
     if (vehicle?.vin && vehicle.engine) {
-      const vinEngine = vehicle.engine;
-      const drive = vehicle.drivetrain ? `, ${vehicle.drivetrain}` : "";
       for (const p of data) {
-        const base = p.partName.replace(/\s*—.*$/, "").trim(); // strip any prior enrichment
-        // The engine itself — NOT "Engine Mount"/"Engine Cover"/"Engine Wiring
-        // Harness", which are distinct parts. The VIN is ground truth for the engine
-        // spec, so OVERRIDE the vision model's visual guess rather than appending to
-        // it: a wrong "2.4L inline-4" left in the description would sit right next to
-        // the VIN-confirmed spec and contradict it. Scrub the model's displacement/
-        // cylinder claims, then LEAD with the VIN spec — keeping the rest of what it
-        // observed (condition, leaks, accessories).
-        if (/^engine( assembly| motor| long block| short block)?$/i.test(base)) {
-          p.partName = `Engine — ${vinEngine}`;
-          const notes = scrubEngineSpecs(p.description);
-          p.description = notes
-            ? `VIN-confirmed engine: ${vinEngine}${drive}. ${notes}`
-            : `VIN-confirmed engine: ${vinEngine}${drive}.`;
-        } else if (/^transmission( assembly)?$/i.test(base) && vehicle.drivetrain) {
-          if (!p.description.toLowerCase().includes(vehicle.drivetrain.toLowerCase())) {
-            p.description = [p.description, `Drivetrain: ${vehicle.drivetrain}.`].filter(Boolean).join(" ");
-          }
+        const enriched = applyVinEngine(p, vehicle.engine, vehicle.drivetrain);
+        p.partName = enriched.partName;
+        p.description = enriched.description;
+        const base = p.partName.replace(/\s*—.*$/, "").trim();
+        if (/^transmission( assembly)?$/i.test(base) && vehicle.drivetrain
+            && !p.description.toLowerCase().includes(vehicle.drivetrain.toLowerCase())) {
+          p.description = [p.description, `Drivetrain: ${vehicle.drivetrain}.`].filter(Boolean).join(" ");
         }
       }
     }
@@ -767,27 +760,6 @@ function applySide(name: string, side: "Left" | "Right" | null): string {
   // The side label leads the whole name → "Driver Side Front Door". Collapse the
   // "Side Side" that "Side Mirror" would produce → "Driver Side Mirror".
   return `${SIDE_LABEL[side]} ${name}`.replace(/\bSide Side\b/g, "Side");
-}
-
-// Strip DISPLACEMENT and CYLINDER-CONFIG claims the vision model guessed from a
-// photo (e.g. "2.4L", "inline-4", "V6", "4-cyl") so the VIN-confirmed engine is the
-// ONLY spec left in the engine part's description and nothing contradicts it.
-// Everything else it observed (condition, leaks, accessories) is left intact.
-function scrubEngineSpecs(text: string): string {
-  if (!text) return "";
-  return text
-    .replace(/\b\d(?:\.\d)?\s?-?\s?(?:l\b|liters?\b|litres?\b)/gi, "")  // 2.4L, 2.4-liter
-    .replace(/\b\d{3,4}\s?cc\b/gi, "")                                  // 2400cc
-    .replace(/\bV[\s-]?\d{1,2}\b/gi, "")                                // V6, V-8
-    .replace(/\b(?:inline|straight|flat)[\s-]?(?:\d{1,2}|two|three|four|five|six|eight|ten|twelve)\b/gi, "") // inline-4, straight-six
-    .replace(/\bI[\s-]?[3-9]\b/g, "")                                   // I4, I-6 config
-    .replace(/\b(?:\d{1,2}|two|three|four|five|six|eight|ten|twelve)[\s-]?cyl(?:inder)?s?\b/gi, "") // 4-cyl, four cylinder
-    .replace(/\(\s*[,;]?\s*\)/g, "")                                    // empty () left behind
-    .replace(/\b(?:a|an)\s+(engine|motor|powerplant)\b/gi, "$1")        // fix dangling article a scrub left ("a engine")
-    .replace(/\s{2,}/g, " ")
-    .replace(/\s+([.,;])/g, "$1")
-    .replace(/^[\s,;.\-–—]+/, "")
-    .trim();
 }
 
 function busyResult(internalError: string): AIResult {
