@@ -160,7 +160,6 @@ function missingHighValueCategories(parts: AIPart[]): string[] {
 
 // Condition multipliers — MUST match the server (lib/pricing.ts). A=+25% (like-new),
 // B=market median, C=40% of median (damaged core).
-const COND_MULT: Record<string, number> = { A: 1.25, B: 1.0, C: 0.4 };
 
 // A door + its glass + its panel (+ handle) belong to one physical door. Group them
 // so the seller sees the COMPLETE door total while each piece keeps its own price.
@@ -199,42 +198,6 @@ function buildRenderRows(parts: AIPart[]): RenderRow[] {
   return rows;
 }
 
-// Reconcile the prices of same-type parts ACROSS ALL PHOTOS (the server only sees
-// one photo per call, so a left door in photo 1 and a right door in photo 2 get
-// priced by independent comp searches — which is how a damaged door ends up above
-// a clean one). Group every same-type part (ignoring left/right), derive ONE
-// consensus market base from the cleanest signal, then re-apply each part's
-// condition grade so condition — not search noise — drives the spread. Also aligns
-// the "selling on eBay" note so paired parts show the same reference number.
-function reconcileSameTypePrices(parts: AIPart[]): void {
-  const gradeOf = (p: AIPart) => (["A", "B", "C"].includes(p.condition as string) ? (p.condition as string) : "B");
-  const baseOf = (p: AIPart) => { const m = COND_MULT[gradeOf(p)] ?? 1; const pr = p.suggestedPriceUsd || 0; return pr > 0 && m ? pr / m : null; };
-  const isReal = (p: AIPart) => { const s = p.pricingInsight?.source; return s === "shop" || s === "grounded" || s === "ebay" || s === "asking"; };
-  const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
-
-  const groups = new Map<string, AIPart[]>();
-  for (const p of parts) { const k = basePartName(p.partName); const g = groups.get(k); if (g) g.push(p); else groups.set(k, [p]); }
-
-  for (const g of groups.values()) {
-    if (g.length < 2) continue;
-    const tiers: AIPart[][] = [
-      g.filter((p) => gradeOf(p) !== "C" && isReal(p)),
-      g.filter((p) => gradeOf(p) !== "C"),
-      g.filter(isReal),
-      g,
-    ];
-    const ref = tiers.find((t) => t.some((p) => baseOf(p) != null)) ?? g;
-    const bases = ref.map(baseOf).filter((b): b is number => typeof b === "number" && b > 0);
-    if (!bases.length) continue;
-    const base = median(bases);
-    for (const p of g) {
-      if (gradeOf(p) === "C") continue; // Grade C = unpriced, never assign a price
-      const np = Math.round(base * (COND_MULT[gradeOf(p)] ?? 1));
-      if (np > 0) p.suggestedPriceUsd = np;
-      if (p.pricingInsight?.ebayMedian) p.pricingInsight = { ...p.pricingInsight, ebayMedian: Math.round(base) };
-    }
-  }
-}
 
 // Flag left/right pairs of the same part priced very differently (>2.5×) — a
 // likely AI pricing slip the seller should eyeball before posting (AHLAM-69).
@@ -389,10 +352,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       const deduped = [...byName.values()]
         .sort(comparePartsForDisplay)
         .map((p) => ({ ...p, _id: newId(), _aiPrice: p.suggestedPriceUsd ?? null }));
-
-      // Normalize same-type parts (e.g. left + right door) to one market base so
-      // condition drives the spread — across photos, which the server can't do.
-      reconcileSameTypePrices(deduped);
 
       // Front shot for the main post image; fall back to the first uploaded photo.
       setMainPhoto(frontPhoto || photos[0]?.url || null);
