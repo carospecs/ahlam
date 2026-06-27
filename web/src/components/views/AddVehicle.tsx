@@ -89,6 +89,37 @@ function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { 
   };
 }
 
+// When a VIN was decoded, its engine/drivetrain are GROUND TRUTH (NHTSA), so the
+// Engine part is labelled FROM THE VIN — not the per-photo visual guess. The VIN
+// usually sits on a different photo (windshield) than the engine (engine bay), so
+// the server can't reconcile them per-photo; they're only ever together here, at
+// merge. Without this, the Engine description keeps the model's guess and can
+// contradict the VIN-confirmed engine shown on the vehicle card. The model's wear
+// notes (conditionNotes) are preserved; only the engine spec is made authoritative.
+function applyVinSpecsToParts(
+  parts: AIPart[],
+  agg: { make: string; model: string; year: string; engine: string | null; drivetrain: string | null },
+): AIPart[] {
+  if (!agg.engine && !agg.drivetrain) return parts;
+  const idLabel = [agg.year, agg.make, agg.model].filter(Boolean).join(" ");
+  return parts.map((p) => {
+    const base = p.partName.replace(/\s*—.*$/, "").trim(); // strip any prior "Engine — …"
+    if (agg.engine && /^engine$/i.test(base)) {
+      const notes = (p.conditionNotes || "").trim();
+      return {
+        ...p,
+        partName: `Engine — ${agg.engine}`,
+        description: `${idLabel} engine — VIN-confirmed ${agg.engine}.${notes ? ` ${notes}` : ""}`.trim(),
+      };
+    }
+    if (agg.drivetrain && /^transmission$/i.test(base)
+        && !p.description.toLowerCase().includes(agg.drivetrain.toLowerCase())) {
+      return { ...p, description: [p.description, `Drivetrain: ${agg.drivetrain}.`].filter(Boolean).join(" ") };
+    }
+    return p;
+  });
+}
+
 // Photo intake/encoding (incl. HEIC→JPEG) lives in @/lib/image.
 
 // Roll the AI's per-part fitment up into a single most-likely source vehicle.
@@ -378,7 +409,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         setCarPrice("");
         setMileage(null);
       }
-      setParts(deduped);
+      setParts(agg ? applyVinSpecsToParts(deduped, agg) : deduped);
       setPhase("results");
       playSonarPing(); // sonar ring: the scan is done, results are ready
     } catch (e) {

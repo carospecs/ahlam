@@ -27,16 +27,17 @@ export interface PricingInsight {
   suggestedPrice: number;
   priceRange: { min: number; max: number };
   similarCount: number;
-  // How the price was produced. "formula" = the deterministic age × condition
-  // model (current). The legacy comp-ladder rungs are kept in the union so any
-  // older persisted rows still type-check.
+  // How the price was produced. "formula" = the deterministic flat grade-discount
+  // model (current — newPartPrice × condition-grade discount). The legacy comp-ladder
+  // rungs are kept in the union so any older persisted rows still type-check.
   source?: "formula" | "shop" | "grounded" | "ebay" | "asking" | "model";
   // Confidence in the estimate. Mirrors the part's vision confidence; "low" when
-  // the model year was unknown (age, and therefore depreciation, is a guess).
+  // the part's grade or fitment side is uncertain.
   confidence?: "high" | "medium" | "low";
-  // Transparency breakdown for the UI: the brand-new base price and the two
-  // multipliers that produced suggestedPrice (newPartPrice × ageFactor × condition).
+  // Transparency breakdown for the UI: the brand-new base price the grade discount
+  // was applied to (suggestedPrice = newPartPrice × grade discount).
   newPartPrice?: number | null;
+  // Legacy — no longer populated; the flat formula has no age/condition multipliers.
   ageFactor?: number;
   conditionFactor?: number;
   // Legacy eBay comp fields — no longer populated, retained for old persisted rows.
@@ -53,10 +54,10 @@ export interface AIPartOutput {
   damageCode?: string;
   description: string;
   // The part's estimated BRAND-NEW (OEM/retail) price from the vision model — the
-  // base the age × condition formula discounts into suggestedPriceUsd.
+  // base the flat grade discount is applied to, producing suggestedPriceUsd.
   newPartPriceUsd: number | null;
-  // Final used price, computed server-side from newPartPriceUsd, vehicle age, and
-  // condition grade. (The model never sets this directly.)
+  // Final used price, computed server-side from newPartPriceUsd and the condition
+  // grade discount. (The model never sets this directly.)
   suggestedPriceUsd: number | null;
   confidence: Confidence;
   lowConfidenceFields?: (keyof AIPartOutput)[];
@@ -482,7 +483,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
         damageCode: typeof p.damageCode === "string" ? p.damageCode.slice(0, 16) : "",
         description: p.description ?? "",
         newPartPriceUsd: typeof p.newPartPriceUsd === "number" ? p.newPartPriceUsd : null,
-        suggestedPriceUsd: null, // computed from new price × age × condition below
+        suggestedPriceUsd: null, // computed from new price × grade discount below
         confidence,
         lowConfidenceFields: Array.from(lowFields),
         compliance: complianceFor(partName),
@@ -504,13 +505,16 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     // Sync those confirmed specs into the engine/transmission part titles and
     // descriptions so listings reflect ground truth, not the AI's visual guess.
     if (vehicle?.vin && vehicle.engine) {
+      const idLabel = [vehicle.yearStart, vehicle.make, vehicle.model].filter(Boolean).join(" ");
       for (const p of data) {
         const base = p.partName.replace(/\s*—.*$/, "").trim(); // strip any prior enrichment
         if (/^engine$/i.test(base)) {
+          // VIN authority: label the engine FROM THE VIN, REPLACING (not appending to)
+          // the model's visual guess so the description can never contradict the
+          // VIN-confirmed engine. The model's wear notes are preserved.
           p.partName = `Engine — ${vehicle.engine}`;
-          if (!p.description.toLowerCase().includes(vehicle.engine.toLowerCase())) {
-            p.description = [p.description, `VIN-confirmed engine: ${vehicle.engine}.`].filter(Boolean).join(" ");
-          }
+          const notes = (p.conditionNotes || "").trim();
+          p.description = `${idLabel} engine — VIN-confirmed ${vehicle.engine}.${notes ? ` ${notes}` : ""}`.trim();
         }
         if (/^transmission$/i.test(base) && vehicle.drivetrain) {
           if (!p.description.toLowerCase().includes(vehicle.drivetrain.toLowerCase())) {

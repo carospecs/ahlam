@@ -6,7 +6,7 @@
 //     PricingToggle UI).
 //
 // The AI scan itself no longer prices from comps — it uses the deterministic
-// age × condition model in ./age-pricing.ts. The old comp ladder (eBay listing
+// flat grade-discount model in ./age-pricing.ts. The old comp ladder (eBay listing
 // medians, shop sold-comps, asking-price approximations, price bands) has been
 // removed.
 import { geminiGenerate } from "./gemini";
