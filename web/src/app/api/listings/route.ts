@@ -123,9 +123,9 @@ export async function POST(req: Request) {
         listing_type: "part",
         photo_url: url,
         ai_output: ai,
-        // Guardrail (AHLAM-51): never persist a part at $0/null. floorPrice falls
-        // a missing/zero estimate to the middle of the part's band.
-        price_usd: floorPrice(p.suggestedPriceUsd, p.partName || ""),
+        // Grade C parts are intentionally unpriced — preserve null so the seller
+        // sets the price manually. A/B parts use the formula price as-is.
+        price_usd: p.suggestedPriceUsd ?? null,
         status,
       };
     });
