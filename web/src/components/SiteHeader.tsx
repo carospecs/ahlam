@@ -130,6 +130,10 @@ export function SiteHeader({
         <span className="cs-pill-links" style={{ display: "inline-flex" }}><ThemeToggle size={31} /></span>
         <span className="cs-pill-cta">{cta}</span>
 
+        {/* Language toggle stays visible in the pill on mobile (not buried in the
+            drawer) — only when this page provides it (the landing). */}
+        {LangToggle && <span className="cs-mobile-lang" style={{ display: "none", flexShrink: 0 }}>{LangToggle}</span>}
+
         {/* Hamburger (mobile only) */}
         <button
           className="cs-burger" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen}

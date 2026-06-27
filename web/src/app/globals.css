@@ -543,10 +543,11 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
 @media (max-width: 900px) {
   .cs-pill-links { display: none !important; }
   .cs-burger { display: inline-flex !important; }
+  .cs-mobile-lang { display: inline-flex !important; }
 }
-/* On small phones drop the inline CTA too (it lives in the drawer) so the pill
-   never overflows the viewport. */
-@media (max-width: 430px) {
+/* On phones drop the inline CTA (it lives in the drawer) so the pill — logo +
+   EN/ES + hamburger — never overflows the viewport. */
+@media (max-width: 560px) {
   .cs-pill-cta { display: none !important; }
 }
 .cs-mobile-menu { animation: cs-rise 0.18s var(--ease-out) both; }
