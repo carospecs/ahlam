@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { vehicleAge, ageFactor, conditionMultiplier, usedPriceFromNew } from "@/lib/age-pricing";
+import { vehicleAge, ageFactor, usedPriceFromNew } from "@/lib/age-pricing";
 import { geminiGenerate } from "@/lib/gemini";
 import { decodeVin, normalizeVin, type VinInfo } from "@/lib/vin";
 
@@ -473,44 +473,31 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     reconcileWheelSpecs(data);
 
     // ── PRICING ──────────────────────────────────────────────────────────────
-    // Deterministic age × condition model (lib/age-pricing.ts):
-    //   usedPrice = newPartPrice × ageFactor(age) × conditionMultiplier(grade, age)
-    // The vision model supplies each part's BRAND-NEW (OEM/retail) price and the
-    // vehicle's model year; we discount locally. No comps, no external lookups —
-    // the same photo always prices the same way.
-    //
-    // NOTE: ageFactor clamps to 0 at age 15, so a part from a vehicle 15+ years
-    // old prices to $0 by design. Raise RESIDUAL_FLOOR in age-pricing.ts to give
-    // aged parts a residual floor.
-    const DEFAULT_AGE = 8; // mid-curve fallback when the model year is unknown
-    const modelYear = vehicle?.yearStart ?? null; // yearStart === yearEnd by the prompt
-    const age = modelYear ? vehicleAge(modelYear) : DEFAULT_AGE;
-    const aged = ageFactor(age);
-
+    // Formula: usedPrice = newPartPriceUsd × gradeDiscount (lib/age-pricing.ts)
+    //   Grade A (like new)        → ×0.85  (15% off new price)
+    //   Grade B (normal wear)     → ×0.70  (30% off new price)
+    //   Grade C (heavily damaged) → null   (unpriced — seller sets manually)
     for (const p of data) {
       const grade: ConditionGrade = (["A", "B", "C"] as const).includes(p.condition) ? p.condition : "B";
-      const price = usedPriceFromNew(p.newPartPriceUsd, grade, age);
+      const price = usedPriceFromNew(p.newPartPriceUsd, grade);
       p.suggestedPriceUsd = price;
-      p.pricingInsight = {
-        suggestedPrice: price ?? 0,
-        priceRange: { min: price ?? 0, max: price ?? 0 },
+      p.pricingInsight = price != null ? {
+        suggestedPrice: price,
+        priceRange: { min: price, max: price },
         similarCount: 0,
         source: "formula",
-        // Mirror the part's vision confidence, but drop to "low" when the model
-        // year was unknown — the age, and therefore the depreciation, is a guess.
-        confidence: modelYear ? p.confidence : "low",
+        confidence: p.confidence,
         newPartPrice: p.newPartPriceUsd,
-        ageFactor: aged,
-        conditionFactor: conditionMultiplier(grade, age),
-      };
+      } : undefined;
     }
 
-    // Whole car: original MSRP discounted by age only (a whole vehicle has no
-    // single A/B/C grade). Null when the model couldn't estimate a new price.
+    // Whole car: original MSRP discounted by age (no single grade applies to a
+    // whole vehicle). Null when the model couldn't estimate a new price.
     if (vehicle) {
+      const age = vehicle.yearStart ? vehicleAge(vehicle.yearStart) : 8;
       vehicle.suggestedWholeCarPriceUsd =
         vehicle.newWholeCarPriceUsd != null && vehicle.newWholeCarPriceUsd > 0
-          ? Math.round(vehicle.newWholeCarPriceUsd * aged)
+          ? Math.round(vehicle.newWholeCarPriceUsd * ageFactor(age))
           : null;
     }
 
