@@ -190,7 +190,7 @@ NO INFERRED / GUESSED PARTS:
 
 OUTPUT ORDER — return "parts" in a logical, scannable order so the seller never hunts for a part:
 1. Group by area in this order: Front exterior → Doors/sides → Rear exterior → Glass → Lighting → Wheels/Tires → Mechanical → Interior.
-2. Keep Left/Right pairs ADJACENT (e.g. Left Headlight immediately next to Right Headlight). Never scatter complementary parts.
+2. Keep driver/passenger pairs ADJACENT (e.g. the driver-side headlight immediately next to the passenger-side headlight). Never scatter complementary parts.
 
 LEFT / RIGHT SIDES — READ CAREFULLY (this is where mistakes happen):
 1. "vehicleFront" — where is the FRONT of the car pointing relative to the photo? This is the MOST IMPORTANT field for correct labeling — get this wrong and every side gets flipped.
@@ -204,10 +204,10 @@ LEFT / RIGHT SIDES — READ CAREFULLY (this is where mistakes happen):
 2. "imageSide" (per part) — purely WHERE the part appears in the photo frame from your point of view: "left", "right", or "center". NOT the vehicle's left/right — just the image frame.
 3. Put NO "left"/"right"/"driver"/"passenger" word in "partName" — the system adds the correct side itself from "imageSide". "front"/"rear" ARE allowed in the name (e.g. "Front Bumper Cover").
 4. CENTER PARTS HAVE NO LEFT/RIGHT. These parts exist as a single centered unit and MUST use "imageSide": "center" — never left/right: Hood, Grille, Front Bumper Cover, Rear Bumper Cover, Roof Panel, Windshield, Back Glass, Trunk Lid, Tailgate, Liftgate, Radiator, Engine, Transmission, Dashboard, Center Console, Instrument Cluster, Steering Wheel, Battery, exhaust/muffler. A "Right Grille" or "Left Bumper Cover" is WRONG.
-5. SIDE PARTS that genuinely come in a left and a right: Fender, Door, Quarter Panel, Side Mirror, Headlight Assembly, Tail Light Assembly, Fog Light, door Windows, Front Seat, wheels. These MUST carry a side — set "imageSide" to "left" or "right", NEVER "center". A door/mirror/fender/headlight always belongs to one side; pick the side you see. Result names must be specific like "Front Left Door", "Rear Right Door", "Left Side Mirror".
+5. SIDE PARTS that genuinely come in a left and a right: Fender, Door, Quarter Panel, Side Mirror, Headlight Assembly, Tail Light Assembly, Fog Light, door Windows, Front Seat, wheels. These MUST carry a side — set "imageSide" to "left" or "right", NEVER "center". A door/mirror/fender/headlight always belongs to one side; pick the side you see. The system turns your "imageSide" into the vehicle side and names the part accordingly — e.g. "Driver Side Front Door", "Passenger Side Rear Door", "Driver Side Mirror".
 6. NO DUPLICATES / NO GENERICS: never output a bare "Door"/"Front Door"/"Rear Door"/"Mirror" without its side, and never list the same physical part twice (e.g. don't return both "Rear Door" and "Rear Right Door" — that's one part, "Rear Right Door"). Each side part appears at most once per side.
-7. NEVER CONTRADICT YOURSELF: the side in the name MUST match what you wrote in "description"/"conditionNotes". If the description says "right (passenger side)", the side is RIGHT. If you truly can't tell the side of a side-part, still give your best single guess and set "confidence":"low" — do NOT fall back to a generic no-side name.
-8. DOOR COMPONENTS — match the door: a door's window, glass, and door panel MUST carry the SAME position AND side as the door they belong to. Name them "Front Left Door Window", "Front Left Door Panel", "Rear Right Door Window" — NEVER a bare "Left Door Panel" or "Door Window". This lets each door's pieces group with the door. The same applies to "front"/"rear": if it's the front door's panel, it is the "Front" door panel.
+7. NEVER CONTRADICT YOURSELF: the side you describe MUST match the part's actual side. In "description"/"conditionNotes", name a part's side as "driver side" or "passenger side" (US convention: driver = LEFT of the vehicle, passenger = RIGHT) — do NOT use bare "left"/"right" for a part's side. If you truly can't tell the side of a side-part, still give your best single guess and set "confidence":"low" — do NOT fall back to a generic no-side name.
+8. DOOR COMPONENTS — match the door: a door's window, glass, and door panel MUST carry the SAME position (front/rear) AND side as the door they belong to, so the system can name them "Driver Side Front Door Window", "Driver Side Front Door Panel", "Passenger Side Rear Door Window". NEVER report a bare "Door Panel" or "Door Window" without its front/rear position. The same applies to "front"/"rear": if it's the front door's panel, it is the "Front" door panel.
 
 WHEEL & TIRE CONSISTENCY (one car = one wheel size):
 - Every wheel on a single vehicle shares ONE rim diameter and ONE bolt pattern. NEVER report the left wheel as "18-inch" and the right wheel as "17-inch" — that is impossible on one car. Use the SAME diameter for every wheel and tire on this vehicle.
@@ -504,15 +504,24 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     // Sync those confirmed specs into the engine/transmission part titles and
     // descriptions so listings reflect ground truth, not the AI's visual guess.
     if (vehicle?.vin && vehicle.engine) {
+      const vinEngine = vehicle.engine;
+      const drive = vehicle.drivetrain ? `, ${vehicle.drivetrain}` : "";
       for (const p of data) {
         const base = p.partName.replace(/\s*—.*$/, "").trim(); // strip any prior enrichment
-        if (/^engine$/i.test(base)) {
-          p.partName = `Engine — ${vehicle.engine}`;
-          if (!p.description.toLowerCase().includes(vehicle.engine.toLowerCase())) {
-            p.description = [p.description, `VIN-confirmed engine: ${vehicle.engine}.`].filter(Boolean).join(" ");
-          }
-        }
-        if (/^transmission$/i.test(base) && vehicle.drivetrain) {
+        // The engine itself — NOT "Engine Mount"/"Engine Cover"/"Engine Wiring
+        // Harness", which are distinct parts. The VIN is ground truth for the engine
+        // spec, so OVERRIDE the vision model's visual guess rather than appending to
+        // it: a wrong "2.4L inline-4" left in the description would sit right next to
+        // the VIN-confirmed spec and contradict it. Scrub the model's displacement/
+        // cylinder claims, then LEAD with the VIN spec — keeping the rest of what it
+        // observed (condition, leaks, accessories).
+        if (/^engine( assembly| motor| long block| short block)?$/i.test(base)) {
+          p.partName = `Engine — ${vinEngine}`;
+          const notes = scrubEngineSpecs(p.description);
+          p.description = notes
+            ? `VIN-confirmed engine: ${vinEngine}${drive}. ${notes}`
+            : `VIN-confirmed engine: ${vinEngine}${drive}.`;
+        } else if (/^transmission( assembly)?$/i.test(base) && vehicle.drivetrain) {
           if (!p.description.toLowerCase().includes(vehicle.drivetrain.toLowerCase())) {
             p.description = [p.description, `Drivetrain: ${vehicle.drivetrain}.`].filter(Boolean).join(" ");
           }
@@ -733,25 +742,52 @@ function isCenterPart(name: string): boolean {
   return CENTER_PART.test(name) && !LATERAL_PART.test(name);
 }
 
-// Remove a stray left/right/driver/passenger word the model put in a part name.
+// Remove a stray left/right/driver/passenger side word from a part name. The
+// "(?!…mirror)" guard keeps the "Side" of "Side Mirror" — so "Driver Side Mirror"
+// strips to "Side Mirror" (matching the bare catalog name), not "Mirror", which
+// keeps dedupe grouping a sided mirror with its generic sibling.
 function stripSide(name: string): string {
   return name
-    .replace(/\b(driver'?s?|passenger'?s?)([ -]side)?\b/gi, "")
+    .replace(/\b(driver'?s?|passenger'?s?)(?:[ -]side(?!\s+mirror\b))?\b/gi, "")
     .replace(/\b(left|right|lh|rh)\b/gi, "")
     .replace(/\s{2,}/g, " ")
     .trim();
 }
 
+// US salvage convention: the vehicle's LEFT side is the DRIVER side and the RIGHT
+// side is the PASSENGER side (the driver sits on the left). lateralSide() computes
+// Left/Right geometrically; we translate to the human-facing label only here, at the
+// naming boundary, so listings read "Driver Side …" / "Passenger Side …".
+const SIDE_LABEL: Record<"Left" | "Right", string> = { Left: "Driver Side", Right: "Passenger Side" };
+
 function applySide(name: string, side: "Left" | "Right" | null): string {
   if (!side) return name;
-  if (/\b(left|right)\b/i.test(name)) return name;
-  const m = name.match(/^(front|rear)\b\s*(.*)$/i);
-  if (m) {
-    const lead = m[1][0].toUpperCase() + m[1].slice(1).toLowerCase();
-    const rest = m[2].trim();
-    return `${lead} ${side}${rest ? ` ${rest}` : ""}`;
-  }
-  return `${side} ${name}`;
+  // Don't double-side a name that already states a side (either convention).
+  if (/\b(driver|passenger|left|right)\b/i.test(name)) return name;
+  // The side label leads the whole name → "Driver Side Front Door". Collapse the
+  // "Side Side" that "Side Mirror" would produce → "Driver Side Mirror".
+  return `${SIDE_LABEL[side]} ${name}`.replace(/\bSide Side\b/g, "Side");
+}
+
+// Strip DISPLACEMENT and CYLINDER-CONFIG claims the vision model guessed from a
+// photo (e.g. "2.4L", "inline-4", "V6", "4-cyl") so the VIN-confirmed engine is the
+// ONLY spec left in the engine part's description and nothing contradicts it.
+// Everything else it observed (condition, leaks, accessories) is left intact.
+function scrubEngineSpecs(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/\b\d(?:\.\d)?\s?-?\s?(?:l\b|liters?\b|litres?\b)/gi, "")  // 2.4L, 2.4-liter
+    .replace(/\b\d{3,4}\s?cc\b/gi, "")                                  // 2400cc
+    .replace(/\bV[\s-]?\d{1,2}\b/gi, "")                                // V6, V-8
+    .replace(/\b(?:inline|straight|flat)[\s-]?(?:\d{1,2}|two|three|four|five|six|eight|ten|twelve)\b/gi, "") // inline-4, straight-six
+    .replace(/\bI[\s-]?[3-9]\b/g, "")                                   // I4, I-6 config
+    .replace(/\b(?:\d{1,2}|two|three|four|five|six|eight|ten|twelve)[\s-]?cyl(?:inder)?s?\b/gi, "") // 4-cyl, four cylinder
+    .replace(/\(\s*[,;]?\s*\)/g, "")                                    // empty () left behind
+    .replace(/\b(?:a|an)\s+(engine|motor|powerplant)\b/gi, "$1")        // fix dangling article a scrub left ("a engine")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([.,;])/g, "$1")
+    .replace(/^[\s,;.\-–—]+/, "")
+    .trim();
 }
 
 function busyResult(internalError: string): AIResult {
