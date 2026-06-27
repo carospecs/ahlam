@@ -478,6 +478,27 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     // Reconcile every wheel/tire to a single consensus diameter before pricing.
     reconcileWheelSpecs(data);
 
+    // ── VIN ENRICHMENT ───────────────────────────────────────────────────────
+    // When a VIN was decoded, we know the exact engine, drivetrain, and trim.
+    // Sync those confirmed specs into the engine/transmission part titles and
+    // descriptions so listings reflect ground truth, not the AI's visual guess.
+    if (vehicle?.vin && vehicle.engine) {
+      for (const p of data) {
+        const base = p.partName.replace(/\s*—.*$/, "").trim(); // strip any prior enrichment
+        if (/^engine$/i.test(base)) {
+          p.partName = `Engine — ${vehicle.engine}`;
+          if (!p.description.toLowerCase().includes(vehicle.engine.toLowerCase())) {
+            p.description = [p.description, `VIN-confirmed engine: ${vehicle.engine}.`].filter(Boolean).join(" ");
+          }
+        }
+        if (/^transmission$/i.test(base) && vehicle.drivetrain) {
+          if (!p.description.toLowerCase().includes(vehicle.drivetrain.toLowerCase())) {
+            p.description = [p.description, `Drivetrain: ${vehicle.drivetrain}.`].filter(Boolean).join(" ");
+          }
+        }
+      }
+    }
+
     // ── PRICING ──────────────────────────────────────────────────────────────
     // Formula: usedPrice = newPartPriceUsd × gradeDiscount (lib/age-pricing.ts)
     //   Grade A (like new)        → ×0.85  (15% off new price)
