@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Ahlam Auto-Poster",
-  "version": "1.0.0",
-  "description": "Auto-fills Facebook Marketplace, OfferUp & Craigslist new-post forms with listings from your Ahlam shop.",
-  "permissions": ["storage", "sidePanel"],
+  "version": "2.0.0",
+  "description": "Auto-fills your Ahlam listings into Facebook, OfferUp, and Craigslist. You review and click Publish. Nothing posts on its own.",
+  "permissions": ["storage", "sidePanel", "unlimitedStorage"],
   "icons": { "16": "icons/icon-16.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
   "host_permissions": [
     "https://ahlam.io/*",
+    "http://localhost/*",
     "https://*.supabase.co/*",
     "https://www.facebook.com/*",
     "https://offerup.com/*",
@@ -15,7 +16,7 @@
   "background": { "service_worker": "background.js" },
   "content_scripts": [
     {
-      "matches": ["https://ahlam.io/*"],
+      "matches": ["https://ahlam.io/*", "http://localhost/*"],
       "js": ["content-ahlam.js"],
       "run_at": "document_start"
     },

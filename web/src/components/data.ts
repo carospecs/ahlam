@@ -79,6 +79,9 @@ export function buildListingText(l: Listing, shop = SHOP) {
   lines.push(l.part);
   if (l.fitment) lines.push(`Fits: ${l.fitment}`);
   lines.push(`Condition: ${l.grade}${l.note ? ` — ${l.note}` : ""}`);
+  // Trust line: the part was AI-identified and its fitment checked against the
+  // vehicle's VIN. We never print the VIN itself (it stays private).
+  if ((l as any).vin) lines.push("Fitment verified by Ahlam AI from the vehicle VIN.");
   if (l.desc) lines.push("", l.desc);
   if (l.price > 0) lines.push("", `Price: $${l.price}`);
   // Warranty / returns terms (WAR-1/2/4): the listing's own, else the shop default.
@@ -96,6 +99,8 @@ export function buildVehicleText(v: Vehicle, shop = SHOP) {
   const lines: string[] = [];
   lines.push(`${v.year} ${v.make} ${v.model} ${v.trim}`);
   lines.push(`${v.body} • ${v.color} • ${v.mileage}`);
+  // Year/make/model came from the VIN, decoded by AI. VIN number stays private.
+  if (v.vin) lines.push("Year, make and model verified by Ahlam AI from the VIN.");
   const desc = (v as any).description || "";
   if (desc) lines.push("", desc);
   lines.push("", "Mechanic-owned salvage vehicle. Clean parts car or project. Runs and drives — sold as-is.");

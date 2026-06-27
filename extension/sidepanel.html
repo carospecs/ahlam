@@ -15,11 +15,35 @@
     .brand { width: 22px; height: 22px; border-radius: 7px; background: linear-gradient(135deg,#D8392E,#F2683C); display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 12px; }
     .muted { color: #8a98ad; }
     .card { background: #101A2C; border: 1px solid #22304a; border-radius: 12px; padding: 12px; margin-top: 12px; }
-    .listing-title { font-weight: 700; font-size: 14px; margin: 0 0 3px; }
-    .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #1b2740; color: #aab8d0; }
+    .sect-h { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #8a98ad; margin: 0 0 8px; }
+
+    label { display: block; font-size: 11px; font-weight: 700; color: #9fb0c8; margin: 10px 0 4px; }
+    label:first-child { margin-top: 0; }
+    input, textarea, select {
+      width: 100%; font: inherit; color: #E6EDF6; background: #0d1626;
+      border: 1px solid #2c3650; border-radius: 9px; padding: 8px 10px; outline: none;
+    }
+    input:focus, textarea:focus, select:focus { border-color: #D8392E; }
+    textarea { resize: vertical; min-height: 84px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
     button { font: inherit; cursor: pointer; border-radius: 9px; border: 1px solid #2c3650; }
-    .primary { width: 100%; padding: 11px; border: none; background: #D8392E; color: #fff; font-weight: 700; font-size: 13.5px; margin-top: 12px; }
+    .primary { width: 100%; padding: 11px; border: none; background: #D8392E; color: #fff; font-weight: 700; font-size: 13.5px; margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 7px; }
     .primary:disabled { opacity: .5; cursor: not-allowed; }
+    .ghost { width: 100%; padding: 9px; background: #18233b; color: #dfe7f3; margin-top: 8px; font-weight: 600; }
+
+    /* photos */
+    .photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .photo { position: relative; aspect-ratio: 4/3; border-radius: 8px; overflow: hidden; border: 1px solid #22304a; background: #0d1626; }
+    .photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .photo .x { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; border: none; background: rgba(0,0,0,.65); color: #fff; font-weight: 800; line-height: 1; padding: 0; }
+    .photo .mv { position: absolute; bottom: 3px; width: 22px; height: 20px; border: none; background: rgba(0,0,0,.6); color: #fff; padding: 0; font-weight: 800; }
+    .photo .mv.l { left: 3px; border-radius: 6px 0 0 6px; }
+    .photo .mv.r { left: 27px; border-radius: 0 6px 6px 0; }
+    .photo .ord { position: absolute; top: 3px; left: 3px; font-size: 10px; font-weight: 800; background: #D8392E; color: #fff; border-radius: 5px; padding: 1px 5px; }
+    .addp { display: grid; place-items: center; aspect-ratio: 4/3; border: 1px dashed #2c3650; border-radius: 8px; color: #8a98ad; font-size: 22px; }
+    .addp input { display: none; }
+
     .chan { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid #1b2740; }
     .chan:first-child { border-top: none; }
     .chan .name { flex: 1; font-weight: 600; }
@@ -30,27 +54,59 @@
     .s-pending { background: #1b2740; color: #8a98ad; }
     .empty { text-align: center; padding: 18px 8px; }
     .step { font-size: 12px; color: #aab8d0; margin-top: 10px; }
+    .savednote { font-size: 11px; color: #4ade80; margin-top: 6px; min-height: 14px; }
     a { color: #f2845f; }
   </style>
 </head>
 <body>
   <h1><span class="brand">A</span> Auto-Poster</h1>
-  <div class="muted">Fills your post on each marketplace. You review and hit Publish. We never post for you.</div>
+  <div class="muted">Edit your listing here, then send it to Facebook. We fill the form — you review and hit Publish. We never post for you.</div>
 
   <div id="empty" class="empty card" style="display:none">
     <div style="font-weight:700;margin-bottom:6px">No listing yet</div>
-    <div class="muted">In Ahlam, open a part, choose <b>Post elsewhere</b>, then <b>Auto-post everywhere</b>. It shows up here.</div>
+    <div class="muted">In Ahlam, open a part, choose <b>Post elsewhere</b>, then <b>Send to extension</b>. It shows up here to edit.</div>
   </div>
 
   <div id="content" style="display:none">
+    <!-- Editable listing -->
     <div class="card">
-      <div id="listingTitle" class="listing-title"></div>
-      <div><span id="listingPrice" class="pill"></span> <span id="listingPhotos" class="muted"></span></div>
+      <div class="sect-h">Listing</div>
+      <label for="fTitle">Title</label>
+      <input id="fTitle" maxlength="100" placeholder="e.g. 2016 Honda Accord Front Bumper" />
+      <div class="row2">
+        <div><label for="fPrice">Price (USD)</label><input id="fPrice" inputmode="decimal" placeholder="0" /></div>
+        <div><label for="fCondition">Condition</label>
+          <select id="fCondition">
+            <option value="New">New</option>
+            <option value="Used - like new">Used - like new</option>
+            <option value="Used - good">Used - good</option>
+            <option value="Used - fair">Used - fair</option>
+          </select>
+        </div>
+      </div>
+      <div class="row2">
+        <div><label for="fCategory">Category</label><input id="fCategory" placeholder="Auto Parts & Accessories" /></div>
+        <div><label for="fLocation">Location</label><input id="fLocation" placeholder="City, State" /></div>
+      </div>
+      <label for="fDesc">Description</label>
+      <textarea id="fDesc" placeholder="Condition, fitment, part numbers…"></textarea>
+      <div id="saved" class="savednote"></div>
     </div>
 
-    <div class="card" id="channels"></div>
+    <!-- Photo manager -->
+    <div class="card">
+      <div class="sect-h">Photos (<span id="photoCount">0</span>) — drag order with the arrows</div>
+      <div id="photos" class="photos"></div>
+    </div>
 
-    <button id="postAll" class="primary">Post to all marketplaces</button>
+    <button id="fillFb" class="primary">▶ Fill Facebook listing</button>
+
+    <!-- Other marketplaces -->
+    <div class="card">
+      <div class="sect-h">Other marketplaces</div>
+      <div id="channels"></div>
+      <button id="postAll" class="ghost">Open & fill all at once</button>
+    </div>
     <div id="step" class="step"></div>
   </div>
 

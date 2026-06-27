@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowLeft, ArrowRight, ArrowUpRight } from "lucide-react";
-import { PublicHeader } from "@/components/PublicHeader";
+import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 import { Reveal, RevealStagger, RevealItem } from "@/components/Reveal";
 import { GUIDES, getGuide } from "@/content/guides";
 
@@ -21,7 +22,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     title: `${g.title} · Ahlam`,
     description: g.description,
     alternates: { canonical: `/guides/${g.slug}` },
-    openGraph: { title: g.title, description: g.description, type: "article" },
+    openGraph: { title: g.title, description: g.description, type: "article", images: [g.image] },
   };
 }
 
@@ -36,6 +37,7 @@ export default async function GuidePage({ params }: Params) {
     "@type": "Article",
     headline: g.title,
     description: g.description,
+    image: g.image,
     datePublished: g.updated,
     dateModified: g.updated,
     author: { "@type": "Organization", name: "Ahlam" },
@@ -56,16 +58,12 @@ export default async function GuidePage({ params }: Params) {
   const related = GUIDES.filter((x) => x.slug !== g.slug).slice(0, 2);
 
   return (
-    <main style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)", position: "relative" }}>
+    <div style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)" }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleLd) }} />
       {faqLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />}
 
-      <div className="aurora" aria-hidden="true">
-        <div className="aurora-blob aurora-1" />
-        <div className="aurora-blob aurora-2" />
-      </div>
-      <div style={{ position: "relative", zIndex: 1 }}>
-        <PublicHeader />
+      <SiteHeader />
+      <main style={{ position: "relative", zIndex: 1 }}>
 
         {/* Header */}
         <section style={{ borderBottom: "1px solid var(--line)" }}>
@@ -83,6 +81,19 @@ export default async function GuidePage({ params }: Params) {
         </section>
 
         <article style={{ maxWidth: 720, margin: "0 auto", padding: "36px 24px 72px" }}>
+          <Reveal>
+            <div className="cs-frame" style={{ marginBottom: 30 }}>
+              <div className="cs-frame__bar">
+                <span className="cs-frame__dot" style={{ background: "#ff5f57" }} />
+                <span className="cs-frame__dot" style={{ background: "#febc2e" }} />
+                <span className="cs-frame__dot" style={{ background: "#28c840" }} />
+              </div>
+              <div className="cs-photo" style={{ height: 360, borderRadius: 0, border: "none" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={g.image} alt={g.title} loading="lazy" />
+              </div>
+            </div>
+          </Reveal>
           <Reveal>
             <p style={{ fontSize: 19, lineHeight: 1.7, color: "var(--foreground)", opacity: 0.95, marginTop: 0, fontWeight: 500 }}>{g.intro}</p>
           </Reveal>
@@ -151,7 +162,8 @@ export default async function GuidePage({ params }: Params) {
             </div>
           )}
         </article>
-      </div>
-    </main>
+      </main>
+      <SiteFooter />
+    </div>
   );
 }

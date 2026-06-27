@@ -822,11 +822,14 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     const p = new URLSearchParams(window.location.search);
     const order = p.get("order");
     const payouts = p.get("payouts");
+    const billing = p.get("billing");
     if (order === "success") { csToast("Payment complete — held safely in escrow"); setActive("orders"); }
     else if (order === "cancelled") { csToast("Checkout cancelled — no charge made"); }
     else if (payouts === "done") { csToast("Payout setup updated"); setActive("billing"); }
-    if (order || payouts) {
-      ["order", "id", "payouts"].forEach((k) => p.delete(k));
+    else if (billing === "success") { csToast("Subscription active — your plan is live"); setActive("billing"); }
+    else if (billing === "cancelled") { csToast("Checkout cancelled — no charge made"); }
+    if (order || payouts || billing) {
+      ["order", "id", "payouts", "billing"].forEach((k) => p.delete(k));
       const url = new URL(window.location.href);
       url.search = p.toString();
       window.history.replaceState({}, "", url);

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Camera, ScanLine, Send, ShieldCheck, Boxes, Tag, Clock, CheckCircle2 } from "lucide-react";
-import { PublicHeader } from "@/components/PublicHeader";
+import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 import { WaitlistForm } from "@/components/WaitlistForm";
 import { Reveal, RevealStagger, RevealItem } from "@/components/Reveal";
 
@@ -33,14 +34,9 @@ const FEATURES = [
 
 export default function WaitlistPage() {
   return (
-    <main style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)", position: "relative" }}>
-      <div className="aurora" aria-hidden="true">
-        <div className="aurora-blob aurora-1" />
-        <div className="aurora-blob aurora-2" />
-        <div className="aurora-blob aurora-3" />
-      </div>
-      <div style={{ position: "relative", zIndex: 1 }}>
-        <PublicHeader />
+    <div style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)" }}>
+      <SiteHeader />
+      <main style={{ position: "relative", zIndex: 1 }}>
 
         {/* Hero */}
         <section style={{ borderBottom: "1px solid var(--line)" }}>
@@ -133,7 +129,8 @@ export default function WaitlistPage() {
             </p>
           </Reveal>
         </section>
-      </div>
-    </main>
+      </main>
+      <SiteFooter />
+    </div>
   );
 }

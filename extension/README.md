@@ -22,10 +22,12 @@ Reload ahlam.io. The Export & posting "Post elsewhere" sheet button now says
 
 ## How it works
 
-1. In Ahlam, open a part/vehicle → **Post elsewhere** → pick a marketplace.
-2. Click **Auto-fill on …**. Ahlam hands the listing (text + photos) to the
-   extension; the marketplace opens in a new tab.
-3. The extension fills Title / Price / Description and attaches the photos.
+1. In Ahlam, open a part/vehicle → **Post elsewhere**.
+2. **Tick the marketplaces** you want and click **Open & fill**. Ahlam hands the
+   listing (text + photos) to the extension, which opens every selected
+   marketplace in its own tab at once.
+3. Each tab fills Title / Price / Description and attaches the photos (Facebook
+   also fills Category / Condition / Location).
    - **Facebook / OfferUp**: their forms are dynamic React apps with localized,
      frequently-changing labels, so fill is best-effort — the full text is also
      copied to your clipboard as a fallback (paste with ⌘/Ctrl-V if a field is
@@ -36,17 +38,23 @@ Reload ahlam.io. The Export & posting "Post elsewhere" sheet button now says
 4. Review everything and click the marketplace's Publish/Post button. (We never
    auto-publish on these sites — you stay in control.)
 
-### Post everywhere (one after another)
-Click **Auto-post everywhere** in the same sheet. The extension opens **Facebook
-first**, fills it, and shows an **"I posted — open Craigslist →"** button. After
-you publish Facebook, click it to move to Craigslist, then OfferUp. You publish
-each one yourself; nothing posts automatically.
+### Pick where, then open & fill all at once
+In the "Post elsewhere" sheet, **tap the marketplaces you want** (Facebook,
+Craigslist, OfferUp — any combination) and click **Open & fill**. The extension
+opens every selected marketplace in its own tab **at the same time** and fills
+each form. You switch between the tabs, review, and hit Publish on each. Nothing
+posts automatically.
 
-### Side panel (the "mini bot")
-Click the **Ahlam Auto-Poster toolbar icon** to open the side panel. It shows the
-current listing, the status of each marketplace (Queued / Open now / Filled), an
-**Open** button per marketplace, and a **Post to all** button — so you can drive
-the whole run from one place without going back to the Ahlam tab.
+### Optional: edit first in the side panel
+If you'd rather review and tweak before anything opens, click the **Ahlam
+Auto-Poster toolbar icon** to open the side-panel editor. There you can fix the
+**title, price, condition, category, location, and description** (autosaves), and
+**manage the photos** — remove any, reorder them with the ‹ › arrows, and **add
+your own** from your device (up to 10). Then click **▶ Fill Facebook listing**, or
+use the **Other marketplaces** section to open Craigslist/OfferUp or **Open & fill
+all at once**. We never auto-publish anywhere.
+
+Open the panel any time from the **Ahlam Auto-Poster toolbar icon**.
 
 ## Privacy
 
@@ -59,9 +67,10 @@ clears the staged data. It sends nothing anywhere else.
 - `manifest.json` — permissions + which pages each script runs on
 - `background.js` — downloads photos, stages the listing, opens tabs, runs the queue
 - `content-ahlam.js` — on ahlam.io: announces the extension + relays the listing(s)
-- `content-banner.js` — shared status banner + the "open next marketplace" button
+- `content-banner.js` — shared "filled — review & publish" status banner
 - `content-facebook.js` / `content-offerup.js` / `content-craigslist.js` — fill each form
-- `sidepanel.html` / `sidepanel.js` — the side-panel mini bot (status + Post to all)
+  (Facebook also fills Category / Condition / Location via combobox best-effort)
+- `sidepanel.html` / `sidepanel.js` — the side-panel **editor** (edit fields + photos, Fill Facebook)
 
 ## Notes / maintenance
 

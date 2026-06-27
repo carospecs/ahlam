@@ -332,33 +332,85 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
   contain-intrinsic-size: auto 700px;
 }
 
-/* Frosted glass surface — amplifies the existing backdrop-filter primitives. */
-.cs-glass {
-  background: color-mix(in srgb, var(--surface) 66%, transparent);
-  backdrop-filter: blur(12px) saturate(1.2);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
-  border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
-  box-shadow: 0 24px 60px -34px rgba(0,0,0,0.65), inset 0 1px 0 color-mix(in srgb, var(--foreground) 8%, transparent);
+/* Solid editorial surface. (Was a frosted-glass primitive — de-glassed so the
+   marketing site reads as a designed, intentional page rather than the typical
+   translucent "AI template" look. Now an opaque card with a crisp hairline
+   border and a restrained shadow.) Kept the class name so existing call sites
+   inherit the new, calmer treatment without edits. */
+.cs-glass, .cs-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent),
+              0 18px 40px -30px rgba(0,0,0,0.55);
 }
-:root[data-theme="light"] .cs-glass {
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
-  box-shadow: 0 24px 60px -38px rgba(20,35,59,0.32), inset 0 1px 0 rgba(255,255,255,0.6);
+:root[data-theme="light"] .cs-glass,
+:root[data-theme="light"] .cs-panel {
+  box-shadow: 0 1px 2px rgba(20,35,59,0.04), 0 18px 40px -32px rgba(20,35,59,0.18);
 }
 
-/* Floating pill nav — blur intensifies on scroll via the .is-scrolled class. */
+/* Subtle inset panel — a quieter fill used inside cards (rows, wells). */
+.cs-well {
+  background: var(--surface2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+/* Editorial mono label — small, letter-spaced, set in the brand mono. A
+   deliberate, "set by a designer" signal that replaces the generic gradient
+   eyebrow. */
+.cs-kicker {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--sand);
+}
+:root[data-theme="light"] .cs-kicker { color: #9a7b3f; }
+
+/* Big mono section index (01 / 02 …) for numbered editorial sections. */
+.cs-index {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-weight: 700; letter-spacing: -0.02em; color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hairline rule used between editorial blocks. */
+.cs-rule { height: 1px; background: var(--line); border: 0; }
+
+/* Product-shot window frame: a clean, solid app/browser chrome around a
+   screenshot or mock so the page leans on real product imagery (Arvya-style)
+   instead of animated abstract graphics. */
+.cs-frame {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 30px 70px -36px rgba(0,0,0,0.6);
+}
+.cs-frame__bar {
+  display: flex; align-items: center; gap: 7px;
+  padding: 11px 14px; border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface2) 60%, var(--surface));
+}
+.cs-frame__dot { width: 10px; height: 10px; border-radius: 999px; }
+
+/* Photo wrapper — crisp framed image with a hairline border. */
+.cs-photo { position: relative; overflow: hidden; border-radius: var(--radius-md); border: 1px solid var(--line); background: var(--surface2); }
+.cs-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* Floating pill nav — solid (de-glassed). A faint translucency on the surface
+   keeps it light over the hero, but it firms up to a solid bar with a hairline
+   sand border on scroll. No heavy backdrop blur. */
 .cs-pill {
-  background: color-mix(in srgb, var(--surface) 42%, transparent);
-  backdrop-filter: blur(10px) saturate(1.2);
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
-  border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-  transition: background-color 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out), backdrop-filter 0.3s var(--ease-out), border-color 0.3s var(--ease-out);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  backdrop-filter: saturate(1.05);
+  -webkit-backdrop-filter: saturate(1.05);
+  border: 1px solid var(--line);
+  transition: background-color 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out), border-color 0.3s var(--ease-out);
 }
 .cs-pill.is-scrolled {
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  backdrop-filter: blur(12px) saturate(1.2);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
-  border-color: color-mix(in srgb, var(--sand) 26%, transparent);
-  box-shadow: 0 18px 44px -26px rgba(0,0,0,0.6);
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--sand) 30%, var(--line));
+  box-shadow: 0 14px 36px -24px rgba(0,0,0,0.55);
 }
 
 /* Brand grotesque display for marketing headings (landing + guides). A
@@ -379,9 +431,12 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
   font-weight: 700;
 }
 
-/* Gold eyebrow label (uppercase, letter-spaced) above section headings. */
+/* Eyebrow label above section headings — now set in the brand mono for an
+   editorial, deliberately-typeset feel (matches .cs-kicker). Applies site-wide,
+   so every existing eyebrow on blog/guides/waitlist upgrades automatically. */
 .cs-eyebrow {
-  font-size: 12px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
   color: var(--sand);
 }
 :root[data-theme="light"] .cs-eyebrow { color: #9a7b3f; }
@@ -392,21 +447,21 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
 .cs-textlink:hover::after { width: calc(100% - 22px); }
 .cs-textlink:hover { opacity: 0.92; }
 
-/* Static aurora: soft blurred brand-color blobs. No longer animated — a
-   perpetually-animating large blur competes with scroll compositing and made
-   fast scrolling feel laggy. Kept as a still background wash. */
-.aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-.aurora-blob { position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.28; }
-:root[data-theme="light"] .aurora-blob { opacity: 0.22; filter: blur(64px); }
-.aurora-1 { width: 48vw; height: 48vw; left: -10vw; top: -12vw;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 60%, transparent), transparent 70%); }
-.aurora-2 { width: 42vw; height: 42vw; right: -8vw; top: -4vw;
-  background: radial-gradient(circle, color-mix(in srgb, var(--sand) 58%, transparent), transparent 70%); }
-.aurora-3 { width: 40vw; height: 40vw; left: 24vw; top: 28vw;
-  background: radial-gradient(circle, color-mix(in srgb, #3b5bdb 48%, transparent), transparent 70%); }
-@keyframes aurora-a { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(7vw,5vw,0) scale(1.18); } }
-@keyframes aurora-b { from { transform: translate3d(0,0,0) scale(1.05); } to { transform: translate3d(-6vw,7vw,0) scale(1); } }
-@keyframes aurora-c { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(4vw,-6vw,0) scale(1.12); } }
+/* Aurora removed. Soft blurred brand-color blobs are the single biggest "AI
+   landing template" tell, so they're gone site-wide. The page gets its depth
+   from real photography, type, and hairline structure instead. The element is
+   force-hidden (rather than deleted) so any page still mounting it stays clean. */
+.aurora { display: none !important; }
+
+/* A single, very faint top wash gives the dark hero a touch of depth without
+   reintroducing colored blobs. Monochrome, low-opacity, fixed. */
+.cs-page-wash {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(90% 60% at 50% -10%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 60%);
+}
+:root[data-theme="light"] .cs-page-wash {
+  background: radial-gradient(90% 60% at 50% -10%, color-mix(in srgb, var(--sand) 26%, transparent), transparent 60%);
+}
 
 /* Faint technical grid behind the hero, masked to fade at the edges. */
 .cs-grid-bg {
@@ -463,8 +518,14 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
 .cs-logo { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; color: var(--muted); opacity: 0.78; white-space: nowrap; }
 
 /* Landing two-column hero collapses on narrow screens. */
+@media (max-width: 980px) {
+  .cs-runs-grid { grid-template-columns: 1fr !important; }
+  .cs-faq-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
+  .cs-cta-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
+  .cs-footer-grid { grid-template-columns: 2fr 1fr 1fr !important; gap: 28px !important; }
+}
 @media (max-width: 880px) {
-  .cs-hero-grid { grid-template-columns: 1fr !important; }
+  .cs-hero-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
   .cs-how-grid { grid-template-columns: 1fr !important; }
   .cs-feat-grid { grid-template-columns: 1fr 1fr !important; }
   /* Step rows stack; the visual always sits below the copy regardless of flip. */
@@ -475,8 +536,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
   .cs-feat-grid { grid-template-columns: 1fr !important; }
   .cs-pill-links { display: none !important; }
 }
-@media (max-width: 760px) {
-  .cs-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
+@media (max-width: 680px) {
+  .cs-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 26px !important; }
 }
 
 /* ---- Print: listing cards ---- */

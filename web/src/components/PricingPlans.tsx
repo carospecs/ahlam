@@ -35,6 +35,21 @@ export const PLANS: Plan[] = [
     ],
   },
   {
+    id: "solo",
+    name: "Solo",
+    price: "$19",
+    per: "/mo",
+    desc: "For individuals and flippers who mostly want the cross-posting extension, with a few AI scans each month.",
+    features: [
+      "Single user",
+      "AI scan: 3 cars per month (photo-to-listing)",
+      "Cross-post with the Ahlam browser extension (Facebook, OfferUp, Craigslist)",
+      "Post up to 1 car a day",
+      "Export up to 20 cars / 100 parts a month",
+      "List on the Ahlam marketplace",
+    ],
+  },
+  {
     id: "growth",
     name: "Growth",
     price: "$100",
@@ -44,7 +59,8 @@ export const PLANS: Plan[] = [
       "10 car listings per month",
       "AI scan & auto-pricing (photo-to-listing)",
       "Team access: Owner & Editor",
-      "AI Interchange Assistant",
+      "AI Interchange Assistant (parts fitment across vehicles)",
+      "AI Auto-Repricing (market watch, updates prices automatically)",
       "Inventory analytics",
       "eBay listing integration",
     ],
@@ -60,7 +76,8 @@ export const PLANS: Plan[] = [
       "50 car listings per month",
       "AI scan & auto-pricing (photo-to-listing)",
       "Team access: Owner & Unlimited Editors",
-      "AI Interchange Assistant",
+      "AI Interchange Assistant (parts fitment across vehicles)",
+      "AI Auto-Repricing (market watch, updates prices automatically)",
       "Full inventory analytics & profit tracking",
       "Cross-platform export (eBay, Facebook, OfferUp, Craigslist)",
     ],
@@ -75,7 +92,8 @@ export const PLANS: Plan[] = [
       "Unlimited car listings per month",
       "AI scan & auto-pricing (photo-to-listing)",
       "Team access: Owner & Unlimited Editors",
-      "AI Interchange Assistant",
+      "AI Interchange Assistant (parts fitment across vehicles)",
+      "AI Auto-Repricing (market watch, updates prices automatically)",
       "Full inventory analytics & profit tracking",
       "Cross-platform export (eBay, Facebook, OfferUp, Craigslist)",
       "Custom business website, built for you",
@@ -92,17 +110,17 @@ export function PricingPlans({
   ctaLabel?: string;
 }) {
   return (
-    <div className="cs-plan-row" style={{ display: "flex", gap: 18, alignItems: "stretch", justifyContent: "center", flexWrap: "wrap" }}>
+    <div className="cs-plan-row" style={{ display: "flex", gap: 14, alignItems: "stretch", justifyContent: "center", flexWrap: "wrap" }}>
       {PLANS.map((p) => (
         <div
           key={p.id}
           className="cs-glass"
           style={{
             flex: "1 1 0",
-            minWidth: 215,
-            maxWidth: 320,
+            minWidth: 198,
+            maxWidth: 300,
             borderRadius: "var(--radius-xl)",
-            padding: 22,
+            padding: 20,
             position: "relative",
             display: "flex",
             flexDirection: "column",

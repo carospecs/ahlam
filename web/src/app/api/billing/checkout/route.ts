@@ -41,7 +41,17 @@ export async function POST(req: Request) {
   try { plan = (await req.json())?.plan; } catch { /* no body */ }
 
   let price: string | null = null;
-  if (plan && PLAN_PRODUCTS[plan]) {
+  if (plan) {
+    // A named plan MUST resolve to its own configured Stripe product. Never fall
+    // back to STRIPE_PRICE_ID for a recognized plan — doing so could charge the
+    // customer a different plan's price while the webhook still stamps this plan
+    // (metadata[plan]). If the plan's product id is unset, fail loudly instead.
+    if (!(plan in PLAN_PRODUCTS) || !PLAN_PRODUCTS[plan]) {
+      return NextResponse.json(
+        { configured: false, error: `The ${plan} plan isn't connected to billing yet. Set STRIPE_PRODUCT_${plan.toUpperCase()} to its Stripe product id.` },
+        { status: 503 },
+      );
+    }
     price = await priceForProduct(PLAN_PRODUCTS[plan], key);
     if (!price) return NextResponse.json({ error: `No active Stripe price found for the ${plan} plan.` }, { status: 502 });
   } else {

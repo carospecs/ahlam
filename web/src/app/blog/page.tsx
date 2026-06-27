@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
-import { PublicHeader } from "@/components/PublicHeader";
+import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 import { Reveal, RevealStagger, RevealItem } from "@/components/Reveal";
 import { BLOG } from "@/content/blog";
 
@@ -24,13 +25,9 @@ function fmt(iso: string) {
 export default function BlogIndex() {
   const posts = [...BLOG].sort((a, b) => +new Date(b.published) - +new Date(a.published));
   return (
-    <main style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)", position: "relative" }}>
-      <div className="aurora" aria-hidden="true">
-        <div className="aurora-blob aurora-1" />
-        <div className="aurora-blob aurora-2" />
-      </div>
-      <div style={{ position: "relative", zIndex: 1 }}>
-        <PublicHeader />
+    <div style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)" }}>
+      <SiteHeader />
+      <main style={{ position: "relative", zIndex: 1 }}>
 
         {/* Hero */}
         <section style={{ borderBottom: "1px solid var(--line)" }}>
@@ -54,6 +51,10 @@ export default function BlogIndex() {
               <RevealItem key={p.slug} style={{ height: "100%" }}>
                 <Link href={`/blog/${p.slug}`} style={{ textDecoration: "none", color: "inherit", display: "block", height: "100%" }}>
                   <article className="cs-glass cs-hover-card" style={{ borderRadius: "var(--radius-lg)", padding: 24, height: "100%", display: "flex", flexDirection: "column" }}>
+                    <div className="cs-photo" style={{ height: 170, marginBottom: 16 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.image} alt={p.title} loading="lazy" />
+                    </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent)", background: "var(--accent-tint)", borderRadius: 999, padding: "4px 10px" }}>{p.category}</span>
                       <span style={{ fontSize: 12, color: "var(--muted)" }}>{fmt(p.published)}</span>
@@ -78,7 +79,8 @@ export default function BlogIndex() {
             </div>
           </Reveal>
         </section>
-      </div>
-    </main>
+      </main>
+      <SiteFooter />
+    </div>
   );
 }
