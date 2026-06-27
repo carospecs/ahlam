@@ -192,9 +192,15 @@ OUTPUT ORDER — return "parts" in a logical, scannable order so the seller neve
 2. Keep Left/Right pairs ADJACENT (e.g. Left Headlight immediately next to Right Headlight). Never scatter complementary parts.
 
 LEFT / RIGHT SIDES — READ CAREFULLY (this is where mistakes happen):
-1. "vehicleFront" — where is the FRONT of the car relative to the photo?
-   - "toward-camera", "away-from-camera", "points-left", "points-right", or "unknown"
-2. "imageSide" (per part) — purely WHERE the part appears in the photo frame from your point of view: "left", "right", or "center".
+1. "vehicleFront" — where is the FRONT of the car pointing relative to the photo? This is the MOST IMPORTANT field for correct labeling — get this wrong and every side gets flipped.
+   - "toward-camera" = car faces YOU (you see the front grille/headlights)
+   - "away-from-camera" = car faces AWAY (you see the trunk/taillights)
+   - "points-left" = car's front points to the LEFT side of the image (side profile, nose left)
+   - "points-right" = car's front points to the RIGHT side of the image (side profile, nose right)
+   - "unknown" = only when you truly cannot determine orientation
+   HOW THE SYSTEM USES THIS: when the car faces toward you, the driver's side (LEFT of the vehicle) appears on the RIGHT side of the image — the system automatically flips imageSide to get the correct vehicle side. So report vehicleFront accurately and report imageSide as literally where the part appears in the photo frame — the system handles the rest.
+   DRIVER SIDE = LEFT side of the vehicle (as the driver sits in the car). PASSENGER SIDE = RIGHT side of the vehicle. In the US, the driver sits on the LEFT.
+2. "imageSide" (per part) — purely WHERE the part appears in the photo frame from your point of view: "left", "right", or "center". NOT the vehicle's left/right — just the image frame.
 3. Put NO "left"/"right"/"driver"/"passenger" word in "partName" — the system adds the correct side itself from "imageSide". "front"/"rear" ARE allowed in the name (e.g. "Front Bumper Cover").
 4. CENTER PARTS HAVE NO LEFT/RIGHT. These parts exist as a single centered unit and MUST use "imageSide": "center" — never left/right: Hood, Grille, Front Bumper Cover, Rear Bumper Cover, Roof Panel, Windshield, Back Glass, Trunk Lid, Tailgate, Liftgate, Radiator, Engine, Transmission, Dashboard, Center Console, Instrument Cluster, Steering Wheel, Battery, exhaust/muffler. A "Right Grille" or "Left Bumper Cover" is WRONG.
 5. SIDE PARTS that genuinely come in a left and a right: Fender, Door, Quarter Panel, Side Mirror, Headlight Assembly, Tail Light Assembly, Fog Light, door Windows, Front Seat, wheels. These MUST carry a side — set "imageSide" to "left" or "right", NEVER "center". A door/mirror/fender/headlight always belongs to one side; pick the side you see. Result names must be specific like "Front Left Door", "Rear Right Door", "Left Side Mirror".
