@@ -306,6 +306,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   async function runAnalysis() {
     const myToken = beginScanRun();
     setPhase("analyzing"); setError(null);
+    // If the seller already confirmed a VIN this session, pass it so every photo's scan
+    // classifies + prices for that exact vehicle (the server decodes it up front).
+    const sessionVin = vinStatus === "confirmed" && /^[A-HJ-NPR-Z0-9]{17}$/.test(vin || "") ? vin : null;
     try {
       const results = await Promise.all(
         photos.map(async (photo) => {
@@ -313,7 +316,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
           const res = await fetch("/api/identify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ imageBase64: dataUrl }),
+            body: JSON.stringify(sessionVin ? { imageBase64: dataUrl, vin: { vin: sessionVin } } : { imageBase64: dataUrl }),
           });
           return { result: (await res.json()) as AIResult, photo };
         })

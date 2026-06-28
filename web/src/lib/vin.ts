@@ -40,6 +40,17 @@ export function normalizeVin(raw: string | null | undefined): string | null {
   return vin;
 }
 
+// Human label for a decoded engine, e.g. "3.5L 6-cyl 2GR-FE". Combines displacement
+// (L, or CC→L) + cylinder count + the engine model/config NHTSA returns. Shared so the
+// photo-read and client-supplied VIN paths build the engine string identically.
+export function engineLabel(
+  d: Pick<VinDecode, "displacementL" | "displacement" | "engineCylinders" | "engine">,
+): string | null {
+  const disp = d.displacementL || (d.displacement ? (Number(d.displacement) / 1000).toFixed(1) : null);
+  return [disp ? `${disp}L` : null, d.engineCylinders ? `${d.engineCylinders}-cyl` : null, d.engine]
+    .filter(Boolean).join(" ") || null;
+}
+
 const NHTSA_LOOKUP = (vin: string) =>
   `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/${vin}?format=json`;
 

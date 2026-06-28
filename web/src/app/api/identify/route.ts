@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { vehicleAge, ageFactor, usedPriceFromNew } from "@/lib/age-pricing";
 import { geminiGenerate } from "@/lib/gemini";
-import { decodeVin, normalizeVin, type VinInfo } from "@/lib/vin";
+import { decodeVin, normalizeVin, engineLabel, type VinInfo, type VinDecode } from "@/lib/vin";
 import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
 import { applyVinEngine } from "@/lib/part-enrich";
 
@@ -237,10 +237,21 @@ CRITICAL RULES:
 const VISION_USER_INSTRUCTION =
   'Catalog every distinct sellable auto part visible in this photo. Inspect each part closely for cracks, breaks, and damage. Report "vehicleFront" and each part\'s "imageSide" as literal observations. Return the JSON { "vehicleFront": ..., "parts": [...] }.';
 
-function vinContext(decoded: { make?: string; model?: string; year?: number }): string {
-  const parts = [decoded.year, decoded.make, decoded.model].filter(Boolean);
-  if (parts.length === 0) return "";
-  return `\n\nKnown source vehicle (from VIN decode): ${parts.join(" ")}. Use this to improve fitment accuracy, but only if the part visibly belongs to this vehicle.`;
+// When a VIN is known BEFORE the scan (client-supplied + decoded up front), inject the
+// full decoded spec into the prompt so the model classifies parts AND prices them for
+// THIS exact vehicle, not a visual guess. (A VIN read from the photo itself is decoded
+// after the vision call, so it can't steer the prompt — the post-process fitment anchor
+// and engine override cover that case instead.)
+function vinContext(decoded: { make?: string | null; model?: string | null; year?: number | null; trim?: string | null; engine?: string | null; drivetrain?: string | null }): string {
+  const id = [decoded.year, decoded.make, decoded.model, decoded.trim].filter(Boolean).join(" ");
+  if (!id) return "";
+  const specs = [
+    decoded.engine ? `engine ${decoded.engine}` : null,
+    decoded.drivetrain ? `drivetrain ${decoded.drivetrain}` : null,
+  ].filter(Boolean).join(", ");
+  return `\n\nKNOWN SOURCE VEHICLE — decoded from its VIN; treat as GROUND TRUTH and override any visual guess: ${id}${specs ? ` (${specs})` : ""}.` +
+    ` Classify each part as the correct part FOR THIS EXACT VEHICLE, set its "fitment" to this vehicle, and base "newPartPriceUsd" on a NEW OEM part for this make/model/year/trim${decoded.engine ? "/engine" : ""}.` +
+    ` Only include a part if it visibly belongs to this vehicle.`;
 }
 
 // NHTSA doesn't carry Toyota/most marketing trims (it returns a platform "Series"
@@ -350,7 +361,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     }
   } catch { /* fail-open: never block a scan on a usage-lookup error */ }
 
-  let body: { imageBase64?: string; imageUrl?: string; photoContext?: string; vin?: { make?: string; model?: string; year?: number } };
+  let body: { imageBase64?: string; imageUrl?: string; photoContext?: string; vin?: { vin?: string; make?: string; model?: string; year?: number } };
   try {
     body = await req.json();
   } catch {
@@ -378,7 +389,14 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
   const photoContext = typeof body.photoContext === "string" && body.photoContext.trim()
     ? `\n\nThis photo is labeled by the seller as: "${body.photoContext.trim()}". Use that to focus on the relevant parts (e.g. an "Engine bay" photo → mechanical parts; a "Dashboard" photo → read the odometer mileage and interior parts).`
     : "";
-  const userText = VISION_USER_INSTRUCTION + (body.vin ? vinContext(body.vin) : "") + photoContext;
+  // Decode a client-supplied VIN UP FRONT (before the vision call) so its full spec can
+  // steer classification + pricing in the prompt. NHTSA is free + cached, not an AI
+  // call. Reused after the scan to lock the vehicle identity/specs.
+  const clientVin: VinDecode | null = body.vin?.vin ? await decodeVin(body.vin.vin) : null;
+  const vinForPrompt = clientVin
+    ? { year: clientVin.year, make: clientVin.make, model: clientVin.model, trim: clientVin.trim, engine: engineLabel(clientVin), drivetrain: clientVin.driveType }
+    : body.vin;
+  const userText = VISION_USER_INSTRUCTION + (vinForPrompt ? vinContext(vinForPrompt) : "") + photoContext;
 
   try {
     const content = await callGemini(rawBase64, mime, userText);
@@ -430,8 +448,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
         // NHTSA "Series" (e.g. "40 Series") is a platform code, not the marketing
         // trim — use the real Trim field, else scan the web for it.
         vehicle.trim = decoded.trim || await vinTrimLookup(decoded.vin, [decoded.year, decoded.make, decoded.model].filter(Boolean).join(" ")) || null;
-        const disp = decoded.displacementL || (decoded.displacement ? (Number(decoded.displacement) / 1000).toFixed(1) : null);
-        vehicle.engine = [disp ? `${disp}L` : null, decoded.engineCylinders ? `${decoded.engineCylinders}-cyl` : null, decoded.engine].filter(Boolean).join(" ") || null;
+        vehicle.engine = engineLabel(decoded);
         vehicle.drivetrain = decoded.driveType || null;
         const { raw: _raw, ...info } = decoded; // strip the bulky raw map
         vehicle.vinInfo = { ...info, trim: vehicle.trim }; // include the resolved (looked-up) trim
@@ -440,9 +457,22 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
         vehicle.vin = null; // misread / not in NHTSA — don't surface a bogus VIN
       }
     }
-    // Client-supplied decode (user scanned/typed the VIN before uploading): trust
-    // its exact year/make/model the same way, even when no VIN was visible in frame.
-    if (vehicle && !vehicle.vin && body.vin) {
+    // Client-supplied VIN (decoded up front): lock identity + specs when the photo
+    // itself showed no VIN. Setting vehicle.vin is what lets the engine override +
+    // fitment anchor below treat this as a VIN-confirmed vehicle.
+    if (vehicle && !vehicle.vin && clientVin) {
+      vehicle.vin = clientVin.vin;
+      if (clientVin.make) vehicle.make = clientVin.make;
+      if (clientVin.model) vehicle.model = clientVin.model;
+      if (clientVin.year) { vehicle.yearStart = clientVin.year; vehicle.yearEnd = clientVin.year; }
+      if (clientVin.trim) vehicle.trim = clientVin.trim;
+      vehicle.engine = engineLabel(clientVin) ?? vehicle.engine;
+      if (clientVin.driveType) vehicle.drivetrain = clientVin.driveType;
+      const { raw: _raw, ...info } = clientVin;
+      vehicle.vinInfo = { ...info, trim: vehicle.trim ?? null };
+      vehicle.confidence = "high";
+    } else if (vehicle && !vehicle.vin && body.vin) {
+      // Legacy: caller passed only make/model/year (no raw VIN to decode).
       if (body.vin.make) vehicle.make = body.vin.make;
       if (body.vin.model) vehicle.model = body.vin.model;
       if (typeof body.vin.year === "number") { vehicle.yearStart = body.vin.year; vehicle.yearEnd = body.vin.year; }
@@ -519,6 +549,28 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
             && !p.description.toLowerCase().includes(vehicle.drivetrain.toLowerCase())) {
           p.description = [p.description, `Drivetrain: ${vehicle.drivetrain}.`].filter(Boolean).join(" ");
         }
+      }
+    }
+
+    // ── VIN FITMENT ANCHOR ─────────────────────────────────────────────────────
+    // The VIN is ground truth for the SOURCE vehicle, so make every part's primary
+    // fitment that exact year/make/model (trim/engine in notes). Any extra interchange
+    // the model suggested for OTHER vehicles is kept after it. This grounds part
+    // classification in the VIN even when the VIN was read from a different photo.
+    if (vehicle?.vin && vehicle.make && vehicle.model && vehicle.yearStart) {
+      const src: VehicleFit = {
+        make: vehicle.make,
+        model: vehicle.model,
+        yearStart: vehicle.yearStart,
+        yearEnd: vehicle.yearEnd ?? vehicle.yearStart,
+        notes: [vehicle.trim, vehicle.engine].filter(Boolean).join(" · ") || undefined,
+      };
+      for (const p of data) {
+        const extras = (p.fitment ?? []).filter(
+          (f) => !(f.make?.toLowerCase() === src.make.toLowerCase()
+                && f.model?.toLowerCase() === src.model.toLowerCase()),
+        );
+        p.fitment = [src, ...extras];
       }
     }
 
