@@ -306,9 +306,11 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   async function runAnalysis() {
     const myToken = beginScanRun();
     setPhase("analyzing"); setError(null);
-    // If the seller already confirmed a VIN this session, pass it so every photo's scan
-    // classifies + prices for that exact vehicle (the server decodes it up front).
-    const sessionVin = vinStatus === "confirmed" && /^[A-HJ-NPR-Z0-9]{17}$/.test(vin || "") ? vin : null;
+    // If a valid VIN is in the field — typed up front OR confirmed from a prior scan —
+    // pass it so every photo's scan classifies + prices for that exact vehicle (the
+    // server decodes it up front; a bad/unknown VIN simply decodes to nothing).
+    const cleanVin = (vin || "").trim().toUpperCase();
+    const sessionVin = /^[A-HJ-NPR-Z0-9]{17}$/.test(cleanVin) ? cleanVin : null;
     try {
       const results = await Promise.all(
         photos.map(async (photo) => {
@@ -554,6 +556,24 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderRadius: 11, background: "var(--accent-tint)", border: "1px solid color-mix(in srgb, var(--accent) 26%, transparent)", fontSize: 13, lineHeight: 1.5 }}>
             <ScanLine size={17} color="var(--accent)" style={{ flexShrink: 0 }} />
             <span><strong style={{ color: "var(--foreground)" }}>Don&apos;t forget the VIN.</strong> Take a clear picture of the VIN plate on the front windshield (driver&apos;s-side base). It locks in exact fitment and noticeably better pricing.</span>
+          </div>
+
+          {/* Optional up-front VIN — when provided, the FIRST scan already prices each
+              part for the exact trim/engine (no scan → confirm → re-run round trip). */}
+          <div style={{ display: "grid", gap: 6 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", letterSpacing: "0.02em" }}>
+              VIN <span style={{ fontWeight: 500, textTransform: "none" }}>· optional — type it now for exact-trim pricing on the first scan, or skip and we&apos;ll read it from your photos</span>
+            </label>
+            <input
+              value={vin}
+              onChange={(e) => { setVin(e.target.value.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, "").slice(0, 17)); setVinStatus("idle"); }}
+              placeholder="17-character VIN (optional)"
+              maxLength={17}
+              style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, padding: "10px 13px", borderRadius: 10, letterSpacing: "0.04em", fontFamily: "var(--font-sans)" }}
+            />
+            {vin && !/^[A-HJ-NPR-Z0-9]{17}$/.test(vin) && (
+              <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{vin.length}/17 characters</span>
+            )}
           </div>
 
           {/* One box — drop every photo in; the AI defines what each one is */}
