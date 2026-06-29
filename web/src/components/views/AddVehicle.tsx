@@ -255,6 +255,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const [saving, setSaving] = React.useState(false);
   const [dragging, setDragging] = React.useState(false);
   const [camOpen, setCamOpen] = React.useState(false);
+  const [repricing, setRepricing] = React.useState(false); // VIN auto-refine in flight
   const fileRef = React.useRef<HTMLInputElement>(null);
   const partSeq = React.useRef(0);
   // After a remount (e.g. returning to a restored session), continue ids above the
@@ -397,10 +398,44 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       setParts(deduped);
       setPhase("results");
       playSonarPing(); // sonar ring: the scan is done, results are ready
+
+      // Auto-refine: a VIN was found in the photos but NOT supplied up front, so the
+      // first-pass prices used the model's vehicle read. Re-price every part for the
+      // exact decoded trim/engine in one background call. Best-effort — prices stay as
+      // they are on any failure.
+      if (!sessionVin && agg?.vin) void repriceForVin(myToken, agg.vin, deduped);
     } catch (e) {
       if (!isScanRun(myToken)) return; // cancelled / superseded
       setError("We couldn't reach the analysis server. Check your connection and try again.");
       setPhase("error");
+    }
+  }
+
+  // One extra call (/api/reprice) that re-estimates each part's new price for the exact
+  // decoded VIN vehicle, then applies the same grade discount. Updates prices in place,
+  // matched by name; skips anything it can't confidently re-price. Best-effort.
+  async function repriceForVin(token: number, vin: string, current: AIPart[]) {
+    setRepricing(true);
+    try {
+      const res = await fetch("/api/reprice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vin, parts: current.map((p) => ({ name: p.partName, grade: p.condition })) }),
+      });
+      const j = await res.json();
+      if (!isScanRun(token)) return; // a newer scan superseded this one
+      if (!j?.ok || !Array.isArray(j.parts)) return;
+      const byName = new Map<string, { suggestedPriceUsd: number | null; newPartPriceUsd: number | null }>();
+      for (const r of j.parts) if (r && typeof r.name === "string") byName.set(r.name.toLowerCase().trim(), r);
+      setParts((prev) => prev.map((p) => {
+        const r = byName.get(p.partName.toLowerCase().trim());
+        if (!r || typeof r.newPartPriceUsd !== "number" || r.newPartPriceUsd <= 0) return p;
+        return { ...p, suggestedPriceUsd: r.suggestedPriceUsd, _aiPrice: r.suggestedPriceUsd ?? p._aiPrice };
+      }));
+    } catch {
+      /* network/parse error — keep the original prices */
+    } finally {
+      if (isScanRun(token)) setRepricing(false);
     }
   }
 
@@ -950,6 +985,11 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                 <div>
                   <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{sellMode === "both" ? "Parts value · suggested" : "Suggested parts value"}</div>
                   <div className="tnum" style={{ fontSize: 22, fontWeight: 800, color: showCar ? "var(--foreground)" : "var(--success)" }}>${partsTotal.toLocaleString()}</div>
+                  {repricing && (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 3, fontSize: 11.5, color: "var(--accent)" }}>
+                      <Sparkles size={12} /> Refining prices for your VIN…
+                    </div>
+                  )}
                 </div>
               )}
             </div>
