@@ -552,7 +552,9 @@ function ContactModal({ target, onClose }: { target: { listingId?: string; shopI
       });
       const d = await r.json();
       if (!r.ok) { csToast(d.error || "Could not send"); setBusy(false); return; }
-      csToast("Message sent to seller");
+      // Sample/demo listings have no real seller — don't pretend the message landed.
+      if (d.demo) { csToast("This is a sample listing — messaging turns on once real shops post"); onClose(); return; }
+      csToast("Message sent — find it under Messages › Buying");
       onClose();
     } catch {
       csToast("Could not send message");

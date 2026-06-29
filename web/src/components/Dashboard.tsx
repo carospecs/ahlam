@@ -15,7 +15,7 @@ import { Overview } from "./views/Overview";
 import { Vehicles } from "./views/Vehicles";
 import { Browse } from "./views/Browse";
 import { Parts } from "./views/Parts";
-import { Messages, DeletedChats } from "./views/Messages";
+import { MessagesHub, DeletedChats } from "./views/Messages";
 import { AIChat } from "./views/AIChat";
 import { AssistantDrawer } from "./AssistantDrawer";
 import { Interchange } from "./views/Interchange";
@@ -242,7 +242,7 @@ function ProfileMenu({ onSignOut, onNav }: { onSignOut: () => void; onNav?: (id:
 
 const VIEWS: Record<string, React.ComponentType<any>> = {
   overview: Overview, vehicles: Vehicles, browse: Browse, orders: Orders, parts: Parts, export: ExportCenter, analytics: Analytics,
-  messages: Messages, aichat: AIChat, add: AddVehicle, interchange: Interchange, vehicleProfile: VehicleProfile,
+  messages: MessagesHub, aichat: AIChat, add: AddVehicle, interchange: Interchange, vehicleProfile: VehicleProfile,
   settings: AccountSettings, shop: ShopProfile, team: TeamRoles, billing: Billing, notifications: Notifications,
   files: Files, yard: YardManagement, gallery: Gallery,
   "deleted-chats": DeletedChats,

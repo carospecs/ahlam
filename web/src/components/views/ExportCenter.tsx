@@ -2,7 +2,7 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
-import { Send, Copy, Download, FileDown, ExternalLink, Info, CircleCheck, Share2, Tag, ShoppingBag, Globe, LoaderCircle, Link2, RefreshCw, ChevronDown, Car, X, AlertTriangle, Check, ImageDown, Boxes } from "lucide-react";
+import { Send, Copy, Download, ExternalLink, Info, CircleCheck, Share2, Tag, ShoppingBag, Globe, LoaderCircle, Link2, RefreshCw, ChevronDown, Car, X, AlertTriangle, Check, ImageDown, Boxes } from "lucide-react";
 
 // Render an overlay through the document body so its position:fixed always
 // covers the real viewport — a transformed ancestor (the scrolled content area)
@@ -121,11 +121,11 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
   // seller on a blank marketplace form. They review/fix the fields (and save the
   // fix back to the listing), then open the marketplace to paste.
   function prepareAndOpen(ch: typeof PREPARE_CHANNELS[number], l: any) {
-    setPrepare({ channel: ch, kind: "part", entity: l, photos: [l.image, ...(Array.isArray(l.images) ? l.images : [])].filter(Boolean), prefix: slug(l.part) });
+    setPrepare({ channel: ch, kind: "part", entity: l, photos: [...new Set([l.image, ...(Array.isArray(l.images) ? l.images : [])].filter(Boolean))], prefix: slug(l.part) });
   }
 
   function prepareCar(ch: typeof PREPARE_CHANNELS[number], v: any) {
-    setPrepare({ channel: ch, kind: "car", entity: v, photos: [v.image, ...(Array.isArray(v.images) ? v.images : [])].filter(Boolean), prefix: slug(`${v.year}-${v.make}-${v.model}`) });
+    setPrepare({ channel: ch, kind: "car", entity: v, photos: [...new Set([v.image, ...(Array.isArray(v.images) ? v.images : [])].filter(Boolean))], prefix: slug(`${v.year}-${v.make}-${v.model}`) });
   }
 
   // One publisher for parts, wholesale lots, and whole cars — body decides which.
@@ -151,16 +151,6 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url); csToast(`Downloaded ${filename}`);
-  }
-  function exportCSV() {
-    const headers = ["Part", "Vehicle/Fitment", "Price", "Grade", "Status", "Description"];
-    const rows = ready.map((l: any) => [l.part, listingVeh(l), l.price ?? "", l.grade ?? "", l.status, (l.desc || l.description || "").replace(/"/g, '""')]);
-    const csv = [headers.join(","), ...rows.map((r: string[]) => r.map((v: string) => `"${v}"`).join(","))].join("\n");
-    downloadBlob(csv, "listings.csv", "text/csv");
-  }
-  function exportJSON() {
-    const data = ready.map((l: any) => ({ id: l.id, part: l.part, vehicle: listingVeh(l), fitment: l.fitment, price: l.price, grade: l.grade, status: l.status, description: l.desc || l.description }));
-    downloadBlob(JSON.stringify(data, null, 2), "listings.json", "application/json");
   }
 
   // Facebook/Meta Commerce catalog feed. A shop with a Facebook Page Shop +
@@ -288,6 +278,20 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
         </div>
       </div>
 
+      {/* Car-Part.com / URG — the wholesale salvage channel (CSV / feed) */}
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Car-Part.com · URG <span style={{ color: "var(--muted)", fontWeight: 500 }}>wholesale</span></div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>The pro wholesale channel — repair shops and the wrecker network search it from their estimating software. Export your priced parts as a recycler-standard interchange CSV, then upload it in Car-Part.com&apos;s inventory tool (or map it into a URG-compatible feed).</div>
+        <Card style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <span style={{ width: 38, height: 38, borderRadius: 10, background: "var(--surface2)", display: "grid", placeItems: "center", flexShrink: 0 }}><Boxes size={18} color="var(--accent)" /></span>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700 }}>Inventory CSV</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>Dealer, Stock #, Year/Make/Model, Part Type, <strong>Interchange/Hollander #</strong>, Grade, Price, Location. Add Hollander/interchange numbers to your parts for the best matching.</div>
+            <button onClick={exportCarPartCSV} disabled={!ready.length} style={{ ...advBtn, marginTop: 10 }}><Download size={16} color="var(--accent)" /> Download Car-Part CSV{ready.length ? ` · ${ready.length}` : ""}</button>
+          </div>
+        </Card>
+      </div>
+
       {/* Whole cars for sale */}
       {sellableCars.length > 0 && (
         <div>
@@ -394,15 +398,12 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
         {advanced && (
           <>
             <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-              <button onClick={exportCarPartCSV} disabled={!ready.length} style={advBtn}><Boxes size={16} color="var(--accent)" /> Car-Part.com / URG (CSV)</button>
-              <button onClick={exportFacebookCSV} disabled={!ready.length} style={advBtn}><Share2 size={16} color="#1877f2" /> Facebook catalog (CSV)</button>
-              <button onClick={exportCSV} disabled={!ready.length} style={advBtn}><FileDown size={16} /> Export CSV</button>
-              <button onClick={exportJSON} disabled={!ready.length} style={advBtn}><Download size={16} /> Export JSON</button>
+              <button onClick={exportFacebookCSV} disabled={!ready.length} style={advBtn}><Share2 size={16} color="#1877f2" /> Facebook &amp; Instagram catalog (CSV)</button>
               <button onClick={() => { try { navigator.clipboard?.writeText(ready.map((l: any) => buildListingText(l, shop)).join("\n\n———\n\n")); } catch {} csToast(`Copied ${ready.length} listings`); }} disabled={!ready.length} style={advBtn}><Copy size={16} /> Copy all text</button>
             </div>
             <div style={{ display: "flex", gap: 8, fontSize: 12, color: "var(--muted)", lineHeight: 1.5, marginTop: 10 }}>
               <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span><strong>Car-Part.com / URG</strong> is the pro wholesale channel — repair shops and the wrecker network search it from their estimating software. This is a recycler-standard interchange inventory CSV (Dealer, Stock #, Year/Make/Model, Part Type, <strong>Interchange/Hollander #</strong>, Grade, Price, Location…); upload it in Car-Part.com&apos;s inventory tool or map it into a URG-compatible feed. Add Hollander/interchange numbers to your parts for the best matching. <strong>Facebook catalog</strong> is the free way to bulk-list on Facebook (Commerce Manager → catalog → Data feed); only items with a public photo are included.</span>
+              <span><strong>Facebook &amp; Instagram catalog</strong> is the free way to bulk-list on Meta (Commerce Manager → catalog → Data feed — one catalog feeds both Facebook and Instagram Shops); only items with a public photo are included. For the wholesale <strong>Car-Part.com / URG</strong> feed, use the Car-Part.com card above.</span>
             </div>
           </>
         )}
@@ -893,7 +894,7 @@ function classifyEbayError(raw: string) {
   if (/at least one photo|requires at least one photo|add a photo/.test(e))
     return { kind: "photo", title: "Add a photo first", blurb: "eBay requires at least one photo on every listing.", steps: ["Open the part and add at least one photo.", "Then list it on eBay again."], showRaw: false };
   if (/seller'?s account|create a seller|register.*seller|additional information to create|not registered/.test(e))
-    return { kind: "sellerreg", title: "Finish your eBay seller registration", blurb: "Your eBay account isn't set up to sell yet — eBay needs a bit more info (payment + identity) before it will publish listings.", steps: ["Go to eBay → Sell, and complete the seller-account setup (link a payout method + verify your identity).", "It's a one-time step on eBay's side.", "Come back and List on eBay again."], showRaw: true };
+    return { kind: "sellerreg", title: "Finish your eBay seller registration", blurb: "Your eBay account isn't set up to sell yet. eBay needs a bit more info (payment + identity) before it will publish listings.", steps: ["Click Finish setup on eBay below, and complete the seller-account setup (link a payout method + verify your identity).", "It's a one-time step on eBay's side.", "Come back and List on eBay again."], showRaw: true };
   if (/motors/.test(e))
     return { kind: "motors", title: "eBay Motors couldn't accept this car", blurb: "Whole-vehicle listings run through eBay Motors, which has extra requirements and fees.", steps: ["Make sure year, make, model and a VIN are all set on the car.", "Confirm your eBay account is approved to sell vehicles.", "Try again, or use Post elsewhere to list it manually."], showRaw: true };
   return { kind: "generic", title: "eBay couldn't publish this", blurb: "eBay returned an error. The exact message is below — it usually points to what to fix.", steps: [], showRaw: true };
@@ -934,6 +935,11 @@ function FixPanel({ raw, target, connected, go, onRetry, onClose }: { raw: strin
           <button onClick={() => { onClose(); go(target); }} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
             <ExternalLink size={15} /> Open {target === "vehicles" ? "vehicles" : "parts"}
           </button>
+        )}
+        {(info.kind === "sellerreg" || info.kind === "motors") && (
+          <a href="https://www.ebay.com/sl/sell" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 700, textDecoration: "none" }}>
+            <ExternalLink size={15} /> Finish setup on eBay
+          </a>
         )}
         <button onClick={onRetry} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px", borderRadius: 10, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>
           <RefreshCw size={15} /> Try again
