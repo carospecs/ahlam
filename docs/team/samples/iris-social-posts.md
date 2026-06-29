@@ -1,4 +1,4 @@
-# Sample: Iris (Content Producer) — Ready-to-Publish Posts
+# Sample: Iris (Content Producer) - Ready-to-Publish Posts
 
 > Illustrative finished posts for an example product launch. Professional English, no em dashes, each paired with a generated image. In a real run, Iris generates the actual image with the higgsfield tool and shows it here.
 

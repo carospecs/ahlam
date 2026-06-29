@@ -1,4 +1,4 @@
-# Sample: Maya (CMO) — 30-Day Go-To-Market Plan
+# Sample: Maya (CMO) - 30-Day Go-To-Market Plan
 
 > Illustrative deliverable for an example B2B SaaS launching a new product. Shows the format and thinking, not real numbers.
 

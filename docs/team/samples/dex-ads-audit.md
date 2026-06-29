@@ -1,4 +1,4 @@
-# Sample: Dex (Paid Ads) — Google Ads Account Audit
+# Sample: Dex (Paid Ads) - Google Ads Account Audit
 
 > Illustrative audit of an example Google Ads account spending ~$4k/mo. Shows the format; numbers are made up.
 

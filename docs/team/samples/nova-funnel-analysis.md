@@ -1,4 +1,4 @@
-# Sample: Nova (Data Analyst) — Funnel Leak Analysis
+# Sample: Nova (Data Analyst) - Funnel Leak Analysis
 
 > Illustrative readout from an example trial funnel. Numbers are made up to show the format and the reasoning.
 
@@ -6,7 +6,7 @@ You asked where the funnel is leaking. Short answer: it's the activation step, n
 
 ```
 Stage                Users     Conv to next     Drop
-Landing page visit   10,000          —            —
+Landing page visit   10,000          -             -
 Started signup        1,200        12.0%        8,800
 Completed signup        840        70.0%          360
 Activated (1st use)     210        25.0%          630   <-- the leak

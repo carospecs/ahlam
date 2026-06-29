@@ -1,4 +1,4 @@
-# Sample: Rae (SEO) — Keyword Strategy + Content Brief
+# Sample: Rae (SEO) - Keyword Strategy + Content Brief
 
 > Illustrative SEO output for an example category. In a real run, the live SERP for each term is checked in the browser before recommending it.
 

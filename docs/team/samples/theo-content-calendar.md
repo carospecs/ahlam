@@ -1,10 +1,10 @@
-# Sample: Theo (Social) — 2-Week Launch Content Calendar
+# Sample: Theo (Social) - 2-Week Launch Content Calendar
 
 > Illustrative organic-social calendar for an example launch. Tailored per platform, mixed by content type, built around a cadence a small team can actually keep.
 
 The principle: don't post the same thing everywhere, and keep promotion a minority of the mix so people don't tune out. This is a launch fortnight, so it builds tension before the launch, spikes on launch day, then sustains.
 
-**Week 1 — build the story**
+**Week 1: build the story**
 
 - **Mon, LinkedIn (POV):** Founder post on the problem you kept hitting that made you build this. No product mention. Pure problem. This is the highest-performing format on LinkedIn and it sets up everything after.
 - **Tue, Instagram Reel (hook test):** 15-second "the moment we realized X was broken." Hook in the first second: a hard visual of the painful before. Series opener.
@@ -12,7 +12,7 @@ The principle: don't post the same thing everywhere, and keep promotion a minori
 - **Thu, Instagram carousel:** "5 signs you've outgrown the old way." Educational, saveable, ends on a soft tease of "we built something for this."
 - **Fri, Reel (behind the scenes):** Quick, raw clip of the team prepping for launch. Builds anticipation and humanizes the brand. Caption teases the date.
 
-**Week 2 — launch and sustain**
+**Week 2: launch and sustain**
 
 - **Mon, all platforms (tease):** "Wednesday." Single image, mysterious, dating the moment. Builds curiosity.
 - **Tue, LinkedIn + Reel (countdown):** Founder on what changes tomorrow and why it matters. Real, not hyped.

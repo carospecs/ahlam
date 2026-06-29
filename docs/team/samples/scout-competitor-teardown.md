@@ -1,4 +1,4 @@
-# Sample: Scout (Web Research) — Competitor Teardown
+# Sample: Scout (Web Research) - Competitor Teardown
 
 > Illustrative teardown of an example competitor. In a real run, every claim below carries a live source link and a date, pulled from the competitor's own site, pricing page, and the public ad libraries.
 
