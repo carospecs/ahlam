@@ -307,21 +307,39 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   async function runAnalysis() {
     const myToken = beginScanRun();
     setPhase("analyzing"); setError(null);
-    // If a valid VIN is in the field — typed up front OR confirmed from a prior scan —
-    // pass it so every photo's scan classifies + prices for that exact vehicle (the
-    // server decodes it up front; a bad/unknown VIN simply decodes to nothing).
-    const cleanVin = (vin || "").trim().toUpperCase();
-    const sessionVin = /^[A-HJ-NPR-Z0-9]{17}$/.test(cleanVin) ? cleanVin : null;
+    // VIN-FIRST: resolve the VIN BEFORE cataloging, so every photo is classified AND
+    // priced for the exact vehicle on the first pass (no blind classification, no
+    // after-the-fact reprice). A typed VIN wins; otherwise read it from the photos in
+    // one cheap pass. If none is found, the catalog still reads it per-photo as a
+    // backstop and the reprice fallback below covers pricing.
+    const typedVin = (vin || "").trim().toUpperCase();
+    let resolvedVin: string | null = /^[A-HJ-NPR-Z0-9]{17}$/.test(typedVin) ? typedVin : null;
     try {
+      // Encode each photo once; reused by the VIN-read pass and the catalog pass.
+      const dataUrls = await Promise.all(photos.map((p) => fileToAIDataUrl(p.file)));
+      if (!isScanRun(myToken)) return;
+
+      if (!resolvedVin) {
+        try {
+          const r = await fetch("/api/read-vin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ images: dataUrls }),
+          });
+          const j = await r.json();
+          if (!isScanRun(myToken)) return;
+          if (j?.ok && j.vin) { resolvedVin = j.vin as string; setVin(resolvedVin); setVinStatus("confirmed"); }
+        } catch { /* VIN read failed — proceed; the catalog reads VINs per-photo too */ }
+      }
+
       const results = await Promise.all(
-        photos.map(async (photo) => {
-          const dataUrl = await fileToAIDataUrl(photo.file);
+        dataUrls.map(async (dataUrl, i) => {
           const res = await fetch("/api/identify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(sessionVin ? { imageBase64: dataUrl, vin: { vin: sessionVin } } : { imageBase64: dataUrl }),
+            body: JSON.stringify(resolvedVin ? { imageBase64: dataUrl, vin: { vin: resolvedVin } } : { imageBase64: dataUrl }),
           });
-          return { result: (await res.json()) as AIResult, photo };
+          return { result: (await res.json()) as AIResult, photo: photos[i] };
         })
       );
 
@@ -399,11 +417,10 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       setPhase("results");
       playSonarPing(); // sonar ring: the scan is done, results are ready
 
-      // Auto-refine: a VIN was found in the photos but NOT supplied up front, so the
-      // first-pass prices used the model's vehicle read. Re-price every part for the
-      // exact decoded trim/engine in one background call. Best-effort — prices stay as
-      // they are on any failure.
-      if (!sessionVin && agg?.vin) void repriceForVin(myToken, agg.vin, deduped);
+      // Fallback only: VIN-first didn't resolve one before the catalog (read-vin found
+      // nothing) but a catalog photo still read one — re-price for it so pricing anchors
+      // to the VIN even on this edge path. Best-effort; prices stay as-is on failure.
+      if (!resolvedVin && agg?.vin) void repriceForVin(myToken, agg.vin, deduped);
     } catch (e) {
       if (!isScanRun(myToken)) return; // cancelled / superseded
       setError("We couldn't reach the analysis server. Check your connection and try again.");
