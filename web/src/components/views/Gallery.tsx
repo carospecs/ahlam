@@ -40,9 +40,13 @@ export function Gallery() {
       imgs.filter(Boolean).forEach((u: string) => push(v.id, vehLabel(v), u, "Whole car", vehDesc(v)));
     }
     for (const l of listings || []) {
-      if (!l.image) continue;
+      const imgs = (Array.isArray(l.images) && l.images.length ? l.images : (l.image ? [l.image] : [])).filter(Boolean);
+      if (!imgs.length) continue;
       const v = l.vehicleId ? vById.get(l.vehicleId) : null;
-      push(v ? v.id : "__other", v ? vehLabel(v) : "Other parts", l.image, l.part || "Part", v ? vehDesc(v) : "");
+      const gKey = v ? v.id : "__other";
+      const gName = v ? vehLabel(v) : "Other parts";
+      const gDesc = v ? vehDesc(v) : "";
+      imgs.forEach((u: string) => push(gKey, gName, u, l.part || "Part", gDesc));
     }
     return [...m.values()].filter((g) => g.photos.length)
       .sort((a, b) => (a.key === "__other" ? 1 : b.key === "__other" ? -1 : a.name.localeCompare(b.name)));
