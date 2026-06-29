@@ -8,7 +8,7 @@ import { csToast } from "../Dashboard";
 
 interface MktPart {
   id: string; part: string; grade: string; price: number; fitment: string;
-  category: string; photoUrl: string | null; views: number; shopName: string;
+  category: string; photoUrl: string | null; photoUrls?: string[] | null; views: number; shopName: string;
   location: string; note: string; desc: string; shopId?: string; phone?: string | null;
   distance?: number | null; driveTime?: number | null;
   verified?: boolean; rating?: number; ratingCount?: number;
@@ -17,7 +17,7 @@ interface MktVehicle {
   id: string; year: string; make: string; model: string; trim: string; body: string;
   color: string; mileage: string; sellMode: string; askingPrice: number | null;
   views: number; shopId: string; shopName: string; location: string; phone?: string | null;
-  photoUrl?: string | null; distance?: number | null; driveTime?: number | null;
+  photoUrl?: string | null; photoUrls?: string[] | null; distance?: number | null; driveTime?: number | null;
   verified?: boolean; rating?: number; ratingCount?: number;
 }
 
@@ -466,15 +466,23 @@ function MetaRow({ icon, children }: { icon: React.ReactNode; children: React.Re
 }
 
 function PartDetailModal({ part, onClose, onContact }: { part: MktPart; onClose: () => void; onContact: () => void }) {
+  const photos = part.photoUrls && part.photoUrls.length ? part.photoUrls : (part.photoUrl ? [part.photoUrl] : []);
+  const [pi, setPi] = React.useState(0);
   return (
     <DetailShell onClose={onClose}>
       <div style={{ position: "relative" }}>
-        <PhotoCell icon="Wrench" url={part.photoUrl} style={{ height: 230, borderRadius: 0 }} iconSize={56} />
+        <PhotoCell icon="Wrench" url={photos[pi] || part.photoUrl} style={{ height: 230, borderRadius: 0 }} iconSize={56} />
         <div style={{ position: "absolute", top: 12, left: 12 }}><ConditionBadge grade={part.grade} /></div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, padding: "6px 16px 0" }}>
-        {[0, 1, 2].map((i) => <PhotoCell key={i} icon="Wrench" style={{ aspectRatio: "1", borderRadius: 9 }} iconSize={18} />)}
-      </div>
+      {photos.length > 1 && (
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(photos.length, 5)},1fr)`, gap: 6, padding: "6px 16px 0" }}>
+          {photos.slice(0, 5).map((u, i) => (
+            <button key={i} onClick={() => setPi(i)} style={{ padding: 0, border: i === pi ? "2px solid var(--accent)" : "1px solid var(--line)", borderRadius: 9, overflow: "hidden", cursor: "pointer", aspectRatio: "1", background: "var(--surface2)" }}>
+              <PhotoCell icon="Wrench" url={u} style={{ width: "100%", height: "100%", borderRadius: 0 }} iconSize={18} />
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{ padding: 18, display: "grid", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
           <div style={{ fontSize: 17, fontWeight: 700 }}>{part.part}</div>
@@ -502,11 +510,22 @@ function PartDetailModal({ part, onClose, onContact }: { part: MktPart; onClose:
 }
 
 function VehicleDetailModal({ vehicle: v, onClose, onContact }: { vehicle: MktVehicle; onClose: () => void; onContact: () => void }) {
+  const photos = v.photoUrls && v.photoUrls.length ? v.photoUrls : (v.photoUrl ? [v.photoUrl] : []);
+  const [pi, setPi] = React.useState(0);
   return (
     <DetailShell onClose={onClose}>
       <div style={{ position: "relative" }}>
-        <PhotoCell icon="Car" url={v.photoUrl} style={{ height: 240, borderRadius: 0 }} iconSize={60} />
+        <PhotoCell icon="Car" url={photos[pi] || v.photoUrl} style={{ height: 240, borderRadius: 0 }} iconSize={60} />
       </div>
+      {photos.length > 1 && (
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(photos.length, 5)},1fr)`, gap: 6, padding: "6px 16px 0" }}>
+          {photos.slice(0, 5).map((u, i) => (
+            <button key={i} onClick={() => setPi(i)} style={{ padding: 0, border: i === pi ? "2px solid var(--accent)" : "1px solid var(--line)", borderRadius: 9, overflow: "hidden", cursor: "pointer", aspectRatio: "1", background: "var(--surface2)" }}>
+              <PhotoCell icon="Car" url={u} style={{ width: "100%", height: "100%", borderRadius: 0 }} iconSize={18} />
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{ padding: 18, display: "grid", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
           <div style={{ fontSize: 17, fontWeight: 700 }}>{v.year} {v.make} {v.model} {v.trim}</div>
