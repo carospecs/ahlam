@@ -5,6 +5,8 @@ import { geminiGenerate } from "@/lib/gemini";
 import { decodeVin, normalizeVin, engineLabel, type VinInfo, type VinDecode } from "@/lib/vin";
 import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
 import { applyVinEngine, stripSide } from "@/lib/part-enrich";
+import { markInferredParts } from "@/lib/inferred-parts";
+import { propagateImpactDamage } from "@/lib/damage-zones";
 
 export const runtime = "nodejs";
 // Pricing is now a local formula (no per-part web/eBay lookups), so the request is
@@ -530,7 +532,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     // Remove the model's duplicate emissions (generic "Front Door" alongside
     // "Front Left/Right Door", exact-name repeats) before pricing so phantoms
     // neither cost a pricing call nor double-list a physical part. (AHLAM-52)
-    const data: AIPartOutput[] = dedupeParts(assembled);
+    let data: AIPartOutput[] = dedupeParts(assembled);
 
     // One car = one wheel size. The model occasionally reports a left wheel at a
     // different diameter than the right, or a tire whose rim contradicts the wheel.
@@ -581,6 +583,11 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
       }
     }
 
+    // Inferred (not-directly-seen) parts — deterministic rule (lib/inferred-parts), since
+    // the model won't reliably self-report. Flags airbags etc. as inferred + unpriced so
+    // pricing below leaves them blank and the UI shows "Inferred — verify".
+    data = markInferredParts(data);
+
     // ── PRICING ──────────────────────────────────────────────────────────────
     // Formula: usedPrice = newPartPriceUsd × gradeDiscount (lib/age-pricing.ts)
     //   Grade A (like new)        → ×0.85  (15% off new price)
@@ -600,6 +607,15 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
         newPartPrice: p.newPartPriceUsd,
       } : undefined;
     }
+
+    // Impact-zone damage propagation (lib/damage-zones) — deterministic safety net the
+    // prompt couldn't enforce: a collision-graded panel pulls its same-side neighbors
+    // (rear door, glass, mirror, rocker…) off Grade A, unprices them, and flags them for
+    // review, instead of pricing them as undamaged. Runs AFTER pricing so the null sticks;
+    // clear the now-stale pricing insight on anything it unpriced.
+    data = propagateImpactDamage(data).map((p) =>
+      p.suggestedPriceUsd == null && p.pricingInsight ? { ...p, pricingInsight: undefined } : p,
+    );
 
     // Whole car: original MSRP discounted by age (no single grade applies to a
     // whole vehicle). Null when the model couldn't estimate a new price.

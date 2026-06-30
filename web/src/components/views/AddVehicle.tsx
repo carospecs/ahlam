@@ -11,6 +11,7 @@ import { ManualListing } from "./ManualListing";
 import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, type ScanSession } from "@/lib/scanSession";
 import type { VinInfo } from "@/lib/vin";
 import { applyVinEngine, reconcilePairPrices, dropGenericWhenSided } from "@/lib/part-enrich";
+import { instanceScore, type PhotoFront } from "@/lib/photo-select";
 
 interface UploadedPhoto { url: string; name: string; file: File }
 
@@ -21,6 +22,7 @@ interface AIPart {
   newPartPriceUsd?: number | null; // brand-new price from the scan; base for L/R parity
   suggestedPriceUsd: number | null; confidence: "high" | "medium" | "low";
   inferred?: boolean; // listed but not directly seen → "Inferred — verify", unpriced
+  photoFront?: PhotoFront; // orientation of the photo this instance came from (best-shot pick)
   lowConfidenceFields?: string[];
   // Pricing provenance from the ladder (AHLAM-53): which rung set the price + how
   // trustworthy it is. Spread through from the identify response.
@@ -354,7 +356,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       for (const { result: r, photo } of results) {
         if (r.ok) {
           // Tag every part with the photo it was scanned from (its thumbnail).
-          collected.push(...r.data.map((p) => ({ ...p, photoUrl: photo.url })));
+          collected.push(...r.data.map((p) => ({ ...p, photoUrl: photo.url, photoFront: r.vehicleFront as PhotoFront })));
           estimates.push(r.vehicle);
           // Main post pic = the photo the AI says shows the front ("toward-camera").
           if (r.vehicleFront === "toward-camera" && !frontPhoto) frontPhoto = photo.url;
@@ -372,17 +374,16 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         : collected;
 
       // Dedupe parts seen across multiple photos by name. Prefer the instance the AI
-      // was most confident about (the photo that actually shows the part — e.g. the
-      // engine-bay shot for "Engine", not a side-profile that hallucinated it), then
-      // break ties by the higher price. This keeps each part's thumbnail correct.
-      const confRank = (p: AIPart) => (p.confidence === "high" ? 2 : p.confidence === "low" ? 0 : 1);
+      // was most confident about, keeping the instance from the photo that shows the part
+      // BEST (lib/photo-select: a front part from the front shot beats one glimpsed in a
+      // side-profile), with confidence and price as tiebreakers. Keeps each part's thumbnail
+      // and condition read from its clearest photo.
+      const score = (p: AIPart) => instanceScore(p) * 10 + (p.suggestedPriceUsd ? 1 : 0);
       const byName = new Map<string, AIPart>();
       for (const p of enrichedCollected) {
         const key = p.partName.toLowerCase().trim();
         const existing = byName.get(key);
-        if (!existing
-          || confRank(p) > confRank(existing)
-          || (confRank(p) === confRank(existing) && (p.suggestedPriceUsd || 0) > (existing.suggestedPriceUsd || 0))) {
+        if (!existing || score(p) > score(existing)) {
           byName.set(key, p);
         }
       }
