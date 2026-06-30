@@ -257,7 +257,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const [dragging, setDragging] = React.useState(false);
   const [camOpen, setCamOpen] = React.useState(false);
   const [repricing, setRepricing] = React.useState(false); // VIN auto-refine in flight
-  const [comping, setComping] = React.useState(false); // market comp lookup in flight
   const fileRef = React.useRef<HTMLInputElement>(null);
   const partSeq = React.useRef(0);
   // After a remount (e.g. returning to a restored session), continue ids above the
@@ -424,10 +423,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       // nothing) but a catalog photo still read one — re-price for it so pricing anchors
       // to the VIN even on this edge path. Best-effort; prices stay as-is on failure.
       if (!resolvedVin && agg?.vin) void repriceForVin(myToken, agg.vin, deduped);
-
-      // Comp anchor: for the ~10 highest-value parts, replace the GUESSED new price with
-      // a real searched NEW price, then re-apply the grade discount. Background + best-effort.
-      void compPricesForTop(myToken, resolvedVin, agg, deduped);
     } catch (e) {
       if (!isScanRun(myToken)) return; // cancelled / superseded
       setError("We couldn't reach the analysis server. Check your connection and try again.");
@@ -460,44 +455,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       /* network/parse error — keep the original prices */
     } finally {
       if (isScanRun(token)) setRepricing(false);
-    }
-  }
-
-  // Market comp anchor: for the ~10 highest-value parts, replace the guessed new price
-  // with a real searched NEW price (/api/comp-prices), then re-apply the grade discount
-  // and L/R parity. Background + best-effort — formula prices stay on any failure.
-  async function compPricesForTop(
-    token: number,
-    vin: string | null,
-    agg: ReturnType<typeof aggregateVehicle>,
-    current: AIPart[],
-  ) {
-    const top = current
-      .filter((p) => typeof p.suggestedPriceUsd === "number" && p.suggestedPriceUsd > 0)
-      .sort((a, b) => (b.suggestedPriceUsd || 0) - (a.suggestedPriceUsd || 0))
-      .slice(0, 10);
-    const vehicle = agg ? { year: Number(agg.year) || undefined, make: agg.make, model: agg.model, trim: agg.trim } : undefined;
-    if (!top.length || (!vin && !(vehicle?.make && vehicle?.model))) return; // need a vehicle to query
-    setComping(true);
-    try {
-      const res = await fetch("/api/comp-prices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vin: vin || undefined, vehicle, parts: top.map((p) => ({ name: p.partName, grade: p.condition })) }),
-      });
-      const j = await res.json();
-      if (!isScanRun(token) || !j?.ok || !Array.isArray(j.parts) || !j.parts.length) return;
-      const byName = new Map<string, { newPartPriceUsd: number | null; suggestedPriceUsd: number | null }>();
-      for (const r of j.parts) if (r && typeof r.name === "string") byName.set(r.name.toLowerCase().trim(), r);
-      setParts((prev) => reconcilePairPrices(prev.map((p) => {
-        const r = byName.get(p.partName.toLowerCase().trim());
-        if (!r || typeof r.newPartPriceUsd !== "number" || r.newPartPriceUsd <= 0) return p;
-        return { ...p, newPartPriceUsd: r.newPartPriceUsd, suggestedPriceUsd: r.suggestedPriceUsd, _aiPrice: r.suggestedPriceUsd ?? p._aiPrice };
-      })));
-    } catch {
-      /* network/parse error — keep the formula prices */
-    } finally {
-      if (isScanRun(token)) setComping(false);
     }
   }
 
@@ -1047,9 +1004,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                 <div>
                   <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{sellMode === "both" ? "Parts value · suggested" : "Suggested parts value"}</div>
                   <div className="tnum" style={{ fontSize: 22, fontWeight: 800, color: showCar ? "var(--foreground)" : "var(--success)" }}>${partsTotal.toLocaleString()}</div>
-                  {(comping || repricing) && (
+                  {repricing && (
                     <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 3, fontSize: 11.5, color: "var(--accent)" }}>
-                      <Sparkles size={12} /> {comping ? "Checking market prices for top parts…" : "Refining prices for your VIN…"}
+                      <Sparkles size={12} /> Refining prices for your VIN…
                     </div>
                   )}
                 </div>

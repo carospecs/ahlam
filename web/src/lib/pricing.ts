@@ -82,35 +82,6 @@ export function parseGroundedPrice(text: string): number | null {
   return m ? Math.round(parseFloat(m[0])) : null;
 }
 
-// On-demand NEW-price signal — a grounded web search for the part's current BRAND-NEW
-// OEM/retail price (NOT used/salvage). The comp anchor uses this to replace the vision
-// model's GUESSED new price with a real one for high-value parts; the grade discount is
-// then applied on top as usual. Returns null when grounding finds nothing credible.
-export async function groundedNewPrice(query: string): Promise<number | null> {
-  try {
-    const res = await geminiGenerate("gemini-2.5-flash", {
-      contents: [{ role: "user", parts: [{ text:
-        `Use Google to find the CURRENT BRAND-NEW retail price of this exact auto part: "${query}". ` +
-        `Check OEM dealer-parts catalogs and major parts retailers (RockAuto, dealer parts sites, etc.). ` +
-        `Estimate the typical NEW replacement price (OEM or quality aftermarket) in US dollars — NOT a used, ` +
-        `salvage, auction, or core price. Reply with ONLY the dollar amount, prefixed with "$" (e.g. "$420") — ` +
-        `no words, no range. If you cannot find a credible new price, reply with exactly "NONE".`,
-      } ] }],
-      tools: [{ google_search: {} }],
-      generationConfig: { temperature: 0 },
-    });
-    if (!res.ok) return null;
-    const j = await res.json();
-    const text: string = (j.candidates?.[0]?.content?.parts || [])
-      .map((p: { text?: string }) => p.text ?? "").join("");
-    const price = parseGroundedPrice(text);
-    if (price == null) return null;
-    // Loose plausibility bound — isSanePrice's bands are tuned for USED prices and would
-    // reject legitimately higher NEW prices, so just guard against absurd values here.
-    return price >= 5 && price <= 40000 ? price : null;
-  } catch { return null; }
-}
-
 // Convenience wrapper used by the PricingToggle UI's "live comp" lookup: a single
 // median sold price for a free-form query. Backed by the grounded sold search.
 export async function livePartPrice(query: string): Promise<number | null> {
