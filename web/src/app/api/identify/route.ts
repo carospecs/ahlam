@@ -4,7 +4,7 @@ import { vehicleAge, ageFactor, usedPriceFromNew } from "@/lib/age-pricing";
 import { geminiGenerate } from "@/lib/gemini";
 import { decodeVin, normalizeVin, engineLabel, type VinInfo, type VinDecode } from "@/lib/vin";
 import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
-import { applyVinEngine } from "@/lib/part-enrich";
+import { applyVinEngine, stripSide } from "@/lib/part-enrich";
 
 export const runtime = "nodejs";
 // Pricing is now a local formula (no per-part web/eBay lookups), so the request is
@@ -787,17 +787,7 @@ function isCenterPart(name: string): boolean {
   return CENTER_PART.test(name) && !LATERAL_PART.test(name);
 }
 
-// Remove a stray left/right/driver/passenger side word from a part name. The
-// "(?!…mirror)" guard keeps the "Side" of "Side Mirror" — so "Driver Side Mirror"
-// strips to "Side Mirror" (matching the bare catalog name), not "Mirror", which
-// keeps dedupe grouping a sided mirror with its generic sibling.
-function stripSide(name: string): string {
-  return name
-    .replace(/\b(driver'?s?|passenger'?s?)(?:[ -]side(?!\s+mirror\b))?\b/gi, "")
-    .replace(/\b(left|right|lh|rh)\b/gi, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
+// stripSide moved to @/lib/part-enrich (shared with the client's L/R price parity).
 
 // US salvage convention: the vehicle's LEFT side is the DRIVER side and the RIGHT
 // side is the PASSENGER side (the driver sits on the left). lateralSide() computes

@@ -9,6 +9,7 @@
 // enrich when a single photo holds both; the aggregator applies the VIN engine — pooled
 // across all of a vehicle's photos — down onto the engine part that came from a
 // different, VIN-less shot.
+import { usedPriceFromNew, type ConditionGrade } from "@/lib/age-pricing";
 
 // The engine itself — NOT "Engine Mount"/"Engine Cover"/"Engine Wiring Harness", which
 // are distinct parts. `baseName` is the part name with any prior "— spec" suffix removed.
@@ -56,4 +57,57 @@ export function applyVinEngine<T extends { partName: string; description: string
   const prior = part.description.replace(/^\s*VIN-confirmed engine:.*?\.(?=\s|$)/i, "");
   const notes = scrubEngineSpecs(prior);
   return { ...part, partName: `Engine — ${engine}`, description: notes ? `${lead} ${notes}` : lead };
+}
+
+// Remove a left/right/driver/passenger side word from a part name. The "(?!…mirror)"
+// guard keeps the "Side" of "Side Mirror" so "Driver Side Mirror" → "Side Mirror"
+// (matching the bare catalog name), which lets pairs group correctly.
+export function stripSide(name: string): string {
+  return name
+    .replace(/\b(driver'?s?|passenger'?s?)(?:[ -]side(?!\s+mirror\b))?\b/gi, "")
+    .replace(/\b(left|right|lh|rh)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+// L/R PRICE PARITY. A part's brand-NEW price is identical for the driver and passenger
+// side — only condition differs — but the vision model often guesses the two sides at
+// different prices, so paired parts of the SAME grade show different prices. For each
+// genuine left+right pair, agree on ONE new price (the higher-confidence side; ties go
+// to the larger number so we never lowball), then re-apply EACH side's own grade
+// discount. Result: equal grades → identical price; different grades → still differ.
+export function reconcilePairPrices<
+  T extends { partName: string; condition: string; confidence?: "high" | "medium" | "low"; newPartPriceUsd?: number | null; suggestedPriceUsd: number | null },
+>(parts: T[]): T[] {
+  const confRank = (c?: string) => (c === "high" ? 2 : c === "low" ? 0 : 1);
+  const sideOf = (name: string): "L" | "R" | null =>
+    /\b(passenger|right|rh)\b/i.test(name) ? "R" : /\b(driver|left|lh)\b/i.test(name) ? "L" : null;
+
+  // Group sided parts by their base name (side removed). Unsided/center parts are skipped.
+  const groups = new Map<string, T[]>();
+  for (const p of parts) {
+    const base = stripSide(p.partName).toLowerCase().trim();
+    if (!base || base === p.partName.toLowerCase().trim()) continue;
+    const g = groups.get(base);
+    if (g) g.push(p); else groups.set(base, [p]);
+  }
+
+  const shared = new Map<T, number>();
+  for (const members of groups.values()) {
+    const priced = members.filter((m) => typeof m.newPartPriceUsd === "number" && (m.newPartPriceUsd as number) > 0);
+    if (priced.length < 2) continue;
+    if (new Set(priced.map((m) => sideOf(m.partName))).size < 2) continue; // need both sides present
+    const consensus = priced.slice().sort(
+      (a, b) => confRank(b.confidence) - confRank(a.confidence) || (b.newPartPriceUsd as number) - (a.newPartPriceUsd as number),
+    )[0].newPartPriceUsd as number;
+    for (const m of priced) shared.set(m, consensus);
+  }
+  if (!shared.size) return parts;
+
+  return parts.map((p) => {
+    const np = shared.get(p);
+    if (np == null) return p;
+    const grade: ConditionGrade = (["A", "B", "C"] as const).includes(p.condition as ConditionGrade) ? (p.condition as ConditionGrade) : "B";
+    return { ...p, newPartPriceUsd: np, suggestedPriceUsd: usedPriceFromNew(np, grade) };
+  });
 }

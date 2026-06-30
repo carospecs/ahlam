@@ -10,7 +10,7 @@ import { playSonarPing } from "@/lib/sound";
 import { ManualListing } from "./ManualListing";
 import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, type ScanSession } from "@/lib/scanSession";
 import type { VinInfo } from "@/lib/vin";
-import { applyVinEngine } from "@/lib/part-enrich";
+import { applyVinEngine, reconcilePairPrices } from "@/lib/part-enrich";
 
 interface UploadedPhoto { url: string; name: string; file: File }
 
@@ -18,6 +18,7 @@ interface VehicleFit { make: string; model: string; yearStart: number; yearEnd: 
 interface AIPart {
   partName: string; partCategory: string; fitment: VehicleFit[];
   condition: "Good" | "Poor"; conditionNotes: string; description: string;
+  newPartPriceUsd?: number | null; // brand-new price from the scan; base for L/R parity
   suggestedPriceUsd: number | null; confidence: "high" | "medium" | "low";
   lowConfidenceFields?: string[];
   // Pricing provenance from the ladder (AHLAM-53): which rung set the price + how
@@ -384,8 +385,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
           byName.set(key, p);
         }
       }
-      const deduped = [...byName.values()]
-        .sort(comparePartsForDisplay)
+      // Enforce left/right price parity (one shared new price → each side's own grade)
+      // before snapshotting _aiPrice, so paired parts of the same grade match.
+      const deduped = reconcilePairPrices([...byName.values()].sort(comparePartsForDisplay))
         .map((p) => ({ ...p, _id: newId(), _aiPrice: p.suggestedPriceUsd ?? null }));
 
       // Front shot for the main post image; fall back to the first uploaded photo.
@@ -444,11 +446,11 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       if (!j?.ok || !Array.isArray(j.parts)) return;
       const byName = new Map<string, { suggestedPriceUsd: number | null; newPartPriceUsd: number | null }>();
       for (const r of j.parts) if (r && typeof r.name === "string") byName.set(r.name.toLowerCase().trim(), r);
-      setParts((prev) => prev.map((p) => {
+      setParts((prev) => reconcilePairPrices(prev.map((p) => {
         const r = byName.get(p.partName.toLowerCase().trim());
         if (!r || typeof r.newPartPriceUsd !== "number" || r.newPartPriceUsd <= 0) return p;
-        return { ...p, suggestedPriceUsd: r.suggestedPriceUsd, _aiPrice: r.suggestedPriceUsd ?? p._aiPrice };
-      }));
+        return { ...p, newPartPriceUsd: r.newPartPriceUsd, suggestedPriceUsd: r.suggestedPriceUsd, _aiPrice: r.suggestedPriceUsd ?? p._aiPrice };
+      })));
     } catch {
       /* network/parse error — keep the original prices */
     } finally {
