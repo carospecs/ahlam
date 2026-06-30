@@ -10,7 +10,7 @@ import { playSonarPing } from "@/lib/sound";
 import { ManualListing } from "./ManualListing";
 import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, type ScanSession } from "@/lib/scanSession";
 import type { VinInfo } from "@/lib/vin";
-import { applyVinEngine, reconcilePairPrices } from "@/lib/part-enrich";
+import { applyVinEngine, reconcilePairPrices, dropGenericWhenSided } from "@/lib/part-enrich";
 
 interface UploadedPhoto { url: string; name: string; file: File }
 
@@ -20,6 +20,7 @@ interface AIPart {
   condition: "Good" | "Poor"; conditionNotes: string; description: string;
   newPartPriceUsd?: number | null; // brand-new price from the scan; base for L/R parity
   suggestedPriceUsd: number | null; confidence: "high" | "medium" | "low";
+  inferred?: boolean; // listed but not directly seen → "Inferred — verify", unpriced
   lowConfidenceFields?: string[];
   // Pricing provenance from the ladder (AHLAM-53): which rung set the price + how
   // trustworthy it is. Spread through from the identify response.
@@ -387,7 +388,12 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       }
       // Enforce left/right price parity (one shared new price → each side's own grade)
       // before snapshotting _aiPrice, so paired parts of the same grade match.
-      const deduped = reconcilePairPrices([...byName.values()].sort(comparePartsForDisplay))
+      // Merge a generic part with its sided sibling (e.g. "Front Seat" + "Driver Side
+      // Front Seat") across photos, enforce L/R price parity, then sort — keeping
+      // inferred (not-directly-seen) parts grouped at the very bottom, separate from
+      // observed detections.
+      const deduped = reconcilePairPrices(dropGenericWhenSided([...byName.values()]).sort(comparePartsForDisplay))
+        .sort((a, b) => (a.inferred ? 1 : 0) - (b.inferred ? 1 : 0))
         .map((p) => ({ ...p, _id: newId(), _aiPrice: p.suggestedPriceUsd ?? null }));
 
       // Front shot for the main post image; fall back to the first uploaded photo.
@@ -953,6 +959,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                           <input value={p.partName} placeholder="Part name" onChange={(e) => setPartName(p._id!, e.target.value)} style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", borderBottom: "1px solid transparent", padding: "1px 0" }} onFocus={(e) => (e.target.style.borderBottomColor = "var(--line)")} onBlur={(e) => (e.target.style.borderBottomColor = "transparent")} />
                           {warn && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 700, color: "var(--signal)", background: "var(--signal-bg)", borderRadius: 6, padding: "2px 7px", flexShrink: 0 }}><TriangleAlert size={11} /> Review</span>}
+                          {p.inferred && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 700, color: "var(--accent)", background: "var(--accent-tint)", borderRadius: 6, padding: "2px 7px", flexShrink: 0 }}><Info size={11} /> Inferred — verify</span>}
                         </div>
                         <textarea value={p.description || ""} placeholder="Description (AI fills this in; tap to edit)" rows={2} onChange={(e) => setPartDesc(p._id!, e.target.value)} style={{ width: "100%", marginTop: 4, fontSize: 12.5, color: "var(--muted)", border: "1px solid transparent", outline: "none", background: "transparent", resize: "vertical", fontFamily: "var(--font-sans)", lineHeight: 1.45, borderRadius: 8, padding: "4px 6px" }} onFocus={(e) => { e.target.style.borderColor = "var(--line)"; e.target.style.color = "var(--foreground)"; }} onBlur={(e) => { e.target.style.borderColor = "transparent"; e.target.style.color = "var(--muted)"; }} />
                       </div>

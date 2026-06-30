@@ -61,6 +61,9 @@ export interface AIPartOutput {
   suggestedPriceUsd: number | null;
   confidence: Confidence;
   lowConfidenceFields?: (keyof AIPartOutput)[];
+  // True when the model listed this part without directly seeing it (inferred/occluded,
+  // e.g. an airbag behind the wheel). Surfaced as "Inferred — verify" and left unpriced.
+  inferred?: boolean;
   pricingInsight?: PricingInsight;
   // Set for parts whose resale is legally restricted (airbags/SRS, catalytic
   // converters, seat-belt restraints). The UI shows a warning in place of a
@@ -138,6 +141,7 @@ You MUST return ONLY a JSON object, no prose, with this shape:
       "description": string,
       "newPartPriceUsd": number | null,
       "confidence": "high" | "medium" | "low",
+      "visiblyPresent": boolean,
       "lowConfidenceFields": string[]
     }
   ]
@@ -181,6 +185,7 @@ PRICING — report each part's NEW price, not its used price:
 
 NO INFERRED / GUESSED PARTS:
 - Catalog ONLY what you can actually see in the photo. If a part is not visible, do NOT list it — never infer, guess, or assume.
+- "visiblyPresent": for EVERY part, set this to true ONLY if you can DIRECTLY SEE the part itself in a photo. Set it to false for any part you are listing without actually seeing it — one you inferred is there because it "must" be (e.g. an airbag behind a steering wheel, a part hidden behind another). Strongly prefer not to list inferred parts at all; but if one slips in, it MUST be marked "visiblyPresent": false — NEVER mark a part you did not actually see as true. A directly-visible part is always true.
 - A photo of an engine bay shows the engine, transmission, and nearby parts. A side-profile photo shows body panels, glass, wheels, lights. Identify every distinct sellable part that is clearly visible — nothing more.
 - NEVER list a part you cannot see, even if it "is typically present" on that vehicle. The seller has photos of what they want to sell; if they wanted a part listed, they would have photographed it.
 - HARD RULE — the engine bay and interior must be VISIBLE in THIS photo:
@@ -220,6 +225,7 @@ CONDITION RUBRIC — grade each part as exactly "A", "B", or "C" (ARA-style), ba
 - C: ${CONDITION_RUBRIC.C.detail}
 Pick the grade by visible wear and damage. When genuinely between two grades, choose the LOWER (more conservative) one.
 - COLLISION / STRUCTURAL DAMAGE IS ALWAYS GRADE C. If a part is crumpled, caved-in, bent, torn, cracked, has a deep dent, broken/missing mounting points, or shattered/spidered glass, it is a damaged repairable CORE — grade it "C", never "A" or "B". A clearly wrecked part is the CHEAPEST version of that part on the car, not a premium one. Inspect each part for collision damage specifically before grading.
+- IMPACT ZONES — DAMAGE PROPAGATES, never grade one wrecked panel in isolation. A real collision almost never hits a single panel cleanly; the force runs through the whole zone. When you see severe damage on ANY panel, deliberately inspect EVERY adjacent panel and the parts mounted on them for related damage from the SAME impact: the panels ahead of and behind it (front fender → front door → rear door → rear quarter panel), the rocker panel below them, and the side mirror, window glass, door handle, and trim that ride on those panels. Grade each neighbor by what you actually see. If a neighboring panel is very likely caught in the same impact but you cannot see it clearly enough to confirm clean, grade it conservatively (down, never "A") and set its "confidence" to "low" so it is flagged for review — do NOT grade the panel beside a crushed one as "A" just because its own damage isn't squarely in frame.
 
 DAMAGE CODE ("damageCode"): a short ARA-style code summarizing the worst visible damage, as TYPE-LOCATION-SIZE.
 - TYPE: DT (dent), SC (scratch/scuff), CR (crack), BR (break/missing piece), RU (rust/corrosion), CH (chip), BN (bend), GL (glass damage), WR (general wear).
@@ -406,7 +412,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
       return NextResponse.json(busyResult("empty completion"), { status: 503 });
     }
 
-    type RawPart = Partial<AIPartOutput> & { imageSide?: ImageSide };
+    type RawPart = Partial<AIPartOutput> & { imageSide?: ImageSide; visiblyPresent?: boolean };
     const cleaned = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
     const parsed = JSON.parse(cleaned) as {
       vehicleFront?: VehicleFront;
@@ -516,6 +522,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
         suggestedPriceUsd: null, // computed from new price × age × condition below
         confidence,
         lowConfidenceFields: Array.from(lowFields),
+        inferred: p.visiblyPresent === false, // listed but not directly seen
         compliance: complianceFor(partName),
       };
     });
@@ -581,7 +588,8 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     //   Grade C (heavily damaged) → null   (unpriced — seller sets manually)
     for (const p of data) {
       const grade: ConditionGrade = (["A", "B", "C"] as const).includes(p.condition) ? p.condition : "B";
-      const price = usedPriceFromNew(p.newPartPriceUsd, grade);
+      // Inferred parts (listed but not seen) get NO firm price — verify before pricing.
+      const price = p.inferred ? null : usedPriceFromNew(p.newPartPriceUsd, grade);
       p.suggestedPriceUsd = price;
       p.pricingInsight = price != null ? {
         suggestedPrice: price,

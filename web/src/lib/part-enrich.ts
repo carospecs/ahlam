@@ -111,3 +111,24 @@ export function reconcilePairPrices<
     return { ...p, newPartPriceUsd: np, suggestedPriceUsd: usedPriceFromNew(np, grade) };
   });
 }
+
+// Drop a generic (unsided) part when a sided sibling exists — e.g. a stray "Front Seat"
+// next to "Driver Side Front Seat". Generalizes the old lateral-only rule to ANY part
+// type (seats, etc.): the system only ever adds a side to a genuinely sidable part
+// (center parts never get one), so the mere presence of a sided sibling proves the
+// unsided entry is a phantom of the same physical part. Runs across photos.
+export function dropGenericWhenSided<T extends { partName: string }>(parts: T[]): T[] {
+  const isSided = (name: string) => stripSide(name).toLowerCase().trim() !== name.toLowerCase().trim();
+  const groups = new Map<string, T[]>();
+  for (const p of parts) {
+    const base = stripSide(p.partName).toLowerCase().trim();
+    const g = groups.get(base);
+    if (g) g.push(p); else groups.set(base, [p]);
+  }
+  const drop = new Set<T>();
+  for (const members of groups.values()) {
+    if (members.length < 2 || !members.some((m) => isSided(m.partName))) continue;
+    for (const m of members) if (!isSided(m.partName)) drop.add(m); // unsided sibling = phantom
+  }
+  return parts.filter((p) => !drop.has(p));
+}
