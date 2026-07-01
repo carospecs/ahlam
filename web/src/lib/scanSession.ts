@@ -24,6 +24,7 @@ export interface ScanSession {
   photos: any[];                 // eslint-disable-line @typescript-eslint/no-explicit-any
   parts: any[];                  // eslint-disable-line @typescript-eslint/no-explicit-any
   vehicle: ScanVehicleInfo | null;
+  photoColors: string[];         // body color each photo reported — for the same-vehicle QA check
   mileage: string | null;
   vin: string;
   vinStatus: "idle" | "checking" | "confirmed" | "bad";
@@ -41,7 +42,7 @@ export interface ScanSession {
 
 function makeDefaults(): ScanSession {
   return {
-    mode: null, phase: "upload", photos: [], parts: [], vehicle: null,
+    mode: null, phase: "upload", photos: [], parts: [], vehicle: null, photoColors: [],
     mileage: null, vin: "", vinStatus: "idle", suggestedCarPrice: null,
     carPrice: "", mainPhoto: null, error: null, sellMode: "parts",
     vehicleTrim: "", vehicleColor: "", vehicleTitle: "", vehicleDesc: "", stockNumber: "",

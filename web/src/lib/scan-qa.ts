@@ -29,10 +29,22 @@ const sideOf = (s: string): "L" | "R" | null =>
 
 const names = (ps: QaPart[]) => ps.map((p) => p.partName).join(", ");
 
+// Do two photos name body colors with NO shared word (e.g. "gray" vs "gold")? That's a
+// strong signal the color was misread — or, more seriously, that the photos aren't all the
+// SAME vehicle. ("gray" vs "dark gray" share "gray" → not a conflict.) Returns the pair.
+function colorConflict(colors: string[]): [string, string] | null {
+  const distinct = [...new Set(colors.map((c) => c.toLowerCase().trim()).filter(Boolean))];
+  const words = distinct.map((c) => new Set(c.split(/\s+/)));
+  for (let i = 0; i < distinct.length; i++)
+    for (let j = i + 1; j < distinct.length; j++)
+      if (![...words[i]].some((w) => words[j].has(w))) return [distinct[i], distinct[j]];
+  return null;
+}
+
 // Run the consistency checks. Returns the flags to show the seller for review (empty when
 // the listing is internally consistent). `wholeCarUsd` is the AI's standalone whole-car
-// estimate, used only for the headline sanity check.
-export function runScanQa(parts: QaPart[], wholeCarUsd?: number | null): QaFlag[] {
+// estimate; `photoColors` is the body color each photo reported (for the same-vehicle check).
+export function runScanQa(parts: QaPart[], wholeCarUsd?: number | null, photoColors: string[] = []): QaFlag[] {
   const flags: QaFlag[] = [];
 
   // 1. Contradiction: a part graded A while flagged inside a damage zone. The damage pass
@@ -72,6 +84,11 @@ export function runScanQa(parts: QaPart[], wholeCarUsd?: number | null): QaFlag[
       message: `Clean-parts total ($${headline.toLocaleString()}) is below the whole-car estimate ($${wholeCarUsd.toLocaleString()}) — parting out usually exceeds it, so pricing may be conservative.`,
     });
   }
+
+  // 6. Photos disagree on the body color → a color misread, or (worse) the photo set may
+  //    mix DIFFERENT vehicles. Either way, a human should confirm before it lists.
+  const cc = colorConflict(photoColors);
+  if (cc) flags.push({ level: "warn", message: `Photos disagree on body color (${cc[0]} vs ${cc[1]}) — verify every photo is the SAME vehicle.` });
 
   return flags;
 }

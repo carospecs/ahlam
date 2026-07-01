@@ -15,6 +15,7 @@ import { instanceScore, type PhotoFront } from "@/lib/photo-select";
 import { runScanQa } from "@/lib/scan-qa";
 import { redactImage, redactImageToDataUrl, type PiiBox } from "@/lib/redact";
 import { groundDescriptions } from "@/lib/describe-ground";
+import { propagateImpactDamage } from "@/lib/damage-zones";
 
 interface UploadedPhoto { url: string; name: string; file: File; piiRegions?: PiiBox[] }
 
@@ -22,7 +23,7 @@ interface VehicleFit { make: string; model: string; yearStart: number; yearEnd: 
 interface AIPart {
   partName: string; partCategory: string; fitment: VehicleFit[];
   box?: [number, number, number, number]; // detection bbox [x0,y0,x1,y1] (0–1); largest wins the clearest-photo pick
-  condition: "Good" | "Poor"; conditionNotes: string; description: string;
+  condition: "A" | "B" | "C"; conditionNotes: string; description: string; // ARA grade (was mistyped Good/Poor)
   newPartPriceUsd?: number | null; // brand-new price from the scan; base for L/R parity
   suggestedPriceUsd: number | null; confidence: "high" | "medium" | "low";
   inferred?: boolean; // listed but not directly seen → "Inferred — verify", unpriced
@@ -245,6 +246,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const phase = s.phase;                              const setPhase = up("phase") as Dispatch<string>;
   const parts = s.parts as AIPart[];                  const setParts = up("parts") as Dispatch<AIPart[]>;
   const vehicle = s.vehicle;                          const setVehicle = up("vehicle") as Dispatch<typeof s.vehicle>;
+  const photoColors = s.photoColors;                  const setPhotoColors = up("photoColors") as Dispatch<string[]>;
   const mainPhoto = s.mainPhoto;                      const setMainPhoto = up("mainPhoto") as Dispatch<string | null>;
   const sellMode = s.sellMode;                        const setSellMode = up("sellMode") as Dispatch<string>;
   const mode = s.mode;                                const setMode = up("mode") as Dispatch<typeof s.mode>;
@@ -276,7 +278,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const partsTotal = parts.reduce((s, p) => s + (p.suggestedPriceUsd || 0), 0);
   const sellable = parts.filter((p) => (p.suggestedPriceUsd || 0) > 0).length;
   const flagged = parts.filter((p) => p.confidence === "low");
-  const goodCount = parts.filter((p) => p.condition === "Good").length;
+  const goodCount = parts.filter((p) => p.condition === "A").length;
   // Pre-submit review checks (AHLAM-66): aggregate everything the seller should
   // eyeball before posting — restricted parts, missing high-value categories,
   // and wildly mismatched left/right prices.
@@ -286,7 +288,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   // Stage-7 consistency guardrail. Drop "Restricted" (already surfaced above) so the QA
   // block only adds its NEW checks: side conflicts, Grade-A-in-a-damage-zone, inferred
   // parts, and the headline-vs-whole-car sanity check.
-  const qaFlags = runScanQa(parts, suggestedCarPrice).filter((f) => !f.message.startsWith("Restricted"));
+  const qaFlags = runScanQa(parts, suggestedCarPrice, photoColors).filter((f) => !f.message.startsWith("Restricted"));
   const photoCount = photos.length;
 
   // One box — drop everything in (HEIC, JPG, PNG, anything). The AI figures out
@@ -395,6 +397,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       // BEFORE dedupe. That way a bare "Engine" from a VIN-less engine shot and an
       // already-enriched "Engine — …" collapse into one entry.
       const agg = aggregateVehicle(estimates);
+      // Stash the distinct body color each photo reported, so QA can flag a gray-vs-gold
+      // mismatch (a misread — or photos of different vehicles).
+      setPhotoColors([...new Set(estimates.map((e) => e?.color).filter((c): c is string => !!c).map((c) => c.trim()))]);
       const enrichedCollected = agg?.engine
         ? collected.map((p) => applyVinEngine(p, agg.engine, agg.drivetrain))
         : collected;
@@ -423,11 +428,15 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       // Front Seat") across photos, enforce L/R price parity, then sort — keeping
       // inferred (not-directly-seen) parts grouped at the very bottom, separate from
       // observed detections.
-      // Ground descriptions on the reconciled facts (Stage 5): lock the one body color
-      // across panels (fixes "gray" vs "bronze") and hedge parts the camera barely saw.
+      // CROSS-PHOTO damage propagation: the server runs damage per-photo, so a crushed
+      // front door in one shot never reached the rear door detected in another. Re-run the
+      // adjacency pass here on the fully merged list so a Grade-C panel drags its same-side
+      // neighbors (rear door, glass, mirror, rocker) off Grade A + unprices them.
+      // Then ground descriptions (Stage 5): lock the one body color + hedge barely-seen parts.
       const deduped = groundDescriptions(
-        reconcilePairPrices(dropGenericWhenSided([...byName.values()]).sort(comparePartsForDisplay))
-          .sort((a, b) => (a.inferred ? 1 : 0) - (b.inferred ? 1 : 0)),
+        propagateImpactDamage(
+          reconcilePairPrices(dropGenericWhenSided([...byName.values()]).sort(comparePartsForDisplay)),
+        ).sort((a, b) => (a.inferred ? 1 : 0) - (b.inferred ? 1 : 0)),
         { bodyColor: agg?.color },
       ).map((p) => ({ ...p, _id: newId(), _aiPrice: p.suggestedPriceUsd ?? null }));
 
@@ -513,7 +522,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   }
   // Add a blank, fully-editable part row (e.g. something the AI missed).
   function addBlankPart() {
-    setParts((prev) => [...prev, { partName: "", partCategory: "", fitment: [], condition: "Good", conditionNotes: "", description: "", suggestedPriceUsd: null, confidence: "high", _id: newId(), _aiPrice: null }]);
+    setParts((prev) => [...prev, { partName: "", partCategory: "", fitment: [], condition: "B", conditionNotes: "", description: "", suggestedPriceUsd: null, confidence: "high", _id: newId(), _aiPrice: null }]);
   }
   // Move a part up/down so sellers control the order buyers see.
   function movePart(id: string, dir: -1 | 1) {
@@ -781,7 +790,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               {vehicle
                 ? <>Source vehicle identified as a <strong>{vehicle.sub.split(" · ")[0] ? `${vehicle.sub.split(" · ")[0]} ` : ""}{vehicle.label}</strong>. </>
                 : <>Couldn't confidently identify the source vehicle from these photos. </>}
-              Cataloged <strong>{parts.length} part{parts.length === 1 ? "" : "s"}</strong>: {goodCount} graded Good, {sellable} with a suggested price, {flagged.length} flagged low-confidence.
+              Cataloged <strong>{parts.length} part{parts.length === 1 ? "" : "s"}</strong>: {goodCount} Grade A, {sellable} with a suggested price, {flagged.length} flagged low-confidence.
             </div>
 
             <div style={{ display: "grid", gap: 7 }}>
