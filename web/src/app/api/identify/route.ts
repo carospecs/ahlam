@@ -7,6 +7,7 @@ import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
 import { applyVinEngine, stripSide } from "@/lib/part-enrich";
 import { markInferredParts } from "@/lib/inferred-parts";
 import { propagateImpactDamage } from "@/lib/damage-zones";
+import { applyDamageZones, type DamageZone } from "@/lib/damage-intersect";
 
 export const runtime = "nodejs";
 // Pricing is now a local formula (no per-part web/eBay lookups), so the request is
@@ -91,6 +92,7 @@ export interface VehicleEstimate {
   yearStart: number | null;
   yearEnd: number | null;
   bodyStyle: string | null;
+  color?: string | null; // one exterior body color, locked from the best-lit panel
   mileage: string | null;
   // The vehicle's original NEW price (MSRP) from the vision model — the base the
   // age factor discounts into suggestedWholeCarPriceUsd.
@@ -141,6 +143,7 @@ You MUST return ONLY a JSON object, no prose, with this shape:
     "yearStart": number | null,
     "yearEnd": number | null,
     "bodyStyle": string | null,
+    "color": string | null,
     "mileage": string | null,
     "newWholeCarPriceUsd": number | null,
     "confidence": "high" | "medium" | "low"
@@ -166,6 +169,9 @@ You MUST return ONLY a JSON object, no prose, with this shape:
   ],
   "piiRegions": [
     { "type": "license-plate" | "windshield-vin", "box": [x0, y0, x1, y1] }
+  ],
+  "damageZones": [
+    { "box": [x0, y0, x1, y1], "severity": "moderate" | "severe" }
   ]
 }
 
@@ -193,6 +199,7 @@ MECE — each part is ONE distinct, separately-sold unit (mutually exclusive, co
 - Don't merge an assembly with its sub-parts (e.g. don't fold the mirror glass into the door). When in doubt, split into the parts a yard actually sells individually.
 
 VEHICLE ESTIMATE ("vehicle"):
+- "color": the vehicle's ONE exterior body color as a short label (e.g. "Silver", "Army Green", "Dark Gray", "Metallic Blue"). Read it from the best-lit, cleanest painted body panel — a car has a single body color, so give one value regardless of shadows/dirt/glare on other panels. Null if no painted body is visible (e.g. an interior-only or engine-bay photo).
 - VIN — THIS IS HIGH PRIORITY. Scan the photo for a VIN and READ IT if one is legible anywhere: the windshield VIN plate (driver-side base of the windshield), the driver door-jamb sticker, the firewall/engine-bay label, the dashboard, or any paperwork in frame. A VIN is exactly 17 characters, capital letters and digits only, and never contains the letters I, O, or Q. Transcribe all 17 characters CAREFULLY, character by character, and return it in "vin". If no VIN is legible, set "vin" to null — NEVER invent or guess a VIN, and never partially fill one.
 - If you read a VIN, USE IT: it tells you the exact make, model, and model year — set yearStart and yearEnd to that EXACT same year (not a range) — and the engine/drivetrain, which determines which parts the car has and what they interchange with. Trust the VIN over a visual guess.
 - ALWAYS COMMIT TO A SINGLE MODEL YEAR. Set yearStart === yearEnd to your one best-estimate model year. Do NOT return a multi-year span like 2016–2025 — that is a generation, not an answer. From the VIN (exact), or failing that the body style, headlights/taillights, grille, wheels, badging and trim cues, identify the specific generation and pick the single most-likely year within it. If you must, give your best single guess and lower "confidence" — but never output a range. A salvage buyer needs the exact year for fitment.
@@ -250,6 +257,7 @@ CONDITION RUBRIC — grade each part as exactly "A", "B", or "C" (ARA-style), ba
 - C: ${CONDITION_RUBRIC.C.detail}
 Pick the grade by visible wear and damage. When genuinely between two grades, choose the LOWER (more conservative) one.
 - COLLISION / STRUCTURAL DAMAGE IS ALWAYS GRADE C. If a part is crumpled, caved-in, bent, torn, cracked, has a deep dent, broken/missing mounting points, or shattered/spidered glass, it is a damaged repairable CORE — grade it "C", never "A" or "B". A clearly wrecked part is the CHEAPEST version of that part on the car, not a premium one. Inspect each part for collision damage specifically before grading.
+- DAMAGE ZONES ("damageZones"): whenever you see COLLISION/IMPACT damage, return a bounding box [x0,y0,x1,y1] (fractions 0–1) around each damaged AREA, with "severity": "severe" (crushed, caved-in, structural, torn, shattered) or "moderate" (deep dents, heavy creasing). Box the whole damaged region, not a single part — the system marks EVERY part inside the box as damaged, which is how a side impact drags down the door, glass, mirror, and rocker together. Empty array if there's no collision damage.
 - IMPACT ZONES — DAMAGE PROPAGATES, never grade one wrecked panel in isolation. A real collision almost never hits a single panel cleanly; the force runs through the whole zone. When you see severe damage on ANY panel, deliberately inspect EVERY adjacent panel and the parts mounted on them for related damage from the SAME impact: the panels ahead of and behind it (front fender → front door → rear door → rear quarter panel), the rocker panel below them, and the side mirror, window glass, door handle, and trim that ride on those panels. Grade each neighbor by what you actually see. If a neighboring panel is very likely caught in the same impact but you cannot see it clearly enough to confirm clean, grade it conservatively (down, never "A") and set its "confidence" to "low" so it is flagged for review — do NOT grade the panel beside a crushed one as "A" just because its own damage isn't squarely in frame.
 
 DAMAGE CODE ("damageCode"): a short ARA-style code summarizing the worst visible damage, as TYPE-LOCATION-SIZE.
@@ -444,6 +452,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
       vehicle?: Partial<VehicleEstimate>;
       parts?: RawPart[];
       piiRegions?: { type?: string; box?: number[] }[];
+      damageZones?: { box?: number[]; severity?: string }[];
     } & RawPart;
 
     const vehicleFront: VehicleFront = parsed.vehicleFront ?? "unknown";
@@ -460,6 +469,11 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
         r.box.every((n) => Number.isFinite(n) && n >= 0 && n <= 1) &&
         r.box[0] < r.box[2] && r.box[1] < r.box[3]);
 
+    // Located impact-damage zones (per photo) → parts whose box intersects one get downgraded.
+    const damageZones: DamageZone[] = (Array.isArray(parsed.damageZones) ? parsed.damageZones : [])
+      .map((z) => ({ box: validBox(z?.box), severity: z?.severity === "severe" ? "severe" as const : "moderate" as const }))
+      .filter((z): z is DamageZone => !!z.box);
+
     const v = parsed.vehicle;
     const vehicle: VehicleEstimate | null = v
       ? {
@@ -469,6 +483,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
           yearStart: typeof v.yearStart === "number" ? v.yearStart : null,
           yearEnd: typeof v.yearEnd === "number" ? v.yearEnd : null,
           bodyStyle: v.bodyStyle ?? null,
+          color: typeof v.color === "string" && v.color.trim() ? v.color.trim() : null,
           mileage: typeof v.mileage === "string" && v.mileage.trim() ? v.mileage.trim() : null,
           newWholeCarPriceUsd: typeof v.newWholeCarPriceUsd === "number" ? v.newWholeCarPriceUsd : null,
           suggestedWholeCarPriceUsd: null, // computed from age below
@@ -650,7 +665,11 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     // (rear door, glass, mirror, rocker…) off Grade A, unprices them, and flags them for
     // review, instead of pricing them as undamaged. Runs AFTER pricing so the null sticks;
     // clear the now-stale pricing insight on anything it unpriced.
-    data = propagateImpactDamage(data).map((p) =>
+    // Pixel-accurate first: downgrade parts whose box sits IN a located damage zone
+    // (applyDamageZones), then propagate from those origins to same-side neighbors via the
+    // adjacency map (propagateImpactDamage). Clear the now-stale pricing insight on anything
+    // either pass unpriced.
+    data = propagateImpactDamage(applyDamageZones(data, damageZones)).map((p) =>
       p.suggestedPriceUsd == null && p.pricingInsight ? { ...p, pricingInsight: undefined } : p,
     );
 

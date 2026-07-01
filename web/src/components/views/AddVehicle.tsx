@@ -14,6 +14,7 @@ import { applyVinEngine, reconcilePairPrices, dropGenericWhenSided } from "@/lib
 import { instanceScore, type PhotoFront } from "@/lib/photo-select";
 import { runScanQa } from "@/lib/scan-qa";
 import { redactImage, redactImageToDataUrl, type PiiBox } from "@/lib/redact";
+import { groundDescriptions } from "@/lib/describe-ground";
 
 interface UploadedPhoto { url: string; name: string; file: File; piiRegions?: PiiBox[] }
 
@@ -43,7 +44,7 @@ const MAX_PHOTOS = 15;
 interface VehicleEstimate {
   vin: string | null; make: string | null; model: string | null; yearStart: number | null; yearEnd: number | null;
   bodyStyle: string | null; mileage: string | null; suggestedWholeCarPriceUsd: number | null; confidence: "high" | "medium" | "low";
-  trim?: string | null; engine?: string | null; drivetrain?: string | null; vinInfo?: VinInfo | null;
+  trim?: string | null; engine?: string | null; drivetrain?: string | null; vinInfo?: VinInfo | null; color?: string | null;
 }
 type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; vehicleFront?: string; piiRegions?: PiiBox[] } | { ok: false; userMessage: string; internalError: string };
 
@@ -52,7 +53,7 @@ type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; ve
 const SCAN_TONE = "var(--signal)";
 
 // Pick the single best whole-car price + label from per-photo AI estimates.
-function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { label: string; sub: string; suggestedPrice: number | null; mileage: string | null; make: string; model: string; year: string; body: string; vin: string | null; trim: string | null; engine: string | null; drivetrain: string | null; vinInfo: VinInfo | null } | null {
+function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { label: string; sub: string; suggestedPrice: number | null; mileage: string | null; make: string; model: string; year: string; body: string; vin: string | null; trim: string | null; engine: string | null; drivetrain: string | null; vinInfo: VinInfo | null; color: string | null } | null {
   const valid = estimates.filter((e): e is VehicleEstimate => !!e && !!e.make && !!e.model);
   if (!valid.length) return null;
 
@@ -89,11 +90,13 @@ function aggregateVehicle(estimates: (VehicleEstimate | null | undefined)[]): { 
   const suggestedPrice = prices.length ? prices[Math.floor(prices.length / 2)] : null;
   const mileage = valid.map((e) => e.mileage).find((m): m is string => !!m) ?? null;
   const vin = vinEst?.vin || valid.map((e) => e.vin).find((v): v is string => !!v) || null;
+  // One body color for the whole car — first non-empty across photos (best-lit panel).
+  const color = valid.map((e) => e.color).find((c): c is string => !!c) || null;
 
   return {
     label: `${make} ${model}`,
     sub: [year, trim, body].filter(Boolean).join(" · "),
-    suggestedPrice, mileage, make, model, year, body, vin, trim, engine, drivetrain, vinInfo,
+    suggestedPrice, mileage, make, model, year, body, vin, trim, engine, drivetrain, vinInfo, color,
   };
 }
 
@@ -420,9 +423,13 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       // Front Seat") across photos, enforce L/R price parity, then sort — keeping
       // inferred (not-directly-seen) parts grouped at the very bottom, separate from
       // observed detections.
-      const deduped = reconcilePairPrices(dropGenericWhenSided([...byName.values()]).sort(comparePartsForDisplay))
-        .sort((a, b) => (a.inferred ? 1 : 0) - (b.inferred ? 1 : 0))
-        .map((p) => ({ ...p, _id: newId(), _aiPrice: p.suggestedPriceUsd ?? null }));
+      // Ground descriptions on the reconciled facts (Stage 5): lock the one body color
+      // across panels (fixes "gray" vs "bronze") and hedge parts the camera barely saw.
+      const deduped = groundDescriptions(
+        reconcilePairPrices(dropGenericWhenSided([...byName.values()]).sort(comparePartsForDisplay))
+          .sort((a, b) => (a.inferred ? 1 : 0) - (b.inferred ? 1 : 0)),
+        { bodyColor: agg?.color },
+      ).map((p) => ({ ...p, _id: newId(), _aiPrice: p.suggestedPriceUsd ?? null }));
 
       // Front shot for the main post image; fall back to the first uploaded photo.
       setMainPhoto(frontPhoto || (photos[0] ? display(photos[0].url) : null));
