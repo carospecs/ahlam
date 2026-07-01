@@ -12,6 +12,7 @@ import { useScanSession, setScanSession, getScanSession, resetScanSession, begin
 import type { VinInfo } from "@/lib/vin";
 import { applyVinEngine, reconcilePairPrices, dropGenericWhenSided } from "@/lib/part-enrich";
 import { instanceScore, type PhotoFront } from "@/lib/photo-select";
+import { runScanQa } from "@/lib/scan-qa";
 
 interface UploadedPhoto { url: string; name: string; file: File }
 
@@ -277,6 +278,10 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const restricted = parts.filter((p) => p.compliance);                       // AHLAM-54
   const missingHighValue = missingHighValueCategories(parts);                  // AHLAM-55
   const priceMismatches = pairedPriceMismatches(parts);                        // AHLAM-69
+  // Stage-7 consistency guardrail. Drop "Restricted" (already surfaced above) so the QA
+  // block only adds its NEW checks: side conflicts, Grade-A-in-a-damage-zone, inferred
+  // parts, and the headline-vs-whole-car sanity check.
+  const qaFlags = runScanQa(parts, suggestedCarPrice).filter((f) => !f.message.startsWith("Restricted"));
   const photoCount = photos.length;
 
   // One box — drop everything in (HEIC, JPG, PNG, anything). The AI figures out
@@ -760,6 +765,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               {priceMismatches.length > 0 && (
                 <ReportLine icon={<TriangleAlert size={14} color="var(--signal)" />} text={`Check left/right pricing — ${priceMismatches.map((m) => m.base).join(", ")} ${priceMismatches.length > 1 ? "have" : "has"} sides priced very differently. Paired parts usually sell within ~20% of each other.`} />
               )}
+              {qaFlags.map((f, i) => (
+                <ReportLine key={`qa${i}`} icon={f.level === "warn" ? <TriangleAlert size={14} color="var(--signal)" /> : <Info size={14} color="var(--muted)" />} text={f.message} />
+              ))}
               {vin && <ReportLine icon={<ScanLine size={14} color="var(--accent)" />} text={`VIN read from your photos: ${vin}. Used to lock the exact year, make, model, and engine for accurate fitment and pricing. Confirm it below.`} />}
               {mileage && <ReportLine icon={<Lock size={14} color="var(--muted)" />} text={`Mileage read from dashboard: ${mileage}. Kept private, never shown on listings. You can share it in chat if a buyer asks.`} />}
             </div>

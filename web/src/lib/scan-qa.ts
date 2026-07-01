@@ -1,0 +1,77 @@
+// SCAN QA / VERIFICATION (pipeline Stage 7) — the end-of-run consistency guardrail that
+// turns the scanner from an optimistic appraiser into a salvage inspector. Pure,
+// deterministic code: it cross-checks the assembled part list for internal contradictions
+// and surfaces low-confidence / must-verify items, instead of publishing silently.
+//
+// Every check is grounded in data the pipeline already produces (condition, inferred flag,
+// compliance flag, price, side in name vs. description, the whole-car estimate). Color
+// uniformity is intentionally NOT checked here yet — it belongs to the grounded Description
+// stage (Stage 5), which locks a single vehicle color; there's nothing reliable to check
+// until that ships.
+
+export type QaFlag = { level: "warn" | "info"; message: string };
+
+// Structural subset of a scanned part — only the fields QA reads. `condition` is typed
+// loosely (string) so both the server's AIPartOutput ("A"|"B"|"C") and the client's AIPart
+// pass through; the checks compare against "A"/"C" at runtime.
+export type QaPart = {
+  partName: string;
+  condition: string;
+  suggestedPriceUsd: number | null;
+  conditionNotes?: string;
+  description?: string;
+  inferred?: boolean;
+  compliance?: { label?: string } | undefined;
+};
+
+const sideOf = (s: string): "L" | "R" | null =>
+  /\bpassenger\b/i.test(s) ? "R" : /\bdriver\b/i.test(s) ? "L" : null;
+
+const names = (ps: QaPart[]) => ps.map((p) => p.partName).join(", ");
+
+// Run the consistency checks. Returns the flags to show the seller for review (empty when
+// the listing is internally consistent). `wholeCarUsd` is the AI's standalone whole-car
+// estimate, used only for the headline sanity check.
+export function runScanQa(parts: QaPart[], wholeCarUsd?: number | null): QaFlag[] {
+  const flags: QaFlag[] = [];
+
+  // 1. Contradiction: a part graded A while flagged inside a damage zone. The damage pass
+  //    downgrades A→B, so this should never fire — if it does, the pipeline disagrees with
+  //    itself and a human should look. (Directly implements "no Grade-A part in a damage zone".)
+  const aInZone = parts.filter((p) => p.condition === "A" && /impact zone/i.test(p.conditionNotes ?? ""));
+  if (aInZone.length) flags.push({ level: "warn", message: `Grade A but in a damage zone — verify: ${names(aInZone)}.` });
+
+  // 2. Side coherence: the side named in the description contradicts the side in the part
+  //    name (e.g. "Driver Side Front Door" described as a passenger door).
+  const sideConflict = parts.filter((p) => {
+    const nameSide = sideOf(p.partName);
+    if (!nameSide) return false;
+    const descSide = sideOf(p.description ?? "");
+    return descSide !== null && descSide !== nameSide;
+  });
+  if (sideConflict.length) flags.push({ level: "warn", message: `Description names the opposite side — verify: ${names(sideConflict)}.` });
+
+  // 3. Inferred parts: not directly seen — never publish as observed.
+  const inferred = parts.filter((p) => p.inferred);
+  if (inferred.length) flags.push({ level: "info", message: `Inferred (not directly seen) — verify before listing: ${names(inferred)}.` });
+
+  // 4. Restricted parts: confirm resale rules before listing.
+  const restricted = parts.filter((p) => p.compliance);
+  if (restricted.length) flags.push({ level: "warn", message: `Restricted resale — confirm the rules: ${names(restricted)}.` });
+
+  // 5. Headline sanity vs. the whole-car estimate. The headline counts only clean, observed,
+  //    sellable parts (not damaged, not inferred). Parting out normally EXCEEDS the whole-car
+  //    value, so a headline below it is a signal the pricing is running conservative.
+  const headline = parts.reduce(
+    (s, p) => s + (p.inferred || p.condition === "C" ? 0 : p.suggestedPriceUsd || 0),
+    0,
+  );
+  if (wholeCarUsd && wholeCarUsd > 0 && headline > 0 && headline < wholeCarUsd) {
+    flags.push({
+      level: "info",
+      message: `Clean-parts total ($${headline.toLocaleString()}) is below the whole-car estimate ($${wholeCarUsd.toLocaleString()}) — parting out usually exceeds it, so pricing may be conservative.`,
+    });
+  }
+
+  return flags;
+}
