@@ -9,6 +9,18 @@ const nextConfig = {
   // deterministic regardless of install/cache state.
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
+  // The /guides section was consolidated into /blog. Preserve existing links and
+  // search-engine equity by permanently redirecting the old URLs to their new
+  // home. Guide slugs were kept identical, so /guides/:slug maps one-to-one onto
+  // /blog/:slug.
+  async redirects() {
+    return [
+      { source: "/guides", destination: "/blog", permanent: true },
+      { source: "/guides/:slug", destination: "/blog/:slug", permanent: true },
+      // The /compare page was removed; its content now lives as a blog post.
+      { source: "/compare", destination: "/blog/ahlam-vs-car-part-ebay-hollander-and-spreadsheets", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

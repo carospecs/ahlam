@@ -23,7 +23,7 @@ const EASE = [0.22, 0.8, 0.26, 1] as const;
 // plan data stay in the codebase either way.
 const SHOW_PRICING = false;
 
-const RECIPIENTS = "mohammadabbas@ahlam.io,andygarcia@ahlam.io";
+const RECIPIENTS = "andygarcia@ahlam.io,mohammadabbas@ahlam.io";
 const GMAIL_COMPOSE = (to: string, subject: string) =>
   `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}`;
 const CAL_DEMO_URL = "https://cal.com/team/ahlam-team";

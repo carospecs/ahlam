@@ -16,11 +16,11 @@ const CAL_DEMO_URL = "https://cal.com/team/ahlam-team";
 export const metadata: Metadata = {
   title: "Ahlam for every used-parts seller · Audiences",
   description:
-    "Ahlam works for salvage yards, used car dealers, repair shops, parts exporters, and individual flippers. See how it fits the way you sell used auto parts.",
+    "Ahlam works for salvage yards, used car dealers, and repair shops. See how it fits the way you sell used auto parts.",
   alternates: { canonical: "/audiences" },
   openGraph: {
     title: "Built for everyone who sells used parts",
-    description: "Salvage yards, dealers, repair shops, exporters, and individual flippers.",
+    description: "Salvage yards, used car dealers, and repair shops.",
     type: "website",
   },
 };
@@ -38,7 +38,7 @@ export default function AudiencesIndex() {
               Built for everyone who sells <span className="accent">used parts</span>
             </h1>
             <p style={{ margin: "20px 0 0", fontSize: 17, color: "var(--muted)", lineHeight: 1.62, maxWidth: 600 }}>
-              Whether you run a two-person yard, flip a parts car in the driveway, or move inventory by the container, Ahlam turns a photo into priced, posted listings. Find the fit that sounds like you.
+              Whether you run a two-person salvage yard, a used car lot, or a repair shop, Ahlam turns a photo into priced, posted listings. Find the fit that sounds like you.
             </p>
           </div>
         </section>

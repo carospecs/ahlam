@@ -18,8 +18,9 @@ function LinkedinGlyph({ size = 16 }: { size?: number }) {
 // site footer never drifts. Server-component safe (plain links + mailto, no
 // client handlers) so it drops into both server and client pages.
 
+const CONTACT_PRIMARY = "andygarcia@ahlam.io";
 const CONTACT = "mohammadabbas@ahlam.io";
-const RECIPIENTS = "mohammadabbas@ahlam.io,andygarcia@ahlam.io";
+const RECIPIENTS = "andygarcia@ahlam.io,mohammadabbas@ahlam.io";
 const CAL_DEMO_URL = "https://cal.com/team/ahlam-team";
 const LINKEDIN_URL = "https://www.linkedin.com/company/ahlam-inc/";
 
@@ -29,14 +30,12 @@ const COLS: Col[] = [
   { h: "Product", links: [
     { label: "How it works", href: "/#how" },
     { label: "Marketplace", href: "/#marketplace" },
-    { label: "Compare", href: "/compare" },
   ] },
   { h: "Audiences", links: [
     { label: "Overview", href: "/audiences" },
     ...AUDIENCES.slice(0, 4).map((a) => ({ label: a.nav, href: `/for/${a.slug}` })),
   ] },
   { h: "Resources", links: [
-    { label: "Guides", href: "/guides" },
     { label: "Blog", href: "/blog" },
     { label: "FAQ", href: "/#faq" },
     { label: "Waitlist", href: "/waitlist" },
@@ -61,7 +60,10 @@ export function SiteFooter() {
           <div style={{ marginTop: 18 }}>
             <div className="cs-kicker" style={{ fontSize: 11, marginBottom: 10 }}>Contact</div>
             <div style={{ display: "grid", gap: 7 }}>
-              <a href={`mailto:${RECIPIENTS}`} style={{ ...footLink, display: "inline-flex", alignItems: "center", gap: 8, opacity: 1 }}>
+              <a href={`mailto:${CONTACT_PRIMARY}`} style={{ ...footLink, display: "inline-flex", alignItems: "center", gap: 8, opacity: 1 }}>
+                <Mail size={14} color="var(--accent)" /> {CONTACT_PRIMARY}
+              </a>
+              <a href={`mailto:${CONTACT}`} style={{ ...footLink, display: "inline-flex", alignItems: "center", gap: 8, opacity: 1 }}>
                 <Mail size={14} color="var(--accent)" /> {CONTACT}
               </a>
               <a href={CAL_DEMO_URL} target="_blank" rel="noopener noreferrer" style={{ ...footLink, display: "inline-flex", alignItems: "center", gap: 8, opacity: 1 }}>
@@ -93,9 +95,7 @@ export function SiteFooter() {
       <div style={{ borderTop: "1px solid var(--line)" }}>
         <div style={{ maxWidth: 1080, margin: "0 auto", padding: "18px 24px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12.5, color: "var(--muted)" }}>© {new Date().getFullYear()} Ahlam. All rights reserved.</span>
-          <a href={`mailto:${RECIPIENTS}`} style={{ ...footLink, marginLeft: "auto" }}>andygarcia@ahlam.io</a>
-          <a href={`mailto:${RECIPIENTS}`} style={footLink}>{CONTACT}</a>
-          <Link href="/waitlist" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Join the waitlist</Link>
+          <Link href="/waitlist" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Join the waitlist</Link>
         </div>
       </div>
     </footer>

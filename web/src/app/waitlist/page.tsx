@@ -125,7 +125,7 @@ export default function WaitlistPage() {
               <WaitlistForm compact />
             </div>
             <p style={{ margin: "18px 0 0", fontSize: 13, color: "var(--muted)" }}>
-              Want to read up first? Browse our <Link href="/guides" style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>guides</Link>.
+              Want to read up first? Browse our <Link href="/blog" style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>blog</Link>.
             </p>
           </Reveal>
         </section>

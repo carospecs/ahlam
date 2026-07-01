@@ -1,9 +1,11 @@
-// Blog: shorter, timely posts (product news, selling tips, customer stories)
-// that sit alongside the long-form /guides. Each post renders at /blog/[slug],
-// is listed at /blog, and is picked up by the sitemap automatically.
+// Blog: the single content hub for Ahlam. Long-form, evergreen articles that
+// rank for the searches salvage yards and parts buyers actually make, plus the
+// occasional comparison. Each post renders at /blog/[slug], is listed at /blog,
+// and is picked up by the sitemap automatically.
 //
-// Difference from guides: guides are evergreen reference playbooks; blog posts
-// are dated, lighter, and can announce features or share a single idea.
+// (The former /guides section was consolidated into this Blog to remove the
+// redundant second content hub. Old /guides/:slug URLs redirect here via
+// next.config.mjs, and the slugs are preserved so no links break.)
 //
 // Add a post by appending an entry. The routes, index, and sitemap read this
 // array, so no other wiring is needed.
@@ -33,275 +35,206 @@ export interface BlogPost {
 
 export const BLOG: BlogPost[] = [
   {
-    slug: "cross-post-a-used-part-everywhere-in-one-minute",
-    title: "Cross-post a used part to eBay, Facebook, OfferUp, and Craigslist in one minute",
+    slug: "ahlam-vs-car-part-ebay-hollander-and-spreadsheets",
+    title: "Ahlam vs Car-Part.com, eBay Motors, Hollander, and spreadsheets",
     description:
-      "How Ahlam takes one graded, priced part and gets it in front of buyers on every marketplace you sell on, without retyping the listing four times.",
-    category: "Product",
+      "A head-to-head look at how Ahlam compares to the tools yards already use to list used parts: Car-Part.com, eBay Motors by hand, Hollander and Checkmate, and plain spreadsheets.",
+    category: "Comparison",
     author: "The Ahlam team",
-    readMinutes: 4,
-    published: "2026-06-22",
-    image: "/img/scan-lot.webp",
+    readMinutes: 6,
+    published: "2026-06-28",
+    image: "/img/compare.webp",
     intro:
-      "Most yards have the same problem: the part is photographed, priced, and ready, but getting it live on eBay, Facebook Marketplace, OfferUp, and Craigslist means typing the same description four times. Here is how Ahlam collapses that into one flow.",
+      "Every yard already has a way to list parts. The question is not whether you have a system, it is whether that system identifies, grades, and prices the part for you, or leaves all three to a person. Here is how Ahlam stacks up against the four tools most yards actually use.",
     sections: [
       {
-        heading: "One listing, every channel",
+        heading: "Ahlam vs Car-Part.com",
         paragraphs: [
-          "When Ahlam identifies and prices a part, it builds a clean, complete listing once: title, condition grade, fitment, price, and photos. From there, posting it is a choice of where, not a round of retyping.",
-          "eBay is fully automated. Connect your account once and a part goes live with a single click, because eBay gives software a real posting API.",
-        ],
-      },
-      {
-        heading: "Facebook, OfferUp, and Craigslist: the assistant fills it in",
-        paragraphs: [
-          "Those three marketplaces do not let software post on your behalf. So instead of pretending otherwise, Ahlam does the next best thing: our browser helper opens the posting form in your own logged-in account, fills in the title, description, price, and category, and loads your photos.",
-          "Nothing goes live until you read it over and click Post. You stay in control, your accounts stay safe, and you skip the typing.",
-        ],
-      },
-      {
-        heading: "Why we built it this way",
-        paragraphs: [
-          "Auto-posting bots that click through Facebook in the background get accounts banned and break every time a page changes. A helper that prefills the real form, in your real browser, with you hitting the final button, is both safer and honest about how these platforms work.",
+          "Car-Part.com is where serious parts buyers search, and being listed there matters. But Car-Part.com lists what you already typed up. It assumes the part is already identified, graded, and priced before it ever reaches the listing.",
+          "Ahlam does that first step. You photograph the part, Ahlam identifies it, grades the condition on a consistent rubric, and prices it from live comps, then hands you a clean listing. The two are complements, not rivals: let Ahlam do the identification and pricing, then distribute through the marketplaces your buyers already use.",
         ],
         bullets: [
-          "eBay: one click, fully automatic.",
-          "Facebook, OfferUp, Craigslist: prefilled form, you confirm.",
-          "Bulk Facebook catalog export for large inventories.",
+          "Car-Part.com: distribution to dedicated parts buyers.",
+          "Ahlam: the identify, grade, and price step that comes before the listing.",
+          "Best together: Ahlam builds the listing, Car-Part.com helps sell it.",
+        ],
+      },
+      {
+        heading: "Ahlam vs eBay Motors by hand",
+        paragraphs: [
+          "eBay Motors offers huge national reach, and it is the right home for shippable, fitment-specific parts. The catch is the work. Listing by hand means knowing the part, the exact fitment, and the price, then typing all of it into eBay's form for every single item.",
+          "Ahlam writes all three for you and posts to eBay in a tap. You still reach the same national audience, you just skip the part where you become a full-time lister to get there.",
+        ],
+      },
+      {
+        heading: "Ahlam vs Hollander and Checkmate",
+        paragraphs: [
+          "Legacy yard management systems like Hollander and Checkmate are deep, mature inventory databases built for large dismantlers, with interchange and full ERP-grade recordkeeping. They are powerful, and for a yard pulling hundreds of cars a month they still win.",
+          "But they are also expensive, desk-bound, and slow to learn, which is overkill for a small yard listing a few dozen parts a week. Ahlam is a photo-to-listing tool a two-person yard can run today, from a phone, with no training. Different tool for a different size of operation.",
+        ],
+      },
+      {
+        heading: "Ahlam vs spreadsheets and notebooks",
+        paragraphs: [
+          "Plenty of yards still run on a spreadsheet or a notebook, and there is nothing wrong with a simple record. But a spreadsheet only records a part after you have already identified and priced it. It captures the answer, it does not give you the answer.",
+          "Ahlam does the identifying and pricing, then keeps the record itself. You get the part name, the grade, the price, the listing, and the log, from one photo, instead of doing the hard part in your head and then typing it into a cell.",
+        ],
+      },
+      {
+        heading: "How to choose",
+        paragraphs: [
+          "If you dismantle hundreds of cars a month and need deep, ERP-grade inventory, a traditional system still fits best. For everyone else, the real bottleneck is the time and expertise to identify, grade, price, and list parts. That is exactly the step Ahlam removes, and it works alongside Car-Part.com and eBay rather than replacing them.",
         ],
       },
     ],
     faqs: [
       {
-        q: "Will this get my Facebook or Craigslist account banned?",
-        a: "No. The helper only fills the form in your own browser and waits for you to post. It does not post automatically or run in the background, which is what those platforms penalize.",
+        q: "Does Ahlam replace Car-Part.com or eBay?",
+        a: "No. Ahlam handles identification, grading, pricing, and listing, then posts to eBay and prepares listings for the marketplaces you already use. Think of it as the step that comes before distribution, not a competitor to it.",
       },
       {
-        q: "Do I have to post to every marketplace?",
-        a: "No. Post to as many or as few as you want. Many yards run eBay automatically and only prep Facebook for higher-value parts.",
+        q: "Should a large dismantler switch to Ahlam?",
+        a: "If you rely on ERP-grade inventory and interchange from a system like Hollander or Checkmate, keep it. Many yards layer Ahlam on top to speed up the identify-and-price step that legacy software leaves to staff expertise.",
       },
     ],
   },
   {
-    slug: "buyer-messages-should-reach-your-inbox-and-phone",
-    title: "Buyer messages should reach your inbox and your phone, not just an app",
+    slug: "how-to-price-a-used-alternator",
+    title: "How to Price a Used Alternator (2026 Pricing Guide)",
     description:
-      "A buyer message you do not see is a sale you lose. Here is how Ahlam makes sure every message reaches you by email, in the app, and on your phone.",
-    category: "Selling tips",
-    author: "The Ahlam team",
-    readMinutes: 3,
-    published: "2026-06-22",
-    image: "/img/aud-seller.webp",
-    intro:
-      "Speed wins parts sales. The first seller to answer usually gets the deal. That only works if you actually find out a buyer wrote to you, which is why message notifications are not a nice-to-have.",
-    sections: [
-      {
-        heading: "Every message, three ways",
-        paragraphs: [
-          "When a buyer messages your shop, Ahlam emails you right away with the message and a link to reply. When you answer, the buyer gets an email too, so the conversation keeps moving even when neither of you is staring at the app.",
-        ],
-        bullets: [
-          "Email alert to your shop the moment a buyer writes.",
-          "An unread badge in the app so nothing gets buried.",
-          "Reply links so you answer in one tap.",
-        ],
-      },
-      {
-        heading: "You control the noise",
-        paragraphs: [
-          "Notifications respect your settings. Turn buyer-message emails off if you live in the app, or keep them on so a message reaches you on the road. The goal is simple: never lose a sale because a message sat unseen.",
-        ],
-      },
-    ],
-    faqs: [
-      {
-        q: "Where do the email alerts go?",
-        a: "To your shop's business email if you set one, otherwise to the owner account's email. You can change this in settings.",
-      },
-    ],
-  },
-  {
-    slug: "how-ai-grades-a-used-parts-condition",
-    title: "How AI grades a used part's condition (the A/B/C system)",
-    description:
-      "Every part Ahlam lists gets an A, B, or C grade. Here is exactly what each grade means, how the AI decides from a photo, and why a consistent rubric sells more parts with fewer returns.",
-    category: "Product",
-    author: "The Ahlam team",
-    readMinutes: 5,
-    published: "2026-06-25",
-    image: "/marketplace/headlight.webp",
-    intro:
-      "Condition is the first thing a parts buyer judges and the last thing most listings explain well. Ahlam grades every part on a simple A, B, C scale, so buyers know what they are getting and you stop guessing or arguing with a coworker over what counts as good. Here is how the system works.",
-    sections: [
-      {
-        heading: "What A, B, and C actually mean",
-        paragraphs: [
-          "The whole point of a grade is that it means the same thing every time. Three letters, three clear tiers, no maybes:",
-        ],
-        bullets: [
-          "Grade A (like new): low miles, no visible damage, often bench-tested. Prices at the top of the comp range.",
-          "Grade B (good, usable): normal wear for its age, works as intended, minor cosmetic marks. Prices around the median.",
-          "Grade C (rough or untested): high miles, visible damage, or sold as a core or as-is. Prices well below median, clearly labeled.",
-        ],
-      },
-      {
-        heading: "What the AI looks at in your photo",
-        paragraphs: [
-          "The model reads the photo for the things a buyer would: visible wear, corrosion, cracks, missing clips, and mounting damage. It then weighs what it sees against the part type and, if you enter it, the vehicle's mileage. A scuffed bumper and a scuffed alternator are not graded the same way, because cosmetics matter a lot on a body panel and very little on a charging unit.",
-          "The grade is a starting point, not a verdict. You can override it in one tap when you know something the photo cannot show, like a bench-test result or a hairline crack on the back side.",
-        ],
-      },
-      {
-        heading: "Why a consistent rubric matters",
-        paragraphs: [
-          "Two staff members grading by feel will never fully agree, and inconsistent grades are one of the top causes of returns and bad reviews. A fixed rubric means a Grade B from your yard reads the same on Monday and Friday, and the same to every buyer who sees it.",
-        ],
-        bullets: [
-          "Fewer returns: buyers receive what the listing promised.",
-          "Faster pricing: the grade maps straight to a position in the comp range.",
-          "Better reviews: an honest C beats an optimistic A that disappoints.",
-        ],
-      },
-      {
-        heading: "Grading in practice",
-        paragraphs: [
-          "Say you photograph a headlight assembly off a 2017 Camry. The lens is clear, the housing is intact, and the mounting tabs are unbroken, but it carries normal road haze. The AI lands on Grade B and prices it at the median of live comps. You glance at it, confirm, and it posts. The judgment that used to start a debate took about a second.",
-        ],
-      },
-    ],
-    faqs: [
-      {
-        q: "Can I change a grade the AI assigns?",
-        a: "Yes. The grade is a suggestion you can override in one tap. The AI reads the photo, but you know the part, so the final call is always yours.",
-      },
-      {
-        q: "Does the grade change the suggested price?",
-        a: "Yes. Grade A anchors to the top of the comp range, Grade B to the median, and Grade C well below it, so condition and price always move together.",
-      },
-    ],
-  },
-  {
-    slug: "why-we-price-from-the-median-not-the-average",
-    title: "Why we price from the median, not the average",
-    description:
-      "A single overpriced listing can drag an average up and leave your part sitting for months. Here is why Ahlam prices from the median of real comps, and what that means for how fast your parts sell.",
+      "A practical framework for pricing a used alternator from a salvage vehicle, using amperage, mileage, condition grade, and live marketplace comps.",
     category: "Pricing",
     author: "The Ahlam team",
-    readMinutes: 4,
-    published: "2026-06-26",
-    image: "/marketplace/wheel.webp",
+    readMinutes: 6,
+    published: "2026-05-01",
+    image: "/marketplace/alternator.webp",
     intro:
-      "When Ahlam suggests a price, it uses the median of comparable listings, not the average. That one choice is the difference between a price buyers accept and a price that looks reasonable on a spreadsheet but never actually sells. Here is the reasoning.",
+      "A used alternator is one of the most commonly pulled and re-sold parts in any yard. Price it too high and it sits. Price it too low and you leave money on the bench. Here is how experienced yards actually land on a number.",
     sections: [
       {
-        heading: "Average and median are not the same number",
+        heading: "Start from the live market, not the original MSRP",
         paragraphs: [
-          "The average adds up every comp and divides by the count. The median is the middle number when you line the comps up from lowest to highest. When the data is clean and tightly clustered, the two land close together. Used-parts data is rarely clean.",
+          "New OEM alternators can list for $250 to $600, but used buyers anchor to what comparable used units sell for, not the dealer price. Pull three to five active comps for the same make, model, year range, and amperage, then take the median.",
+          "Ahlam does this for you. When you photograph the part, it pulls live eBay sold and active comps and suggests a price range, so you start from real demand instead of a guess.",
         ],
       },
       {
-        heading: "One weird listing breaks the average",
+        heading: "Adjust for condition grade",
         paragraphs: [
-          "Marketplaces are full of outliers: a part listed at triple the going rate by a seller who will never move it, or a fire-sale price from someone clearing out a garage. The average chases those extremes. The median quietly ignores them.",
+          "Condition is the single biggest swing factor. Use a consistent A, B, and C rubric so a grade of Good means the same thing every time:",
         ],
         bullets: [
-          "Five comps at $90, $95, $100, $105, and $400.",
-          "Average: $158, dragged up by one fantasy price.",
-          "Median: $100, the real middle of the market.",
+          "Grade A (like new, low miles, bench-tested): price at the top of the comp range.",
+          "Grade B (reliable, moderate wear, spins strong): price at the median.",
+          "Grade C (high miles, or sold as a core or untested): 40 to 60 percent of the median, clearly labeled as-is.",
         ],
       },
       {
-        heading: "Why this matters more for used parts",
+        heading: "Factor in testability and warranty",
         paragraphs: [
-          "Price that part at $158 and it sits. Price it at $100 and it moves. The median protected you from a single bad data point.",
-          "New parts have a list price. Used parts have a market that shifts with condition, mileage, region, and luck. That market is noisy by nature, which is exactly the situation where the median beats the average. The messier the data, the more the median earns its keep.",
+          "A bench-tested alternator with even a 30-day guarantee commands 15 to 25 percent more than an identical untested unit, because it removes the buyer's biggest fear. If you can test it, say so in the listing and price accordingly.",
         ],
       },
       {
-        heading: "What you see in Ahlam",
+        heading: "A quick worked example",
         paragraphs: [
-          "Ahlam pulls live comps for the same part and fitment, takes the median, and shows you the range it came from, so the number is never a black box. You see the middle of the market and the spread around it, then nudge up for a Grade A or down for a Grade C.",
-        ],
-        bullets: [
-          "The suggested price is the median of real, current comps.",
-          "You see the full range, so you can position above or below the middle.",
-          "Outliers are filtered, so one fantasy listing never sets your price.",
+          "Say you pulled a 130-amp alternator from a 2015 Honda Accord with 70,000 miles. Comps cluster at $85 to $120 used. It spins strong and you bench-tested it, so it is a solid Grade A or B. List it at $110 with the note bench-tested, 30-day guarantee. The test justifies the top of the range.",
         ],
       },
     ],
     faqs: [
-      {
-        q: "Does the median ever price too low?",
-        a: "Rarely, because you still adjust for condition. The median is the starting point for a Grade B part. A bench-tested Grade A moves up toward the top of the range, and the listing explains why.",
-      },
-      {
-        q: "Where do the comps come from?",
-        a: "Live marketplace listings for the same part. Ahlam matches make, model, year range, and key specs, then takes the median of what is actually selling right now.",
-      },
+      { q: "Should I sell untested alternators as cores?", a: "Yes. If you cannot verify output, list it as an untested core at 40 to 60 percent of the working-unit price. Honest labeling cuts returns and protects your rating." },
+      { q: "How much does amperage change the price?", a: "Higher-amp units (for example towing or premium-audio variants) are scarcer and sell for more. Always match the amperage exactly when pulling comps." },
     ],
   },
   {
-    slug: "ebay-vs-facebook-vs-offerup-where-used-parts-sell",
-    title: "Posting to eBay vs Facebook vs OfferUp: where used parts actually sell",
+    slug: "best-time-of-year-to-sell-used-auto-parts",
+    title: "The Best Time of Year to Sell Used Auto Parts",
     description:
-      "eBay, Facebook Marketplace, and OfferUp each sell used parts to a different buyer. Here is what moves on each channel, what it costs, and a simple rule for deciding where to post.",
-    category: "Selling tips",
+      "Seasonality drives used-parts demand. Learn which parts sell fastest each season so you can time listings, pricing, and inventory pulls.",
+    category: "Selling strategy",
     author: "The Ahlam team",
     readMinutes: 5,
-    published: "2026-06-24",
-    image: "/img/aud-export.webp",
+    published: "2026-04-15",
+    image: "/img/aud-dealer.webp",
     intro:
-      "The best marketplace for a used part depends on the part, the buyer, and how far you are willing to ship. eBay, Facebook Marketplace, and OfferUp pull different crowds, and the smart move is matching the part to the channel instead of blasting everything everywhere. Here is the breakdown.",
+      "Used-parts demand is seasonal and predictable. Aligning what you pull and list with the calendar can meaningfully shorten how long inventory sits.",
     sections: [
       {
-        heading: "eBay: national reach, shippable parts",
+        heading: "Spring: body and cooling parts",
         paragraphs: [
-          "eBay is where buyers search by exact fitment from anywhere in the country. That national audience is hard to beat for parts worth shipping: alternators, ECUs, headlights, and small mechanical components. You pay final value fees, but you reach a buyer who knows precisely what they need and will pay for it.",
-        ],
-        bullets: [
-          "Best for: shippable, fitment-specific parts with national demand.",
-          "Strength: huge reach and buyers who search by part number.",
-          "Cost: final value fees, though the reach usually pays for them.",
+          "As tax refunds land and the weather improves, DIY repairs and project cars ramp up. Body panels, bumpers, mirrors, and cooling-system parts (radiators, condensers, fans) move quickly. Price body parts confidently from March through May.",
         ],
       },
       {
-        heading: "Facebook Marketplace: local, fast, fee-free",
+        heading: "Summer: A/C and road-trip wear items",
         paragraphs: [
-          "Facebook is local-first and free to list, which makes it the home for bulky parts that cost too much to ship: bumpers, hoods, doors, wheels, and seats. Buyers come to pick up, cash in hand, often the same day. The tradeoff is more tire-kickers and more messages to manage.",
-        ],
-        bullets: [
-          "Best for: large, heavy parts sold locally for pickup.",
-          "Strength: no listing fees and fast local cash sales.",
-          "Cost: more low-quality messages and no buyer protection to lean on.",
+          "Heat exposes weak A/C systems, so compressors, condensers, and blower motors spike. Long-distance driving also lifts demand for suspension and braking components.",
         ],
       },
       {
-        heading: "OfferUp: a second local net",
+        heading: "Fall and winter: starting, charging, and heating",
         paragraphs: [
-          "OfferUp overlaps with Facebook on local pickup but reaches a different, mobile-first set of buyers. It is a strong second channel for the same bulky parts, and posting there widens your local net without much extra work.",
-        ],
-        bullets: [
-          "Best for: local pickup, as a backup alongside Facebook.",
-          "Strength: a distinct mobile buyer base for the same heavy parts.",
-          "Cost: a smaller audience than the big two, so treat it as backup.",
+          "Cold weather kills marginal batteries, starters, and alternators, and drivers suddenly care about heater cores and blend doors. This is prime season for charging-system parts, exactly the items covered in our alternator pricing guide.",
         ],
       },
       {
-        heading: "The simple rule, and why cross-posting wins",
+        heading: "Year-round: high-demand mechanical",
         paragraphs: [
-          "If it ships cheaply and fits one vehicle, lead with eBay. If it is big and heavy, lead with Facebook and add OfferUp. Most mid-value parts have demand on more than one channel, so the real answer is to post the right ones everywhere they sell. That is the slow part by hand, and the part Ahlam removes: one graded, priced listing, posted everywhere you sell.",
+          "Engines, transmissions, and ECUs sell steadily regardless of season because they are failure-driven, not weather-driven. Keep these listed continuously and let pricing, not timing, do the work.",
         ],
       },
     ],
     faqs: [
+      { q: "Should I discount out-of-season parts?", a: "A modest 10 to 15 percent off can clear out-of-season inventory, but high-value mechanical parts hold value year-round, so do not over-discount those." },
+    ],
+  },
+  {
+    slug: "salvage-yard-software-comparison-2026",
+    title: "Salvage Yard Software Comparison (2026)",
+    description:
+      "An honest look at yard management and parts-listing software in 2026: Car-Part, Hollander and Checkmate, eBay Motors, and AI-first tools like Ahlam.",
+    category: "Software",
+    author: "The Ahlam team",
+    readMinutes: 8,
+    published: "2026-06-01",
+    image: "/img/compare.webp",
+    intro:
+      "The right software depends on your size and workflow. Here is a candid comparison of the main options yards weigh in 2026, including where each is strong and where it falls short.",
+    sections: [
       {
-        q: "Should I really post the same part to all three?",
-        a: "For mid-value parts, yes. Cross-posting multiplies your buyers for the same few seconds of work in Ahlam. For very large or very cheap parts, lead local and skip the channels that would cost more to ship than the part is worth.",
+        heading: "Traditional yard management systems (Hollander, Checkmate, Pinnacle)",
+        paragraphs: [
+          "These are mature, deep systems built for large dismantlers: inventory, interchange, and integration with Car-Part.com. They are powerful, but they are also expensive, desk-bound, and have a steep learning curve. That is overkill for a small yard listing a few dozen parts a week.",
+        ],
       },
       {
-        q: "Do these marketplaces let software post for me?",
-        a: "Only eBay offers a real posting API, so eBay is fully automatic in Ahlam. For Facebook, OfferUp, and Craigslist, Ahlam prefills the form in your own logged-in browser and you click post.",
+        heading: "Marketplaces (Car-Part.com, eBay Motors)",
+        paragraphs: [
+          "Car-Part.com is where serious parts buyers search, and eBay Motors offers huge reach. But both assume you already know what the part is, how to grade it, and how to price it. They handle distribution, not identification.",
+        ],
       },
+      {
+        heading: "AI-first listing tools (Ahlam)",
+        paragraphs: [
+          "Newer tools remove the expertise bottleneck. You photograph a part, the AI identifies it, grades condition on a consistent rubric, suggests a price from live comps, and helps you post across channels. This is the biggest workflow change for small yards in years. It turns a five-minute listing into a five-second one.",
+        ],
+        bullets: [
+          "Best for: small to mid-size yards and independent sellers who want speed and do not have a dedicated lister.",
+          "Strengths: photo-to-listing speed, consistent condition grading, live pricing, and multi-channel posting.",
+          "Pair with: Car-Part or eBay for distribution, while the AI tool handles identification and pricing.",
+        ],
+      },
+      {
+        heading: "How to choose",
+        paragraphs: [
+          "If you dismantle hundreds of cars a month and need deep, ERP-grade inventory, a traditional system still wins. If your bottleneck is the time and expertise to identify, grade, price, and list parts, an AI-first tool will move the needle fastest, and it complements the marketplaces rather than replacing them.",
+        ],
+      },
+    ],
+    faqs: [
+      { q: "Can I use an AI listing tool alongside Car-Part.com?", a: "Yes, and that is the recommended setup for small yards. Use the AI tool to identify, grade, price, and draft the listing, then distribute through the marketplaces your buyers already use." },
+      { q: "Do I need to replace my existing system?", a: "Not necessarily. Many yards layer an AI listing tool on top of their current workflow to speed up the identify-and-price step that software has historically left to staff expertise." },
     ],
   },
 ];
