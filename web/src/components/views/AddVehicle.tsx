@@ -20,6 +20,7 @@ interface UploadedPhoto { url: string; name: string; file: File; piiRegions?: Pi
 interface VehicleFit { make: string; model: string; yearStart: number; yearEnd: number; notes?: string }
 interface AIPart {
   partName: string; partCategory: string; fitment: VehicleFit[];
+  box?: [number, number, number, number]; // detection bbox [x0,y0,x1,y1] (0–1); largest wins the clearest-photo pick
   condition: "Good" | "Poor"; conditionNotes: string; description: string;
   newPartPriceUsd?: number | null; // brand-new price from the scan; base for L/R parity
   suggestedPriceUsd: number | null; confidence: "high" | "medium" | "low";
@@ -400,7 +401,11 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       // BEST (lib/photo-select: a front part from the front shot beats one glimpsed in a
       // side-profile), with confidence and price as tiebreakers. Keeps each part's thumbnail
       // and condition read from its clearest photo.
-      const score = (p: AIPart) => instanceScore(p) * 10 + (p.suggestedPriceUsd ? 1 : 0);
+      // Prominence-first: the detection with the LARGEST bounding box is the photo that
+      // shows the part biggest/clearest (Phase B). Orientation-fit (instanceScore) and a
+      // price nudge break ties, and everything still works if a box is missing (area 0).
+      const boxArea = (p: AIPart) => { const b = p.box; return b && b.length === 4 ? Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]) : 0; };
+      const score = (p: AIPart) => boxArea(p) * 1000 + instanceScore(p) + (p.suggestedPriceUsd ? 0.5 : 0);
       const byName = new Map<string, AIPart>();
       for (const p of enrichedCollected) {
         const key = p.partName.toLowerCase().trim();

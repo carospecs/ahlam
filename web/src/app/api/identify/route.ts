@@ -50,6 +50,9 @@ export interface PricingInsight {
 export interface AIPartOutput {
   partName: string;
   partCategory: string;
+  // Bounding box for this detection, [x0,y0,x1,y1] as fractions of the image (0–1). Used
+  // to keep each part's clearest shot (largest box) and, later, to intersect damage zones.
+  box?: [number, number, number, number];
   fitment: VehicleFit[];
   condition: ConditionGrade;
   conditionNotes: string;
@@ -107,6 +110,15 @@ export interface VehicleEstimate {
 // or a legible windshield VIN. `box` is [x0,y0,x1,y1] as fractions of the image (0–1).
 export interface PiiRegion { type: "license-plate" | "windshield-vin"; box: [number, number, number, number] }
 
+// Validate a model-emitted bounding box → a clean [x0,y0,x1,y1] tuple in 0–1, or undefined.
+// Guards against a stray/garbage value ever being treated as a box (and masking a whole photo).
+function validBox(b: unknown): [number, number, number, number] | undefined {
+  if (!Array.isArray(b) || b.length !== 4) return undefined;
+  const [x0, y0, x1, y1] = b.map(Number);
+  if (![x0, y0, x1, y1].every((n) => Number.isFinite(n) && n >= 0 && n <= 1)) return undefined;
+  return x0 < x1 && y0 < y1 ? [x0, y0, x1, y1] : undefined;
+}
+
 export type AIResult =
   | { ok: true; data: AIPartOutput[]; vehicle?: VehicleEstimate | null; vehicleFront?: string; piiRegions?: PiiRegion[] }
   | { ok: false; userMessage: string; internalError: string };
@@ -137,6 +149,7 @@ You MUST return ONLY a JSON object, no prose, with this shape:
     {
       "partName": string,
       "partCategory": string,
+      "box": [x0, y0, x1, y1],
       "imageSide": "left" | "right" | "center",
       "fitment": [
         { "make": string, "model": string, "yearStart": number, "yearEnd": number, "notes": string }
@@ -160,6 +173,7 @@ PII REGIONS — for privacy, we blur personal identifiers before any listing. In
 
 MULTI-PART DETECTION:
 - Identify ALL clearly-visible, individually-sellable parts in the image.
+- BOUNDING BOX ("box"): for EVERY part, return a tight bounding box around it as [x0, y0, x1, y1] in fractions of the image (0.0–1.0): x0/y0 = top-left corner, x1/y1 = bottom-right corner, with x0 < x1 and y0 < y1. Box the part as YOU SEE IT in this photo. This box is how the system keeps each part's clearest shot — a part shown large and head-on wins over the same part glimpsed small at the edge of another photo.
 - Return one array element per part. Return up to 50 of the clearly-visible, sellable parts (most photos have far fewer — that is just the ceiling, never a target).
 - Do NOT invent parts you cannot actually see. If something is not visible, simply omit it — never guess.
 - If only 1–2 parts are visible, return only 1–2 parts. Do not pad the list.
@@ -537,6 +551,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
       return {
         partName,
         partCategory: p.partCategory ?? "Uncategorized",
+        box: validBox((p as { box?: unknown }).box),
         fitment: Array.isArray(p.fitment) ? p.fitment : [],
         condition,
         conditionNotes: p.conditionNotes ?? "",
