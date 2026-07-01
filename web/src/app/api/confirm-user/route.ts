@@ -2,6 +2,23 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+// Founder / admin allowlist. Override with ADMIN_EMAILS (comma-separated) in
+// production. Mirrors /api/waitlist so admin gating stays consistent.
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "admin@gmail.com,mohammadabbas@ahlam.io,andygarcia@ahlam.io")
+  .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+async function requireAdmin(): Promise<string | null> {
+  // Returns the admin email if the caller is a signed-in allowlisted user, else null.
+  try {
+    const sb = await supabaseServer();
+    const { data: { user } } = await sb.auth.getUser();
+    const email = user?.email?.toLowerCase();
+    return email && ADMIN_EMAILS.includes(email) ? email : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(req: Request) {
   let body: { email?: string };
   try {
@@ -15,14 +32,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email required" }, { status: 400 });
   }
 
-  // Require authentication — only the user themselves can confirm their email.
-  const supabase = await supabaseServer();
-  const { data: { user: authUser }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !authUser) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (authUser.email?.toLowerCase() !== email) {
-    return NextResponse.json({ error: "You can only confirm your own email" }, { status: 403 });
+  // Admin-only. A user must NOT be able to confirm their own email — that would
+  // defeat email verification entirely. Marking an account email-confirmed is a
+  // privileged operation reserved for founders/admins (or Supabase directly).
+  const admin_email = await requireAdmin();
+  if (!admin_email) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const admin = supabaseAdmin();

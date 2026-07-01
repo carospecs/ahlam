@@ -90,6 +90,10 @@ Designs seller vetting, watches for stolen-part and chop-shop patterns, sets VIN
 Covers restricted parts (airbags, cats, seatbelts), EPA rules, state dismantler licensing, marketplace liability, the eBay and Facebook automation terms your extension must respect, plus terms of service and privacy.
 > *Example.* You: "Reg, can yards sell airbags on Ahlam?" Reg checks current rules in the browser, explains that used airbags are restricted or illegal in many states and dangerous to ship, sorts it into clearly-fine, needs-care, and do-not-without-counsel, drafts a restricted-parts list, and adds the caveat that a licensed attorney must review before it ships.
 
+**Knox (`knox-security`)**: Application Security; finds the hole before an attacker does.
+Audits the real code for broken access control, exposed secrets, injection, payment and webhook tampering, RLS gaps, and dependency vulnerabilities, then ranks findings by actual exploitability and recommends or drafts the fix. He reads and proposes; he does not deploy, push, or commit, and never runs exploits against live systems.
+> *Example.* You: "Knox, is anything in our code hackable?" Knox maps the API routes and Supabase RLS, finds the one table missing row-level security that leaks every shop's OAuth tokens, writes the exploit path and the one-line migration to close it, and separates the must-fix-before-launch items from the harden-before-scale ones.
+
 ---
 
 ## Product, Design and QA
