@@ -13,8 +13,9 @@ import type { VinInfo } from "@/lib/vin";
 import { applyVinEngine, reconcilePairPrices, dropGenericWhenSided } from "@/lib/part-enrich";
 import { instanceScore, type PhotoFront } from "@/lib/photo-select";
 import { runScanQa } from "@/lib/scan-qa";
+import { redactImage, redactImageToDataUrl, type PiiBox } from "@/lib/redact";
 
-interface UploadedPhoto { url: string; name: string; file: File }
+interface UploadedPhoto { url: string; name: string; file: File; piiRegions?: PiiBox[] }
 
 interface VehicleFit { make: string; model: string; yearStart: number; yearEnd: number; notes?: string }
 interface AIPart {
@@ -43,7 +44,7 @@ interface VehicleEstimate {
   bodyStyle: string | null; mileage: string | null; suggestedWholeCarPriceUsd: number | null; confidence: "high" | "medium" | "low";
   trim?: string | null; engine?: string | null; drivetrain?: string | null; vinInfo?: VinInfo | null;
 }
-type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; vehicleFront?: string } | { ok: false; userMessage: string; internalError: string };
+type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; vehicleFront?: string; piiRegions?: PiiBox[] } | { ok: false; userMessage: string; internalError: string };
 
 // Accent color used across the scan flow (spinner, report card). The scan engine
 // is fixed and never surfaced to the seller.
@@ -354,17 +355,33 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
 
       if (!isScanRun(myToken)) return; // cancelled / superseded while scanning
 
+      // PII (Stage 0): mask the license plate + windshield VIN before any image is shown
+      // or saved. Redact the DISPLAY copies now; stash the regions on each photo so the
+      // SAVE path redacts the uploaded originals too. (The VIN was already read internally.)
+      const redactedDisplay = new Map<string, string>();
+      await Promise.all(results.map(async ({ result: r, photo }) => {
+        const regions = r.ok ? r.piiRegions : undefined;
+        photo.piiRegions = regions && regions.length ? regions : undefined;
+        if (regions && regions.length) {
+          const red = await redactImage(photo.url, regions);
+          if (red !== photo.url) redactedDisplay.set(photo.url, red);
+        }
+      }));
+      if (!isScanRun(myToken)) return;
+      setPhotos([...photos]); // persist photo.piiRegions into the store for the save path
+      const display = (u: string) => redactedDisplay.get(u) ?? u;
+
       const collected: AIPart[] = [];
       const estimates: (VehicleEstimate | null | undefined)[] = [];
       let firstError: string | null = null;
       let frontPhoto: string | null = null;
       for (const { result: r, photo } of results) {
         if (r.ok) {
-          // Tag every part with the photo it was scanned from (its thumbnail).
-          collected.push(...r.data.map((p) => ({ ...p, photoUrl: photo.url, photoFront: r.vehicleFront as PhotoFront })));
+          // Tag every part with the (redacted) photo it was scanned from (its thumbnail).
+          collected.push(...r.data.map((p) => ({ ...p, photoUrl: display(photo.url), photoFront: r.vehicleFront as PhotoFront })));
           estimates.push(r.vehicle);
           // Main post pic = the photo the AI says shows the front ("toward-camera").
-          if (r.vehicleFront === "toward-camera" && !frontPhoto) frontPhoto = photo.url;
+          if (r.vehicleFront === "toward-camera" && !frontPhoto) frontPhoto = display(photo.url);
         } else if (!firstError) firstError = r.userMessage;
       }
 
@@ -403,7 +420,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         .map((p) => ({ ...p, _id: newId(), _aiPrice: p.suggestedPriceUsd ?? null }));
 
       // Front shot for the main post image; fall back to the first uploaded photo.
-      setMainPhoto(frontPhoto || photos[0]?.url || null);
+      setMainPhoto(frontPhoto || (photos[0] ? display(photos[0].url) : null));
 
       if (!deduped.length) {
         setError(firstError || "No sellable parts were detected in these photos. Try clearer, closer shots.");
@@ -519,7 +536,13 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       // them — this is what makes each post carry a real picture. PDFs are scanned
       // for identification but are never stored as listing images.
       const imagePhotos = photos.filter((p) => !isPdf(p.file));
-      const images = await Promise.all(imagePhotos.map((p) => fileToJpegDataUrl(p.file)));
+      // Upload REDACTED images for any photo with PII (plate/VIN) so the saved, customer-
+      // facing listing never carries them; fall back to the normal encode otherwise.
+      const images = await Promise.all(imagePhotos.map(async (p) =>
+        p.piiRegions && p.piiRegions.length
+          ? (await redactImageToDataUrl(p.url, p.piiRegions)) ?? (await fileToJpegDataUrl(p.file))
+          : fileToJpegDataUrl(p.file),
+      ));
       const idxOf = new Map(imagePhotos.map((p, i) => [p.url, i]));
       const heroIndex = mainPhoto && idxOf.has(mainPhoto) ? idxOf.get(mainPhoto)! : 0;
 

@@ -103,8 +103,12 @@ export interface VehicleEstimate {
   vinInfo?: VinInfo | null; // full decode for the seller-facing VIN details section
 }
 
+// A personal-identifier region to blur before the image is shown/saved: a license plate
+// or a legible windshield VIN. `box` is [x0,y0,x1,y1] as fractions of the image (0–1).
+export interface PiiRegion { type: "license-plate" | "windshield-vin"; box: [number, number, number, number] }
+
 export type AIResult =
-  | { ok: true; data: AIPartOutput[]; vehicle?: VehicleEstimate | null; vehicleFront?: string }
+  | { ok: true; data: AIPartOutput[]; vehicle?: VehicleEstimate | null; vehicleFront?: string; piiRegions?: PiiRegion[] }
   | { ok: false; userMessage: string; internalError: string };
 
 const CONDITION_RUBRIC: Record<string, { detail: string }> = {
@@ -146,8 +150,13 @@ You MUST return ONLY a JSON object, no prose, with this shape:
       "visiblyPresent": boolean,
       "lowConfidenceFields": string[]
     }
+  ],
+  "piiRegions": [
+    { "type": "license-plate" | "windshield-vin", "box": [x0, y0, x1, y1] }
   ]
 }
+
+PII REGIONS — for privacy, we blur personal identifiers before any listing. In "piiRegions", return a bounding box for each LICENSE PLATE and each legible WINDSHIELD VIN PLATE visible in THIS photo. Box is [x0, y0, x1, y1] as fractions of the image (0.0–1.0): x0/y0 = top-left, x1/y1 = bottom-right. Draw the box slightly LARGER than the plate so the whole thing is covered. If none is visible, return an empty array. (Still read the VIN into "vin" above — we only blur it from the customer-facing image, not from our internal fitment.)
 
 MULTI-PART DETECTION:
 - Identify ALL clearly-visible, individually-sellable parts in the image.
@@ -420,9 +429,22 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
       vehicleFront?: VehicleFront;
       vehicle?: Partial<VehicleEstimate>;
       parts?: RawPart[];
+      piiRegions?: { type?: string; box?: number[] }[];
     } & RawPart;
 
     const vehicleFront: VehicleFront = parsed.vehicleFront ?? "unknown";
+
+    // Personal-identifier boxes to blur client-side (license plate / windshield VIN).
+    // Keep only well-formed, in-bounds boxes so a stray value never masks the whole photo.
+    const piiRegions: PiiRegion[] = (Array.isArray(parsed.piiRegions) ? parsed.piiRegions : [])
+      .map((r) => ({
+        type: r?.type === "windshield-vin" ? "windshield-vin" : "license-plate",
+        box: (Array.isArray(r?.box) ? r.box : []).map(Number) as number[],
+      }))
+      .filter((r): r is PiiRegion =>
+        r.box.length === 4 &&
+        r.box.every((n) => Number.isFinite(n) && n >= 0 && n <= 1) &&
+        r.box[0] < r.box[2] && r.box[1] < r.box[3]);
 
     const v = parsed.vehicle;
     const vehicle: VehicleEstimate | null = v
@@ -629,7 +651,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
 
     // Count this successful scan against the shop's monthly quota (best-effort).
     void recordUsage(supabaseAdmin(), scanShopId, "scan");
-    return NextResponse.json({ ok: true, data, vehicle, vehicleFront });
+    return NextResponse.json({ ok: true, data, vehicle, vehicleFront, piiRegions });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await alertTeam(`identify route threw: ${msg}`);
