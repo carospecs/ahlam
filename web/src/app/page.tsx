@@ -2,7 +2,6 @@
 
 import { useState, useEffect, lazy, Suspense } from "react";
 import { Landing } from "@/components/Landing";
-import { I18nProvider } from "@/lib/i18n";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
 const Login = lazy(() => import("@/components/Login").then((m) => ({ default: m.Login })));
@@ -98,5 +97,5 @@ export default function Home() {
   // Sign in / sign up are closed to the public pre-launch: every landing CTA goes
   // to the waitlist. Admins log in via the hidden /adminhost route.
   const goWaitlist = () => { window.location.href = "/waitlist"; };
-  return <I18nProvider><Landing onGetStarted={goWaitlist} onSignIn={goWaitlist} /></I18nProvider>;
+  return <Landing onGetStarted={goWaitlist} onSignIn={goWaitlist} />;
 }

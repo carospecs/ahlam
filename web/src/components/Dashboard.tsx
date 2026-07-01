@@ -32,7 +32,7 @@ import { ShopProfile, TeamRoles, Billing, Notifications } from "./views/Settings
 import { DashboardSkeleton } from "./UI";
 import { BrandChip } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
-import { I18nProvider, useI18n, useT } from "@/lib/i18n";
+import { useI18n, useT } from "@/lib/i18n";
 import { AddressAutocomplete, ZipField } from "./AddressAutocomplete";
 
 export const DataContext = createContext<any>({ user: {}, shop: {}, vehicles: [], listings: [], threads: [], activity: [] });
@@ -865,7 +865,6 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 
   return (
     <DataContext.Provider value={data}>
-      <I18nProvider>
       <div style={sx.layout} className="cs-layout">
         {navOpen && <div className="cs-backdrop" onClick={() => setNavOpen(false)} style={sx.backdrop} />}
         <Sidebar active={effectiveActive} onNav={navTo} onSignOut={onSignOut} open={navOpen} onClose={() => setNavOpen(false)} />
@@ -889,7 +888,6 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
         <MessageNotifier />
         <AssistantDrawer open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       </div>
-      </I18nProvider>
     </DataContext.Provider>
   );
 }

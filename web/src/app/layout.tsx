@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Space_Grotesk, Space_Mono, Fraunces, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { I18nProvider } from "@/lib/i18n";
 
 const sans = Inter({
   subsets: ["latin"],
@@ -19,7 +20,7 @@ const display = Space_Grotesk({
   display: "swap",
 });
 
-// Editorial serif for large marketing display headings (landing + guides only,
+// Editorial serif for large marketing display headings (landing + blog only,
 // applied via the .cs-display class so the app/dashboard keep the Poppins brand).
 const serif = Fraunces({
   subsets: ["latin"],
@@ -86,7 +87,13 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>{children}<ServiceWorkerRegister /></body>
+      <body>
+        {/* Single site-wide language layer. On ES it translates the whole DOM
+            (marketing pages, blog, and the app) via /api/translate, so the
+            EN/ES toggle works everywhere, not just the landing page. */}
+        <I18nProvider>{children}</I18nProvider>
+        <ServiceWorkerRegister />
+      </body>
     </html>
   );
 }

@@ -6,6 +6,7 @@ import { ChevronDown, X } from "lucide-react";
 import { BrandMark, BetaBadge } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
 import { AUDIENCES } from "./site-nav";
+import { useI18n } from "@/lib/i18n";
 
 // One shared top nav for the entire marketing site (landing, blog, guides,
 // waitlist, compare, audiences). Replaces the landing's inline pill AND the old
@@ -21,8 +22,6 @@ type Lang = "en" | "es";
 const PRIMARY: { label: string; href: string }[] = [
   { label: "How it works", href: "/#how" },
   { label: "Marketplace", href: "/#marketplace" },
-  { label: "Compare", href: "/compare" },
-  { label: "Guides", href: "/guides" },
   { label: "Blog", href: "/blog" },
 ];
 
@@ -35,6 +34,14 @@ export function SiteHeader({
   lang?: Lang;
   setLang?: (l: Lang) => void;
 }) {
+  // Language toggle can be driven either by explicit props (the landing passes
+  // them) or, on every other marketing page, straight from the shared i18n
+  // context. Falling back to context is what makes the EN/ES switch work site
+  // wide (blog, audiences, /for, waitlist), not just on the landing page.
+  const i18n = useI18n();
+  const effLang = lang ?? i18n.lang;
+  const effSetLang = setLang ?? i18n.setLang;
+
   const [scrolled, setScrolled] = React.useState(false);
   const [audOpen, setAudOpen] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -65,11 +72,11 @@ export function SiteHeader({
     ? <button onClick={onGetStarted} className="cs-raise" style={solidBtnSm}>Join the waitlist</button>
     : <Link href="/waitlist" className="cs-raise" style={solidBtnSm}>Join the waitlist</Link>;
 
-  const LangToggle = lang && setLang ? (
+  const LangToggle = effLang && effSetLang ? (
     <span data-no-i18n style={{ display: "inline-flex", alignItems: "center", border: "1px solid var(--line)", borderRadius: 999, overflow: "hidden" }}>
       {(["en", "es"] as const).map((l) => (
-        <button key={l} onClick={() => setLang(l)} aria-label={l === "en" ? "English" : "Español"}
-          style={{ padding: "6px 11px", fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: lang === l ? "var(--accent)" : "transparent", color: lang === l ? "#fff" : "var(--muted)" }}>{l.toUpperCase()}</button>
+        <button key={l} onClick={() => effSetLang(l)} aria-label={l === "en" ? "English" : "Español"}
+          style={{ padding: "6px 11px", fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: effLang === l ? "var(--accent)" : "transparent", color: effLang === l ? "#fff" : "var(--muted)" }}>{l.toUpperCase()}</button>
       ))}
     </span>
   ) : null;
@@ -119,8 +126,6 @@ export function SiteHeader({
             )}
           </div>
 
-          <Link href="/compare" style={navLink}>Compare</Link>
-          <Link href="/guides" style={navLink}>Guides</Link>
           <Link href="/blog" style={navLink}>Blog</Link>
         </nav>
 
