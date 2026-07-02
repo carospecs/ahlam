@@ -580,6 +580,64 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
     }
   }
 
+  // One QA flag row for the report card: short headline (count instead of the part
+  // list), full message in the disclosure, and the A1 agent's verdicts grouped +
+  // deduped — near-identical "Photo check" paragraphs collapse into one line whose
+  // button fixes every affected part.
+  function renderQaRow(f: { level: "warn" | "info"; message: string }, i: number) {
+    const kind = qaKindOf(f.message);
+    const rs = kind ? qaAgent.resolutions.filter((r) => r.kind === kind) : [];
+    const allClear = rs.length > 0 && rs.every((r) => r.verdict === "resolved");
+    if (allClear) {
+      return (
+        <ReportRow key={`qa${i}`} tone="ok" icon={<CircleCheck size={14} color="var(--success)" />}
+          text={kind === "color" ? "Body color re-checked — it's the same vehicle in every photo" : "Re-checked by the AI agent — no issue found"}
+          detail={[...new Set(rs.map((r) => r.evidence))].join(" ")} />
+      );
+    }
+    // Headline: first clause + a part count instead of the comma list.
+    const base = f.message.split(" — ")[0];
+    const tail = /:\s(.+?)\.?$/.exec(f.message)?.[1];
+    const listCount = tail ? tail.split(",").length : 0;
+    const headline = listCount > 0 ? `${base} — ${listCount} part${listCount > 1 ? "s" : ""}` : base;
+    // Group fixable verdicts by the field they fix; dedupe escalations by evidence.
+    const fixable = rs.filter((r) => r.edit && r.partId);
+    const byField = new Map<string, QaAgentResolution[]>();
+    for (const r of fixable) byField.set(r.edit!.field, [...(byField.get(r.edit!.field) || []), r]);
+    const escalations = [...new Map(rs.filter((r) => !r.edit || !r.partId).map((r) => [r.evidence, r])).values()];
+    const detailText = [f.message, ...new Set(fixable.map((r) => r.evidence).filter(Boolean))].join("\n");
+    return (
+      <ReportRow key={`qa${i}`} tone={f.level === "warn" ? "warn" : "info"}
+        icon={f.level === "warn" ? <TriangleAlert size={14} color="var(--signal)" /> : <Info size={14} color="var(--muted)" />}
+        text={headline}
+        detail={<span style={{ whiteSpace: "pre-line" }}>{detailText}</span>}>
+        {kind && qaAgent.running && rs.length === 0 && (
+          <div style={{ marginLeft: 23, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--accent)" }}>
+            <Sparkles size={12} /> AI agent is double-checking this…
+          </div>
+        )}
+        {[...byField.entries()].map(([field, group]) => (
+          <div key={field} style={{ marginLeft: 23, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12, color: "var(--muted)" }}>
+            <Sparkles size={12} color="var(--accent)" style={{ flexShrink: 0 }} />
+            <span style={{ flex: 1, minWidth: 160, overflowWrap: "anywhere" }}>
+              Photo check: fix the {field === "condition" ? "grade" : field === "partName" ? "part name" : "description"} on{" "}
+              {group.length === 1 ? <strong>{group[0].partName}</strong> : <strong>{group.length} parts</strong>}
+            </span>
+            <button onClick={() => group.forEach(applyQaResolution)} style={{ padding: "4px 10px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--accent-tint)", color: "var(--accent)", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+              {field === "condition" ? "Set Grade B" : group.length > 1 ? `Fix all ${group.length}` : "Fix"}
+            </button>
+          </div>
+        ))}
+        {escalations.map((r, k) => (
+          <div key={`e${k}`} style={{ marginLeft: 23, display: "flex", gap: 8, fontSize: 12, color: "var(--muted)" }}>
+            <Sparkles size={12} color="var(--accent)" style={{ flexShrink: 0, marginTop: 2 }} />
+            <span style={{ overflowWrap: "anywhere" }}>{r.evidence}</span>
+          </div>
+        ))}
+      </ReportRow>
+    );
+  }
+
   // Apply an agent-proposed QA fix (A1) — seller-accepted, never automatic.
   function applyQaResolution(r: QaAgentResolution) {
     if (!r.edit || !r.partId) return;
@@ -886,64 +944,83 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               <button onClick={() => setPhase("upload")} style={{ ...navBtn, padding: "7px 12px", fontSize: 12.5 }}><ArrowLeft size={14} /> Re-run / edit photos</button>
             </div>
 
-            <div style={{ fontSize: 13.5, color: "var(--foreground)", lineHeight: 1.6, background: "var(--surface2)", borderRadius: "var(--radius-md)", padding: "12px 14px" }}>
-              {vehicle
-                ? <>Source vehicle identified as a <strong>{vehicle.sub.split(" · ")[0] ? `${vehicle.sub.split(" · ")[0]} ` : ""}{vehicle.label}</strong>. </>
-                : <>Couldn't confidently identify the source vehicle from these photos. </>}
-              Cataloged <strong>{parts.length} part{parts.length === 1 ? "" : "s"}</strong>: {goodCount} Grade A, {sellable} with a suggested price, {flagged.length} flagged low-confidence.
+            {/* At-a-glance strip — the key numbers as chips, no sentence parsing. */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              <StatChip value={String(parts.length)} label={parts.length === 1 ? "part" : "parts"} />
+              <StatChip value={String(goodCount)} label="Grade A" tone="ok" />
+              <StatChip value={String(sellable)} label="priced" />
+              <StatChip value={String(flagged.length)} label="flagged" tone={flagged.length ? "warn" : "ok"} />
+              {partsTotal > 0 && <StatChip value={`$${partsTotal.toLocaleString()}`} label="total" tone="accent" />}
             </div>
 
-            <div style={{ display: "grid", gap: 7 }}>
-              {vehicle && <ReportLine icon={<Car size={14} color="var(--success)" />} text={`Identified ${vehicle.label}, ${vehicle.sub}.`} />}
-              {suggestedCarPrice && <ReportLine icon={<Sparkles size={14} color="var(--signal)" />} text={`AI estimates a whole-car market value around $${suggestedCarPrice.toLocaleString()} (standalone, not the sum of parts).`} />}
-              <ReportLine icon={<Wrench size={14} color="var(--success)" />} text={`${sellable} of ${parts.length} part${parts.length === 1 ? "" : "s"} returned a suggested price${partsTotal > 0 ? ` (total $${partsTotal.toLocaleString()})` : ""}.`} />
-              {flagged.length > 0
-                ? <ReportLine icon={<TriangleAlert size={14} color="var(--signal)" />} text={`${flagged.length} part${flagged.length > 1 ? "s" : ""} flagged for review: ${flagged.map((f) => f.partName).join(", ")}.`} />
-                : <ReportLine icon={<CircleCheck size={14} color="var(--success)" />} text="No low-confidence parts. Every item came back clean." />}
-              {restricted.length > 0 && (
-                <ReportLine icon={<TriangleAlert size={14} color="#f59e0b" />} text={`${restricted.length} restricted part${restricted.length > 1 ? "s" : ""} — verify resale rules before listing: ${restricted.map((p) => p.partName).join(", ")}.`} />
+            {/* Vehicle & value — neutral facts about what was identified. */}
+            <ReportGroup title="Vehicle & value">
+              {vehicle
+                ? <ReportRow tone="ok" icon={<Car size={14} color="var(--success)" />} text={<>Identified <strong>{vehicle.label}</strong> · {vehicle.sub}</>} />
+                : <ReportRow tone="info" icon={<Info size={14} color="var(--muted)" />} text="Couldn't confidently identify the source vehicle from these photos." />}
+              {suggestedCarPrice && (
+                <ReportRow tone="info" icon={<Sparkles size={14} color="var(--signal)" />}
+                  text={<>Whole-car value ≈ <strong className="tnum">${suggestedCarPrice.toLocaleString()}</strong> · standalone estimate</>}
+                  detail="The AI's market value for the entire vehicle sold whole. It's independent of the per-part prices below — parting out usually totals more." />
               )}
-              {missingHighValue.length > 0 && (
-                <ReportLine icon={<Info size={14} color="var(--signal)" />} text={`No ${missingHighValue.join(", ")} detected. If you're parting out the whole car, add engine-bay photos — these are usually the highest-value parts and you're leaving money on the table without them.`} />
+              <ReportRow tone="info" icon={<Wrench size={14} color="var(--success)" />}
+                text={<>{sellable} of {parts.length} part{parts.length === 1 ? "" : "s"} priced{partsTotal > 0 ? <> · total <strong className="tnum">${partsTotal.toLocaleString()}</strong></> : null}</>} />
+              {vin && (
+                <ReportRow tone="info" icon={<ScanLine size={14} color="var(--accent)" />}
+                  text={<>VIN <span className="tnum">{vin}</span> read from photos</>}
+                  detail="The decoded VIN locks the exact year, make, model, and engine for fitment and pricing. Confirm it in the vehicle card below." />
               )}
-              {priceMismatches.length > 0 && (
-                <ReportLine icon={<TriangleAlert size={14} color="var(--signal)" />} text={`Check left/right pricing — ${priceMismatches.map((m) => m.base).join(", ")} ${priceMismatches.length > 1 ? "have" : "has"} sides priced very differently. Paired parts usually sell within ~20% of each other.`} />
+              {mileage && (
+                <ReportRow tone="info" icon={<Lock size={14} color="var(--muted)" />}
+                  text={`Mileage ${mileage} · kept private`}
+                  detail="Read from the dashboard photo. Never shown on listings — you can share it in chat if a buyer asks." />
               )}
-              {qaFlags.map((f, i) => {
-                // A1 QA Resolver: render the agent's verdicts under the flag they settle.
-                // "resolved" on every case → the flag collapses into a green all-clear with
-                // the evidence; otherwise each case shows its diagnosis + a one-tap fix.
-                const kind = qaKindOf(f.message);
-                const rs = kind ? qaAgent.resolutions.filter((r) => r.kind === kind) : [];
-                const allClear = rs.length > 0 && rs.every((r) => r.verdict === "resolved");
-                return (
-                  <div key={`qa${i}`} style={{ display: "grid", gap: 4 }}>
-                    <ReportLine
-                      icon={allClear ? <CircleCheck size={14} color="var(--success)" /> : f.level === "warn" ? <TriangleAlert size={14} color="var(--signal)" /> : <Info size={14} color="var(--muted)" />}
-                      text={allClear ? rs.map((r) => r.evidence).join(" ") : f.message}
-                    />
-                    {!allClear && kind && qaAgent.running && rs.length === 0 && (
-                      <div style={{ marginLeft: 22, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--accent)" }}>
-                        <Sparkles size={12} /> AI agent is double-checking this…
-                      </div>
+            </ReportGroup>
+
+            {/* Needs review — everything that wants a human decision, warn-styled. */}
+            {(() => {
+              // The conservative-pricing note is a tip, not a review item — split it out.
+              const reviewQa = qaFlags.filter((f) => !f.message.startsWith("Clean-parts total"));
+              const tipQa = qaFlags.filter((f) => f.message.startsWith("Clean-parts total"));
+              const hasReview = flagged.length > 0 || restricted.length > 0 || priceMismatches.length > 0 || reviewQa.length > 0;
+              return (
+                <>
+                  <ReportGroup title="Needs review">
+                    {!hasReview && <ReportRow tone="ok" icon={<CircleCheck size={14} color="var(--success)" />} text="Nothing needs review — every item came back clean." />}
+                    {flagged.length > 0 && (
+                      <ReportRow tone="warn" icon={<TriangleAlert size={14} color="var(--signal)" />}
+                        text={<><strong>{flagged.length} part{flagged.length > 1 ? "s" : ""}</strong> flagged low-confidence — check name, side, and price</>}
+                        detail={flagged.map((f) => f.partName).join(", ")} />
                     )}
-                    {!allClear && rs.map((r, k) => (
-                      <div key={k} style={{ marginLeft: 22, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12, color: "var(--muted)" }}>
-                        <Sparkles size={12} color="var(--accent)" style={{ flexShrink: 0 }} />
-                        <span style={{ flex: 1, minWidth: 180 }}>{r.evidence}</span>
-                        {r.edit && r.partId && (
-                          <button onClick={() => applyQaResolution(r)} style={{ padding: "4px 10px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--accent-tint)", color: "var(--accent)", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-                            {r.edit.field === "condition" ? "Set Grade B" : r.edit.field === "partName" ? "Fix part name" : "Fix description"}
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-              {vin && <ReportLine icon={<ScanLine size={14} color="var(--accent)" />} text={`VIN read from your photos: ${vin}. Used to lock the exact year, make, model, and engine for accurate fitment and pricing. Confirm it below.`} />}
-              {mileage && <ReportLine icon={<Lock size={14} color="var(--muted)" />} text={`Mileage read from dashboard: ${mileage}. Kept private, never shown on listings. You can share it in chat if a buyer asks.`} />}
-            </div>
+                    {restricted.length > 0 && (
+                      <ReportRow tone="warn" icon={<TriangleAlert size={14} color="#f59e0b" />}
+                        text={<><strong>{restricted.length} restricted part{restricted.length > 1 ? "s" : ""}</strong> — confirm resale rules before listing</>}
+                        detail={restricted.map((p) => p.partName).join(", ")} />
+                    )}
+                    {priceMismatches.length > 0 && (
+                      <ReportRow tone="warn" icon={<TriangleAlert size={14} color="var(--signal)" />}
+                        text={<>Left/right prices differ a lot: <strong>{priceMismatches.map((m) => m.base).join(", ")}</strong></>}
+                        detail="Paired parts usually sell within ~20% of each other — check whether one side's price or condition is off." />
+                    )}
+                    {reviewQa.map((f, i) => renderQaRow(f, i))}
+                  </ReportGroup>
+                  {(missingHighValue.length > 0 || tipQa.length > 0) && (
+                    <ReportGroup title="Tips">
+                      {missingHighValue.length > 0 && (
+                        <ReportRow tone="tip" icon={<Info size={14} color="var(--accent)" />}
+                          text={<>No <strong>{missingHighValue.slice(0, 2).join(", ")}{missingHighValue.length > 2 ? ` +${missingHighValue.length - 2} more` : ""}</strong> detected — add engine-bay photos</>}
+                          detail={`Missing high-value categories: ${missingHighValue.join(", ")}. If you're parting out the whole car, these are usually the highest-value parts — without photos of them you're leaving money on the table.`} />
+                      )}
+                      {tipQa.map((f, i) => (
+                        <ReportRow key={`tqa${i}`} tone="tip" icon={<Info size={14} color="var(--accent)" />}
+                          text="Pricing may be conservative — clean-parts total is below the whole-car estimate"
+                          detail={f.message} />
+                      ))}
+                    </ReportGroup>
+                  )}
+                </>
+              );
+            })()}
           </Card>
 
           {/* Source vehicle (only if the model could infer one) */}
@@ -1396,11 +1473,56 @@ function PriceBand({ low, high, value, confidence, onChange }: { low: number; hi
   );
 }
 
-function ReportLine({ icon, text }: { icon: React.ReactNode; text: string }) {
+// ── AI analysis report building blocks ───────────────────────────────────────
+
+// Small stat chip for the report's at-a-glance strip (57 parts · 46 Grade A · …).
+function StatChip({ value, label, tone = "neutral" }: { value: string; label: string; tone?: "neutral" | "ok" | "warn" | "accent" }) {
+  const color = tone === "ok" ? "var(--success)" : tone === "warn" ? "var(--signal)" : tone === "accent" ? "var(--accent)" : "var(--foreground)";
   return (
-    <div style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12.5, color: "var(--foreground)", lineHeight: 1.5 }}>
-      <span style={{ flexShrink: 0, marginTop: 1 }}>{icon}</span>
-      <span>{text}</span>
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 5, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 9, padding: "5px 10px" }}>
+      <span className="tnum" style={{ fontSize: 14, fontWeight: 800, color }}>{value}</span>
+      <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{label}</span>
+    </span>
+  );
+}
+
+// A titled group of report rows (Vehicle & value / Needs review / Tips).
+function ReportGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+// One report row with severity treatment and an optional "Show details" disclosure.
+// Tones: warn (amber chip + left border), tip (accent left border), ok/info (quiet
+// icon+text). minWidth 0 + overflowWrap keep long content wrapping inside the card
+// instead of clipping at its right edge. `children` hosts action sub-rows (agent fixes).
+function ReportRow({ tone, icon, text, detail, children }: {
+  tone: "ok" | "info" | "warn" | "tip"; icon: React.ReactNode; text: React.ReactNode;
+  detail?: React.ReactNode; children?: React.ReactNode;
+}) {
+  const framed = tone === "warn" || tone === "tip";
+  const frame: React.CSSProperties = tone === "warn"
+    ? { background: "var(--signal-bg)", borderLeft: "3px solid var(--signal)" }
+    : tone === "tip"
+      ? { background: "var(--surface2)", borderLeft: "3px solid var(--accent)" }
+      : {};
+  return (
+    <div style={{ ...frame, borderRadius: 9, padding: framed ? "8px 10px" : "1px 0", display: "grid", gap: 5, minWidth: 0 }}>
+      <div style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12.5, color: "var(--foreground)", lineHeight: 1.5, minWidth: 0 }}>
+        <span style={{ flexShrink: 0, marginTop: 1 }}>{icon}</span>
+        <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{text}</span>
+      </div>
+      {detail && (
+        <details style={{ marginLeft: 23 }}>
+          <summary style={{ cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: "var(--accent)", userSelect: "none", width: "fit-content" }}>Show details</summary>
+          <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.55, marginTop: 4, overflowWrap: "anywhere" }}>{detail}</div>
+        </details>
+      )}
+      {children}
     </div>
   );
 }
