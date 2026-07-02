@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { ebayConfigured, exchangeCode, saveTokens, provisionShopPolicies } from "@/lib/ebay";
+import { ebayConfigured, exchangeCode, saveTokens, provisionShopPolicies, EBAY_STATE_COOKIE } from "@/lib/ebay";
 
 export const runtime = "nodejs";
 
@@ -12,16 +13,31 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const error = url.searchParams.get("error");
-  if (error || !code) return NextResponse.redirect(new URL("/?ebay=error", site));
-  if (!ebayConfigured()) return NextResponse.redirect(new URL("/?ebay=error", site));
+  const state = url.searchParams.get("state");
+
+  const cookieStore = await cookies();
+  const expectedState = cookieStore.get(EBAY_STATE_COOKIE)?.value;
+
+  // Every exit clears the single-use state cookie.
+  const done = (path: string) => {
+    const res = NextResponse.redirect(new URL(path, site));
+    res.cookies.set(EBAY_STATE_COOKIE, "", { path: "/", maxAge: 0 });
+    return res;
+  };
+
+  if (error || !code) return done("/?ebay=error");
+  if (!ebayConfigured()) return done("/?ebay=error");
+
+  // CSRF: reject unless eBay echoed back the exact state we set at connect time.
+  if (!state || !expectedState || state !== expectedState) return done("/?ebay=error");
 
   const supabase = await supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.redirect(new URL("/?signin", site));
+  if (!user) return done("/?signin");
 
   const db = supabaseAdmin();
   const { data: profile } = await db.from("profiles").select("shop_id").eq("id", user.id).single();
-  if (!profile?.shop_id) return NextResponse.redirect(new URL("/?ebay=error", site));
+  if (!profile?.shop_id) return done("/?ebay=error");
 
   try {
     const tokens = await exchangeCode(code);
@@ -30,8 +46,8 @@ export async function GET(req: Request) {
     // works immediately. Best-effort — never block the connect on it.
     try { await provisionShopPolicies(profile.shop_id); }
     catch (e) { console.error("[ebay] policy provisioning failed:", e instanceof Error ? e.message : e); }
-    return NextResponse.redirect(new URL("/?ebay=connected", site));
+    return done("/?ebay=connected");
   } catch {
-    return NextResponse.redirect(new URL("/?ebay=error", site));
+    return done("/?ebay=error");
   }
 }

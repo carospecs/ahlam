@@ -68,6 +68,7 @@ export async function GET() {
           priceInsight: c.pricingInsight || null,
           note: c.conditionNotes || c.condition_notes || "", desc: c.description || "",
           sellerId: l.seller_id, ebayUrl: l.ebay_url || null, image: l.photo_url || null,
+          images: Array.isArray(l.photo_urls) ? l.photo_urls.filter(Boolean) : (l.photo_url ? [l.photo_url] : []),
           stockLocation: l.stock_location || "", barcode: l.barcode || "",
           warrantyDays: typeof c.warrantyDays === "number" ? c.warrantyDays : null,
           asIs: !!c.asIs,

@@ -10,12 +10,13 @@ import {
   Sun, Moon, TrendingUp, BookOpen, FolderClosed, MapPin, Trash2, Maximize2,
 } from "lucide-react";
 import { armAudio, playMessageChime } from "@/lib/notifySound";
+import { fileToJpegDataUrl } from "@/lib/image";
 import { buildListingText, buildVehicleText, partsForVehicle } from "./data";
 import { Overview } from "./views/Overview";
 import { Vehicles } from "./views/Vehicles";
 import { Browse } from "./views/Browse";
 import { Parts } from "./views/Parts";
-import { Messages, DeletedChats } from "./views/Messages";
+import { MessagesHub, DeletedChats } from "./views/Messages";
 import { AIChat } from "./views/AIChat";
 import { AssistantDrawer } from "./AssistantDrawer";
 import { Interchange } from "./views/Interchange";
@@ -256,7 +257,7 @@ function ProfileMenu({ onSignOut, onNav }: { onSignOut: () => void; onNav?: (id:
 
 const VIEWS: Record<string, React.ComponentType<any>> = {
   overview: Overview, vehicles: Vehicles, browse: Browse, orders: Orders, parts: Parts, export: ExportCenter, analytics: Analytics,
-  messages: Messages, aichat: AIChat, add: AddVehicle, interchange: Interchange, vehicleProfile: VehicleProfile,
+  messages: MessagesHub, aichat: AIChat, add: AddVehicle, interchange: Interchange, vehicleProfile: VehicleProfile,
   settings: AccountSettings, shop: ShopProfile, team: TeamRoles, billing: Billing, notifications: Notifications,
   files: Files, yard: YardManagement, gallery: Gallery,
   "deleted-chats": DeletedChats,
@@ -434,9 +435,9 @@ function ExportModal() {
     if (!arr.length) return;
     setUploading(true);
     try {
-      const b64s = await Promise.all(arr.map((f) => new Promise<string>((res, rej) => {
-        const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(f);
-      })));
+      // Normalize every photo to a downscaled JPEG data URL — converts iPhone
+      // HEIC/HEIF so it isn't stored mislabeled as JPEG.
+      const b64s = await Promise.all(arr.map((f) => fileToJpegDataUrl(f)));
       const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: listing.id, photosBase64: b64s }) });
       if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't upload photo"); setUploading(false); return; }
       setListing((prev: any) => ({ ...prev, image: b64s[0] })); // optimistic preview

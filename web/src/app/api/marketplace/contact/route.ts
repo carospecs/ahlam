@@ -56,22 +56,29 @@ async function notifySellerByEmail(opts: {
     }
     if (!shopId) return;
 
-    const { data: shop } = await db.from("shops").select("name, email, notify").eq("id", shopId).single();
+    const { data: shop } = await db.from("shops").select("name, email").eq("id", shopId).single();
     if (!shop) return;
 
-    // Respect the seller's preference: skip if they turned buyer-message alerts off.
-    const notify = (shop as { notify?: { buyer_messages?: boolean } | null }).notify;
-    if (notify && notify.buyer_messages === false) return;
+    // Resolve the shop owner once — used both for the preference check and as the
+    // fallback recipient when no business email is on file.
+    const { data: member } = await db.from("shop_members").select("user_id").eq("shop_id", shopId).eq("role", "owner").single();
+    const ownerId = (member as { user_id?: string } | null)?.user_id || null;
+
+    // Respect the seller's preference, read from the SAME place Settings writes it
+    // (profiles.notification_prefs.buyer_messages). Default ON when unset. Previously
+    // this queried a non-existent shops.notify column, which errored and silently
+    // suppressed every notification email.
+    if (ownerId) {
+      const { data: prof } = await db.from("profiles").select("notification_prefs").eq("id", ownerId).single();
+      const prefs = (prof as { notification_prefs?: { buyer_messages?: boolean } | null } | null)?.notification_prefs;
+      if (prefs && prefs.buyer_messages === false) return;
+    }
 
     // Prefer the business email; otherwise the shop owner's account email.
     let to = (shop as { email?: string | null }).email || null;
-    if (!to) {
-      const { data: member } = await db.from("shop_members").select("user_id").eq("shop_id", shopId).eq("role", "owner").single();
-      const ownerId = (member as { user_id?: string } | null)?.user_id;
-      if (ownerId) {
-        const { data: owner } = await db.auth.admin.getUserById(ownerId);
-        to = owner.user?.email || null;
-      }
+    if (!to && ownerId) {
+      const { data: owner } = await db.auth.admin.getUserById(ownerId);
+      to = owner.user?.email || null;
     }
     if (!to) return;
 

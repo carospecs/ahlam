@@ -14,10 +14,20 @@ for (const line of envRaw.split("\n")) {
 
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
+// Seed accounts use a password supplied at runtime — never hardcode credentials
+// in a tracked file. Set SEED_PASSWORD in web/.env.local or the shell.
+// Demo identities use the reserved example.com domain (not externally
+// registerable, and deliberately NOT in any admin allowlist).
+const SEED_PASSWORD = env.SEED_PASSWORD || process.env.SEED_PASSWORD;
+if (!SEED_PASSWORD) {
+  console.error("Refusing to seed: set SEED_PASSWORD (in web/.env.local or the shell) first.");
+  process.exit(1);
+}
+
 async function seed() {
   const users = [
-    { email: "Admin@gmail.com", password: "Admin123!", displayName: "Admin" },
-    { email: "Admin1@gmail.com", password: "Admin123!", displayName: "Admin 1" },
+    { email: "owner1@example.com", password: SEED_PASSWORD, displayName: "Demo Owner" },
+    { email: "owner2@example.com", password: SEED_PASSWORD, displayName: "Demo Owner 2" },
   ];
 
   const userIds = {};
@@ -42,8 +52,8 @@ async function seed() {
     console.log("Created user: " + u.email + " (" + data.user.id + ")");
   }
 
-  const adminId = userIds["Admin@gmail.com"];
-  const admin1Id = userIds["Admin1@gmail.com"];
+  const adminId = userIds[users[0].email];
+  const admin1Id = userIds[users[1].email];
 
   const shops = [
     { id: "5e781213-da74-4e6b-a7b2-414f2d26ef45", name: "Admin's Auto Parts", location: "Los Angeles, CA", business_phone: "(213) 555-0100" },

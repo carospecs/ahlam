@@ -7,6 +7,7 @@ import { useData, csToast } from "../Dashboard";
 import { AddressAutocomplete, ZipField } from "../AddressAutocomplete";
 import { PricingPlans } from "../PricingPlans";
 import { WARRANTY_DAYS } from "@/lib/warranty";
+import { normalizeImageFile } from "@/lib/image";
 
 function reloadData() { (window as any).csReloadData?.(); }
 
@@ -117,9 +118,12 @@ export function ShopProfile(_: ViewProps) {
 
   function set(k: string, v: string) { setForm((f: any) => ({ ...f, [k]: v })); }
 
-  async function uploadLogo(file: File | undefined) {
-    if (!file) return;
+  async function uploadLogo(fileIn: File | undefined) {
+    if (!fileIn) return;
     setUploading(true);
+    // Convert iPhone HEIC/HEIF to JPEG so the picker's HEIC files aren't rejected
+    // by the server (which only accepts PNG/JPG/WebP). Other formats pass through.
+    const file = await normalizeImageFile(fileIn);
     const fd = new FormData();
     fd.append("file", file);
     try {
@@ -156,7 +160,7 @@ export function ShopProfile(_: ViewProps) {
       <div style={{ marginBottom: 18 }}><VerificationCard canManage={user?.role === "owner"} /></div>
       <form onSubmit={save} style={{ display: "grid", gap: 16 }}>
         <Field label="Shop logo">
-          <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { uploadLogo(e.target.files?.[0]); e.target.value = ""; }} />
+          <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp,.heic,.heif" hidden onChange={(e) => { uploadLogo(e.target.files?.[0]); e.target.value = ""; }} />
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element

@@ -84,7 +84,10 @@ async function listPart(db: any, shopId: string, listingId: string, policies: Sh
   if (!price || price <= 0) return NextResponse.json({ error: "Set a price before listing on eBay." }, { status: 400 });
 
   // eBay requires at least one photo on a listing.
-  const images = (l.photo_url && /^https?:\/\//.test(l.photo_url) ? [l.photo_url] : []);
+  // Use the part's full photo gallery (0035) when present, hero first; fall back
+  // to the single hero photo. eBay accepts up to 12 PictureURLs.
+  const partGallery: unknown[] = Array.isArray(l.photo_urls) && l.photo_urls.length ? l.photo_urls : (l.photo_url ? [l.photo_url] : []);
+  const images = partGallery.filter((u): u is string => typeof u === "string" && /^https?:\/\//.test(u)).slice(0, 12);
   if (!images.length) return NextResponse.json({ error: "eBay requires at least one photo — add a photo to this part, then list it." }, { status: 400 });
 
   // Pick the listable Motors leaf category from live comps for this exact part.

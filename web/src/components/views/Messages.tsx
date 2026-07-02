@@ -13,6 +13,7 @@ const STATUS_META = {
 type ConvStatus = keyof typeof STATUS_META;
 import { MarketChip } from "../UI";
 import { useData, csToast } from "../Dashboard";
+import { BuyerMessages } from "./BuyerMessages";
 
 const DELETED_KEY = "ahlam_deleted_chats";
 function loadDeleted(): Map<string, number> {
@@ -400,6 +401,32 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
         </div>
       </div>
       )}
+    </div>
+  );
+}
+
+// Messages has two sides: "Selling" (inquiries received about your listings) and
+// "Buying" (sellers you've messaged from the marketplace + their replies). The
+// toggle lets one inbox cover both without a separate nav item.
+export function MessagesHub(props: { go: (id: string) => void; onVehicle?: (v: any) => void; showDeleted?: boolean }) {
+  const { threads } = useData();
+  const [tab, setTab] = React.useState<"selling" | "buying">("selling");
+  const sellingCount = threads.length;
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      <div style={{ display: "inline-flex", gap: 4, padding: 3, borderRadius: 10, background: "var(--surface2)", border: "1px solid var(--line)", width: "fit-content" }}>
+        {([["selling", "Selling"], ["buying", "Buying"]] as const).map(([id, label]) => {
+          const on = tab === id;
+          return (
+            <button key={id} onClick={() => setTab(id)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 16px", borderRadius: 8, border: "none", background: on ? "var(--surface)" : "transparent", color: on ? "var(--foreground)" : "var(--muted)", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: on ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }}>
+              {label}
+              {id === "selling" && sellingCount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: on ? "var(--accent)" : "var(--muted)", opacity: 0.85 }}>{sellingCount}</span>}
+            </button>
+          );
+        })}
+      </div>
+      {tab === "selling" ? <Messages {...props} /> : <BuyerMessages />}
     </div>
   );
 }

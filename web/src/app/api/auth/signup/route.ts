@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-
-const signupCooldowns = new Map<string, number>();
+import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 
 // Public signups are CLOSED pre-launch — the only public action is joining the
 // waitlist. (This route uses the service-role admin API, which bypasses the
@@ -35,14 +34,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Password must be between 6 and 128 characters" }, { status: 400 });
   }
 
-  // Basic in-memory rate limit (per email, per IP).
-  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
-  const key = `${email}:${ip}`;
-  const last = signupCooldowns.get(key);
-  if (last && Date.now() - last < 5000) {
-    return NextResponse.json({ error: "Too many signup attempts. Wait a few seconds." }, { status: 429 });
+  // Rate limit per email+IP and a coarser per-IP cap (shared limiter; durable
+  // when Upstash is configured).
+  const ip = clientIp(req);
+  const [perAccount, perIp] = await Promise.all([
+    checkRateLimit(`signup:${email}:${ip}`, { windowMs: 15_000, max: 3 }),
+    checkRateLimit(`signup:ip:${ip}`, { windowMs: 60_000, max: 15 }),
+  ]);
+  const limit = !perAccount.ok ? perAccount : perIp;
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many signup attempts. Wait a few seconds." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } }
+    );
   }
-  signupCooldowns.set(key, Date.now());
 
   const admin = supabaseAdmin();
   const { data, error } = await admin.auth.admin.createUser({

@@ -2,6 +2,11 @@
 // credentials aren't configured, so the rest of the product stays healthy.
 import { supabaseAdmin } from "@/lib/supabase";
 
+// Name of the HttpOnly cookie holding the OAuth CSRF state between /api/ebay/connect
+// and /api/ebay/callback. Lives here (not in a route file) because Next.js route
+// modules may only export request handlers.
+export const EBAY_STATE_COOKIE = "ebay_oauth_state";
+
 const ENV = (process.env.EBAY_ENV || "production").toLowerCase() === "sandbox" ? "sandbox" : "production";
 const HOSTS = ENV === "sandbox"
   ? { auth: "https://auth.sandbox.ebay.com", api: "https://api.sandbox.ebay.com" }

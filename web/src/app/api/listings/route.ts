@@ -137,6 +137,7 @@ export async function POST(req: Request) {
         vehicle_id: veh.id,
         listing_type: "part",
         photo_url: url,
+        photo_urls: url ? [url] : [],   // gallery seeded with the part's photo; more can be added later
         ai_output: ai,
         // Grade C parts are intentionally unpriced — preserve null so the seller
         // sets the price manually. A/B parts use the formula price as-is.
@@ -144,7 +145,12 @@ export async function POST(req: Request) {
         status,
       };
     });
-    const { data: ins, error: lErr } = await db.from("listings").insert(rows).select("id");
+    let { data: ins, error: lErr } = await db.from("listings").insert(rows).select("id");
+    // photo_urls may not be migrated yet (0035) — drop it from every row and retry.
+    if (lErr && /photo_urls/i.test(lErr.message || "")) {
+      const stripped = rows.map(({ photo_urls, ...r }) => r);
+      ({ data: ins, error: lErr } = await db.from("listings").insert(stripped).select("id"));
+    }
     if (lErr) return NextResponse.json({ error: lErr.message }, { status: 500 });
     listingCount = ins?.length || 0;
   }
@@ -213,24 +219,37 @@ export async function PATCH(req: Request) {
       if (typeof body.asIs === "boolean") corrected.asIs = body.asIs;
       update.corrected = corrected;
     }
-    // New photo(s): base64 JPEGs uploaded to the part-photos bucket; the first
-    // becomes this part's photo. Lets sellers add a picture from the export flow.
+    // New photo(s): base64 JPEGs uploaded to the part-photos bucket and APPENDED
+    // to the part's gallery (photo_urls); the first stays as the hero (photo_url).
     if (Array.isArray(body.photosBase64) && body.photosBase64.length) {
+      const { data: cur } = await db.from("listings").select("photo_urls, photo_url").eq("id", body.listingId).eq("shop_id", shopId).single();
+      const existing: string[] = Array.isArray((cur as { photo_urls?: unknown })?.photo_urls)
+        ? ((cur as { photo_urls: string[] }).photo_urls).filter(Boolean)
+        : ((cur as { photo_url?: string })?.photo_url ? [(cur as { photo_url: string }).photo_url] : []);
       const stamp = Date.now();
-      let first: string | null = null;
+      const added: string[] = [];
       for (let i = 0; i < body.photosBase64.length && i < 8; i++) {
         try {
           const b64 = String(body.photosBase64[i]).replace(/^data:[^;]+;base64,/, "");
           const path = `${shopId}/${stamp}-${i}-${String(body.listingId).slice(0, 8)}.jpg`;
           const up = await db.storage.from("part-photos").upload(path, Buffer.from(b64, "base64"), { contentType: "image/jpeg", upsert: true });
-          if (!up.error && !first) first = db.storage.from("part-photos").getPublicUrl(path).data.publicUrl;
+          if (!up.error) added.push(db.storage.from("part-photos").getPublicUrl(path).data.publicUrl);
         } catch { /* skip a photo that won't decode/upload */ }
       }
-      if (first) update.photo_url = first;
+      if (added.length) {
+        const gallery = [...existing, ...added].filter((u, i, a) => !!u && a.indexOf(u) === i);
+        update.photo_urls = gallery;
+        update.photo_url = gallery[0];   // hero = first photo
+      }
     }
     if (Object.keys(update).length === 0) return NextResponse.json({ ok: true });
 
-    const { error } = await db.from("listings").update(update).eq("id", body.listingId).eq("shop_id", shopId);
+    let { error } = await db.from("listings").update(update).eq("id", body.listingId).eq("shop_id", shopId);
+    // photo_urls may not be migrated yet (0035) — keep the hero (photo_url) and retry.
+    if (error && "photo_urls" in update && /photo_urls/i.test(error.message || "")) {
+      delete (update as { photo_urls?: unknown }).photo_urls;
+      ({ error } = await db.from("listings").update(update).eq("id", body.listingId).eq("shop_id", shopId));
+    }
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
