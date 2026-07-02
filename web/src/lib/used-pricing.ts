@@ -37,12 +37,15 @@ const POWERTRAIN =
   /\b(engine|transmission|drive\s?unit|battery\s?pack|high.?voltage|onboard\s?charger|inverter|dc.?dc|catalytic\s?converter|driveshaft|differential|transaxle)\b/i;
 
 const FAST_MOVER =
-  /\b(mirror|windshield|window|glass|head\s?light|tail\s?light|headlamp|taillamp|fog\s?light|lamp|cluster|module|radio|screen|display|wheel|rim|tire|sensor|camera)\b/i;
+  /\b(mirror|windshield|window|glass|head\s?light|tail\s?light|headlamp|taillamp|fog\s?light|lamp|cluster|module|radio|screen|display|wheel|rim|tire|sensor|camera|latch|handle|hinge|lock|regulator|switch|emblem|molding|charge\s?port)\b/i;
 
+// Order matters: a "Liftgate Glass" or "Hood Latch" contains a panel word but IS a
+// small fast-moving part — the fast-mover and powertrain checks run before the
+// painted-panel check so panel words only win for the actual panel.
 export function partClass(partName: string): PartClass {
-  if (PAINTED_PANEL.test(partName)) return "painted-panel";
-  if (POWERTRAIN.test(partName)) return "powertrain";
   if (FAST_MOVER.test(partName)) return "fast-mover";
+  if (POWERTRAIN.test(partName)) return "powertrain";
+  if (PAINTED_PANEL.test(partName)) return "painted-panel";
   return "default";
 }
 

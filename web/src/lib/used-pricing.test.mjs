@@ -34,6 +34,13 @@ test("interior door trim and door glass are NOT painted panels", () => {
   assert.notEqual(partClass("Side Mirror"), "painted-panel");
 });
 
+test("panel-word + small-part-word names are fast movers, not panels (stress-test regression)", () => {
+  assert.equal(partClass("Liftgate Glass"), "fast-mover");
+  assert.equal(partClass("Hood Latch"), "fast-mover");
+  assert.equal(partClass("Charge Port Door"), "fast-mover");
+  assert.equal(partClass("Door Lock Actuator"), "fast-mover");
+});
+
 test("powertrain parts classify as powertrain", () => {
   for (const name of ["Engine", "Transmission", "High-Voltage Battery Pack", "Rear Drive Unit (Motor)", "Onboard Charger", "Inverter / DC-DC Converter", "Catalytic Converter"]) {
     assert.equal(partClass(name), "powertrain", name);
