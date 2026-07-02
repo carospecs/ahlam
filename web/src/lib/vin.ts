@@ -16,6 +16,8 @@ export interface VinDecode {
   displacement: string | null;
   displacementL: string | null;
   fuelType: string | null;
+  fuelTypeSecondary: string | null;   // set on hybrids ("Electric" alongside gasoline)
+  electrificationLevel: string | null; // NHTSA "BEV"/"PHEV"/"HEV"… — powertrain ground truth
   transmission: string | null;
   driveType: string | null;
   doors: string | null;
@@ -89,6 +91,8 @@ export async function decodeVin(rawVin: string): Promise<VinDecode | null> {
       displacement: fields["Displacement (CC)"] || null,
       displacementL: fields["Displacement (L)"] || null,
       fuelType: fields["Fuel Type - Primary"] || null,
+      fuelTypeSecondary: fields["Fuel Type - Secondary"] || null,
+      electrificationLevel: fields["Electrification Level"] || null,
       transmission: fields["Transmission Style"] || null,
       driveType: fields["Drive Type"] || fields["Drive System"] || null,
       doors: fields["Number of Doors"] || null,

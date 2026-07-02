@@ -1,12 +1,15 @@
 // VIN-anchored re-pricing — one cheap text-only Gemini call that re-estimates each
-// part's brand-new OEM price for the EXACT decoded vehicle, then applies the same
-// grade discount as the scan. Used by AddVehicle to auto-refine prices when a VIN was
-// found in the photos (decoded only after the vision call) rather than supplied up
-// front — so the seller never has to scan, confirm, and re-run.
+// part's USED-market price for the EXACT decoded vehicle, then applies the same
+// class curve + grade factor as the scan (lib/used-pricing). Used by AddVehicle to
+// auto-refine prices when a VIN was found in the photos (decoded only after the
+// vision call), and to price code-generated inferred powertrain parts (battery pack,
+// drive units) that no photo showed.
 import { NextResponse } from "next/server";
 import { geminiGenerate } from "@/lib/gemini";
 import { decodeVin, engineLabel } from "@/lib/vin";
-import { usedPriceFromNew, type ConditionGrade } from "@/lib/age-pricing";
+import { type ConditionGrade } from "@/lib/age-pricing";
+import { partClass, usedPointFromBand, usedPointFallback, gradeAdjustUsed } from "@/lib/used-pricing";
+import { classifyPowertrain, powertrainPromptLine } from "@/lib/powertrain";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -51,28 +54,36 @@ export async function POST(req: Request) {
 
   // Resolve the vehicle spec — prefer decoding the VIN (ground truth) over passed fields.
   let v = body.vehicle ?? {};
+  let decoded: Awaited<ReturnType<typeof decodeVin>> = null;
   if (body.vin) {
-    const d = await decodeVin(body.vin);
-    if (d) v = { year: d.year, make: d.make, model: d.model, trim: d.trim, engine: engineLabel(d), drivetrain: d.driveType };
+    decoded = await decodeVin(body.vin);
+    if (decoded) v = { year: decoded.year, make: decoded.make, model: decoded.model, trim: decoded.trim, engine: engineLabel(decoded), drivetrain: decoded.driveType };
   }
   const id = [v.year, v.make, v.model, v.trim].filter(Boolean).join(" ");
   if (!id) return NextResponse.json({ ok: false, error: "no vehicle" }, { status: 400, headers: CORS });
   const spec = [v.engine ? `engine ${v.engine}` : null, v.drivetrain ? `drivetrain ${v.drivetrain}` : null].filter(Boolean).join(", ");
 
-  // One text-only call: brand-new OEM retail price per part for THIS exact vehicle.
+  // Powertrain steer: the pricer must know a BEV's valuable parts from a gas car's.
+  // The full NHTSA decode (electrification fields) wins over name heuristics.
+  const powertrain = classifyPowertrain(decoded ?? { make: v.make, model: v.model, trim: v.trim });
+
+  // One text-only call: USED-market selling price per part for THIS exact vehicle.
   // Echo the name back so the client can match by name (order is not relied upon).
   const list = parts.map((p, i) => `${i + 1}. ${p.name}`).join("\n");
   const prompt =
-    `You price auto parts for salvage yards. For a ${id}${spec ? ` (${spec})` : ""}, give the approximate BRAND-NEW ` +
-    `OEM (or quality aftermarket) retail price in USD for each part below — the NEW replacement price for THIS exact ` +
-    `make/model/year/trim/engine, NOT a used or salvage price. Left & right of a paired part get the SAME price. ` +
+    `You price USED auto parts for salvage yards / dismantlers. For a USED ${id}${spec ? ` (${spec})` : ""}, give the typical ` +
+    `price each part below ACTUALLY SELLS FOR as a USED/recycled part (car-part.com, eBay sold listings, LKQ) in good used ` +
+    `condition — NEVER the new/OEM/MSRP price; a used part sells for a fraction of new. ` +
+    `${powertrain.source !== "default" ? powertrainPromptLine(powertrain.type) + " " : ""}` +
+    `Be conservative on large painted body panels (doors, liftgate, hood, fenders, quarter panels, bumper covers): they move ` +
+    `slowly and sell near the LOW end of any range. Left & right of a paired part get the SAME price. ` +
     `Use realistic round numbers; if you truly have no basis for one, use null. ` +
-    `Also give your plausible RANGE for each new price as newPartPriceLowUsd / newPartPriceHighUsd (low ≤ price ≤ high): ` +
-    `tight (±10% or less) when you know the part and vehicle well, wider when you're less sure. Null range when the price is null.\n\n` +
-    `Return ONLY a JSON array (no prose), one object per part, shape: [{"name": string, "newPartPriceUsd": number|null, "newPartPriceLowUsd": number|null, "newPartPriceHighUsd": number|null}]. ` +
+    `Also give the realistic USED-market RANGE as usedPartPriceLowUsd / usedPartPriceHighUsd (low ≤ price ≤ high): ` +
+    `tight (±15% or less) when you know the part and vehicle well, wider when you're less sure. Null range when the price is null.\n\n` +
+    `Return ONLY a JSON array (no prose), one object per part, shape: [{"name": string, "usedPartPriceUsd": number|null, "usedPartPriceLowUsd": number|null, "usedPartPriceHighUsd": number|null}]. ` +
     `Use the exact part names given.\n\nParts:\n${list}`;
 
-  let parsed: { name?: string; newPartPriceUsd?: unknown; newPartPriceLowUsd?: unknown; newPartPriceHighUsd?: unknown }[] = [];
+  let parsed: { name?: string; usedPartPriceUsd?: unknown; usedPartPriceLowUsd?: unknown; usedPartPriceHighUsd?: unknown }[] = [];
   try {
     const res = await geminiGenerate("gemini-2.5-flash", {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -86,13 +97,13 @@ export async function POST(req: Request) {
   } catch { return NextResponse.json({ ok: false, error: "parse" }, { status: 502, headers: CORS }); }
 
   // Match the model's prices back to the requested parts by name, falling back to
-  // positional order. Then apply the same grade discount the scan uses — to the
-  // point estimate AND to the low/high band, so the band brackets the used price.
+  // positional order. Then the same math as the scan: class-positioned point in the
+  // used band × grade factor, band grade-adjusted so it brackets the price.
   const num = (v: unknown): number | null => (typeof v === "number" && v > 0 ? v : null);
   type Priced = { mid: number | null; lo: number | null; hi: number | null };
   const fromRaw = (r: (typeof parsed)[number] | undefined): Priced => {
-    const mid = num(r?.newPartPriceUsd);
-    let lo = num(r?.newPartPriceLowUsd), hi = num(r?.newPartPriceHighUsd);
+    const mid = num(r?.usedPartPriceUsd);
+    let lo = num(r?.usedPartPriceLowUsd), hi = num(r?.usedPartPriceHighUsd);
     if (mid == null || lo == null || hi == null) return { mid, lo: null, hi: null };
     if (lo > hi) [lo, hi] = [hi, lo];
     return { mid, lo: Math.min(lo, mid), hi: Math.max(hi, mid) };
@@ -104,12 +115,16 @@ export async function POST(req: Request) {
   const out = parts.map((p, i) => {
     const priced = byName.get(p.name.toLowerCase().trim()) ?? fromRaw(parsed[i]);
     const grade = (["A", "B", "C"] as const).includes(p.grade as ConditionGrade) ? (p.grade as ConditionGrade) : "B";
+    const cls = partClass(p.name);
+    const base = priced.lo != null && priced.hi != null
+      ? usedPointFromBand(priced.lo, priced.hi, cls)
+      : (priced.mid != null ? usedPointFallback(priced.mid, cls) : null);
     return {
       name: p.name,
-      newPartPriceUsd: priced.mid,
-      suggestedPriceUsd: usedPriceFromNew(priced.mid, grade),
-      suggestedPriceLowUsd: usedPriceFromNew(priced.lo, grade),
-      suggestedPriceHighUsd: usedPriceFromNew(priced.hi, grade),
+      usedPartPriceUsd: base,
+      suggestedPriceUsd: gradeAdjustUsed(base, grade),
+      suggestedPriceLowUsd: gradeAdjustUsed(priced.lo, grade),
+      suggestedPriceHighUsd: gradeAdjustUsed(priced.hi, grade),
     };
   });
 

@@ -32,13 +32,14 @@ function part(over) {
 
 console.log("inferred-parts:");
 
-// 1) A plain "Airbag" with a firm price and no visibility note → inferred, unpriced,
-//    note appended.
-test('"Airbag" (A, $723, no visibility note) → inferred, price nulled, note appended', () => {
+// 1) A plain "Airbag" with a firm price and no visibility note → inferred + note, but
+//    the price STAYS (inferred parts are priced-and-flagged, never blanked — a hidden
+//    part can be the most valuable one on the car).
+test('"Airbag" (A, $723, no visibility note) → inferred, note appended, price KEPT', () => {
   const input = [part({ partName: "Airbag", condition: "A", suggestedPriceUsd: 723, conditionNotes: "" })];
   const [out] = markInferredParts(input);
   assert.equal(out.inferred, true);
-  assert.equal(out.suggestedPriceUsd, null);
+  assert.equal(out.suggestedPriceUsd, 723);
   assert.ok(out.conditionNotes.includes(INFERRED_NOTE.trim()), "note appended");
   // Other fields untouched.
   assert.equal(out.partName, "Airbag");
@@ -111,11 +112,11 @@ test("pure — does not mutate input", () => {
 
 // 7) The PRETENSIONER module IS flagged (the tight-list positive case), to prove the
 //    seat-belt distinction in (3) is the pretensioner-vs-plain split, not a blanket skip.
-test('"Seat Belt Pretensioner" (hidden module) → inferred, unpriced', () => {
+test('"Seat Belt Pretensioner" (hidden module) → inferred, price kept', () => {
   const input = [part({ partName: "Seat Belt Pretensioner", suggestedPriceUsd: 90, conditionNotes: "in B-pillar" })];
   const [out] = markInferredParts(input);
   assert.equal(out.inferred, true);
-  assert.equal(out.suggestedPriceUsd, null);
+  assert.equal(out.suggestedPriceUsd, 90);
   assert.ok(out.conditionNotes.includes(INFERRED_NOTE.trim()));
 });
 

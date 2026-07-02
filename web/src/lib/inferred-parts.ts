@@ -96,14 +96,20 @@ export type Part = {
 // For each part whose type is rarely directly visible and whose own text does NOT say
 // it is exposed, we:
 //   1. set `inferred = true`,
-//   2. set `suggestedPriceUsd = null` (no firm price on something not actually seen),
-//   3. append INFERRED_NOTE to `conditionNotes`.
+//   2. append INFERRED_NOTE to `conditionNotes`.
 // Everything else is left exactly as-is.
+//
+// PRICING NOTE: inferred parts KEEP their price. Powertrain and other high-value parts
+// are frequently invisible in exterior photos yet are among the most valuable parts on
+// the car (a BEV's battery pack, a sedan's engine) — dropping the price because the
+// camera didn't see them is how a Model X ships with an unpriced battery pack. The
+// "inferred — verify" flag is the safeguard; the price stays so the seller starts from
+// a real number instead of a blank.
 //
 // PURE: never mutates the input — returns a new array of new objects (untouched parts
 // are returned as fresh shallow copies too, so the caller's array is fully independent).
 // IDEMPOTENT: re-running over its own output is a no-op — the note is only appended when
-// it is not already present, and re-nulling an already-null price changes nothing.
+// it is not already present.
 export function markInferredParts<T extends Part>(parts: T[]): T[] {
   return parts.map((part) => {
     if (!isLikelyInferred(part.partName, `${part.description ?? ""} ${part.conditionNotes ?? ""}`)) {
@@ -118,7 +124,6 @@ export function markInferredParts<T extends Part>(parts: T[]): T[] {
     return {
       ...part,
       inferred: true,
-      suggestedPriceUsd: null,
       conditionNotes,
     };
   });

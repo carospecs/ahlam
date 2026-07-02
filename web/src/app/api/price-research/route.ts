@@ -14,7 +14,8 @@ import { geminiGenerate } from "@/lib/gemini";
 import { supabaseAdmin } from "@/lib/supabase";
 import { parseGroundedPrice } from "@/lib/pricing";
 import { isSanePrice } from "@/lib/price-bands";
-import { GRADE_DISCOUNT, type ConditionGrade } from "@/lib/age-pricing";
+import { type ConditionGrade } from "@/lib/age-pricing";
+import { gradeAdjustUsed } from "@/lib/used-pricing";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -79,10 +80,9 @@ async function researchPart(vehicleId: string, spec: string, part: InPart): Prom
     if (!sources.length) return null;
 
     // Comps are good-used ≈ Grade B; re-express the median in this part's grade using
-    // the same discount ratios as the formula. Grade C is unpriced — never researched.
+    // the same grade factors as the formula. Grade C is unpriced — never researched.
     const grade: ConditionGrade = part.grade === "A" ? "A" : "B";
-    const ratio = (GRADE_DISCOUNT[grade] ?? GRADE_DISCOUNT.B)! / GRADE_DISCOUNT.B!;
-    const proposedPriceUsd = Math.round(median * ratio);
+    const proposedPriceUsd = gradeAdjustUsed(median, grade)!;
 
     return {
       name: part.name,

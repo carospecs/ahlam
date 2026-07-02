@@ -31,7 +31,7 @@ export type Part = {
   damageCode?: string;
   description?: string;
   suggestedPriceUsd: number | null;
-  newPartPriceUsd?: number | null;
+  usedPartPriceUsd?: number | null;
   confidence?: "high" | "medium" | "low";
   lowConfidenceFields?: string[];
 };

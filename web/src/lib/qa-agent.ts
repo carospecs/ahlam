@@ -9,7 +9,8 @@
 // AddVehicle applies only when the seller taps it.
 
 import { sideOf, colorConflict } from "./scan-qa";
-import { usedPriceFromNew, type ConditionGrade } from "./age-pricing";
+import { type ConditionGrade } from "./age-pricing";
+import { gradeAdjustUsed } from "./used-pricing";
 
 // The part shape this module needs (structural subset of AddVehicle's AIPart).
 export type QaAgentPart = {
@@ -18,7 +19,7 @@ export type QaAgentPart = {
   description?: string;
   condition: string;
   conditionNotes?: string;
-  newPartPriceUsd?: number | null;
+  usedPartPriceUsd?: number | null;
   box?: [number, number, number, number];
   photoUrl?: string;
   photoFront?: string;
@@ -67,9 +68,9 @@ export function applyQaEdit(
       ? { partName: swapSideWords(p.partName) }
       : { description: swapSideWords(p.description ?? "") };
   }
-  // downgrade-B: the safe direction — reprice with the Grade-B discount.
+  // downgrade-B: the safe direction — reprice at the used-market Grade-B base.
   const grade: ConditionGrade = "B";
-  return { condition: grade, suggestedPriceUsd: usedPriceFromNew(p.newPartPriceUsd, grade) };
+  return { condition: grade, suggestedPriceUsd: gradeAdjustUsed(p.usedPartPriceUsd, grade) };
 }
 
 // Downscale any renderable image URL (object URL or data URL) to a JPEG data URL the

@@ -1,6 +1,8 @@
-// Part pricing formula — the single source of truth for the AI scan's part prices.
-// The vision model estimates each part's BRAND-NEW (OEM/retail) price; this module
-// applies a flat condition-based discount:
+// LEGACY part pricing formula — superseded by lib/used-pricing.ts, which anchors to
+// the part's USED-market selling price instead of discounting the new/retail price
+// (the new-price anchor put painted panels near best-case retail; see the 2018
+// Model X case in used-pricing.ts). usedPriceFromNew/GRADE_DISCOUNT are kept only
+// for old persisted rows; vehicleAge/ageFactor are still live (whole-car estimate).
 //
 //   Grade A (like new)       → newPartPrice × 0.85  (15% off)
 //   Grade B (normal wear)    → newPartPrice × 0.70  (30% off)

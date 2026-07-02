@@ -88,7 +88,7 @@ const part = {
   description: "Passenger side front door in good shape.",
   condition: "A",
   conditionNotes: "sits inside impact zone",
-  newPartPriceUsd: 1000,
+  usedPartPriceUsd: 700, // used-market Grade-B anchor
 };
 
 test("swap-side on partName only touches the name", () => {
@@ -101,14 +101,14 @@ test("swap-side on description only touches the description", () => {
   assert.deepEqual(out, { description: "Driver side front door in good shape." });
 });
 
-test("downgrade-B sets Grade B and reprices with the B discount (×0.70)", () => {
+test("downgrade-B sets Grade B and reprices at the used Grade-B anchor (×1.0)", () => {
   const out = applyQaEdit(part, { field: "condition", kind: "downgrade-B" });
   assert.equal(out.condition, "B");
   assert.equal(out.suggestedPriceUsd, 700);
 });
 
-test("downgrade-B with no new price leaves the price null (never invents one)", () => {
-  const out = applyQaEdit({ ...part, newPartPriceUsd: null }, { field: "condition", kind: "downgrade-B" });
+test("downgrade-B with no used anchor leaves the price null (never invents one)", () => {
+  const out = applyQaEdit({ ...part, usedPartPriceUsd: null }, { field: "condition", kind: "downgrade-B" });
   assert.equal(out.condition, "B");
   assert.equal(out.suggestedPriceUsd, null);
 });

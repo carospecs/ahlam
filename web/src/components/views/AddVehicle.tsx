@@ -15,6 +15,7 @@ import { instanceScore, type PhotoFront } from "@/lib/photo-select";
 import { runScanQa } from "@/lib/scan-qa";
 import { bandFor, bandFraction, priceAtFraction, roundYardPrice } from "@/lib/price-band";
 import { runQaAgent, hasWarnCases, applyQaEdit, type QaAgentResolution } from "@/lib/qa-agent";
+import { classifyPowertrain, ensurePowertrainParts } from "@/lib/powertrain";
 import { redactImage, redactImageToDataUrl, type PiiBox } from "@/lib/redact";
 import { groundDescriptions } from "@/lib/describe-ground";
 import { propagateImpactDamage } from "@/lib/damage-zones";
@@ -26,13 +27,13 @@ interface AIPart {
   partName: string; partCategory: string; fitment: VehicleFit[];
   box?: [number, number, number, number]; // detection bbox [x0,y0,x1,y1] (0–1); largest wins the clearest-photo pick
   condition: "A" | "B" | "C"; conditionNotes: string; description: string; // ARA grade (was mistyped Good/Poor)
-  newPartPriceUsd?: number | null; // brand-new price from the scan; base for L/R parity
+  usedPartPriceUsd?: number | null; // used-market Grade-B anchor from the scan; base for L/R parity + downgrades
   suggestedPriceUsd: number | null; confidence: "high" | "medium" | "low";
-  // The model's uncertainty band around suggestedPriceUsd (grade-discounted server-side).
-  // Renders as the draggable confidence band under the price field; when absent the band
-  // falls back to a confidence-derived spread (lib/price-band).
+  // The model's used-market band (grade-adjusted server-side). Renders as the draggable
+  // confidence band under the price field; when absent the band falls back to a
+  // confidence-derived spread (lib/price-band).
   suggestedPriceLowUsd?: number | null; suggestedPriceHighUsd?: number | null;
-  inferred?: boolean; // listed but not directly seen → "Inferred — verify", unpriced
+  inferred?: boolean; // not directly seen → "Inferred — verify"; PRICED (hidden parts can be the most valuable)
   photoFront?: PhotoFront; // orientation of the photo this instance came from (best-shot pick)
   lowConfidenceFields?: string[];
   // Pricing provenance from the ladder (AHLAM-53): which rung set the price + how
@@ -473,6 +474,23 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         return;
       }
 
+      // POWERTRAIN REALITY (lib/powertrain): classify gas/hybrid/BEV, drop parts that
+      // can't exist for it, and APPEND the expected high-value powertrain parts the
+      // photos never showed (a BEV's battery pack + drive units, a sedan's engine) —
+      // flagged "inferred — verify" and priced by the reprice pass below, never
+      // silently absent. Only runs with some vehicle identity to hang them on.
+      const powertrain = classifyPowertrain(agg?.vinInfo ?? { make: agg?.make, model: agg?.model, trim: agg?.trim });
+      const awd = /\b(awd|4wd|4x4|all.?wheel)\b/i.test(`${agg?.vinInfo?.driveType ?? ""} ${agg?.drivetrain ?? ""}`);
+      const { parts: finalParts, added: generatedParts } = agg
+        ? ensurePowertrainParts(deduped, powertrain.type, (e) => ({
+            partName: e.partName, partCategory: e.partCategory, fitment: [] as VehicleFit[],
+            condition: "B" as const,
+            conditionNotes: "Inferred from the vehicle's powertrain type — not visible in the photos; verify it is present and intact before listing.",
+            description: e.description, suggestedPriceUsd: null, confidence: "low" as const,
+            inferred: true, _id: newId(), _aiPrice: null,
+          }), { awd })
+        : { parts: deduped, added: [] };
+
       // Prefer the AI's explicit vehicle estimate (incl. whole-car price + mileage);
       // fall back to fitment-derived identity if the model didn't return one. (agg was
       // resolved above so the engine part could be enriched before dedupe.)
@@ -484,31 +502,42 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         if (agg.trim) setVehicleTrim(agg.trim); // prefill trim from the VIN
         if (agg.vin) { setVin(agg.vin); setVinStatus("confirmed"); } // VIN read + decoded server-side
       } else {
-        setVehicle(deriveVehicle(deduped));
+        setVehicle(deriveVehicle(finalParts));
         setSuggestedCarPrice(null);
         setCarPrice("");
         setMileage(null);
       }
-      setParts(deduped);
+      setParts(finalParts);
       setPhase("results");
       playSonarPing(); // sonar ring: the scan is done, results are ready
 
       // ── AGENTS (docs/agent-layer-blueprint.md) — advisory, off the scan path ──
       // A1 QA Resolver: if the QA guardrail raised warn flags, spend a few focused
       // calls settling them with evidence. Proposals only — seller applies each fix.
-      if (hasWarnCases(deduped, distinctColors)) {
+      if (hasWarnCases(finalParts, distinctColors)) {
         setQaAgent({ running: true, resolutions: [] });
-        void runQaAgent(deduped, photos.map((p) => display(p.url)), distinctColors)
+        void runQaAgent(finalParts, photos.map((p) => display(p.url)), distinctColors)
           .then((resolutions) => { if (isScanRun(myToken)) setQaAgent({ running: false, resolutions }); });
       }
-      // A2 Pricing Research: market-check the top-value parts via grounded web
-      // search. Fire-and-forget; results render as accept/dismiss badges.
-      void researchMarket(myToken, deduped, agg);
 
-      // Fallback only: VIN-first didn't resolve one before the catalog (read-vin found
-      // nothing) but a catalog photo still read one — re-price for it so pricing anchors
-      // to the VIN even on this edge path. Best-effort; prices stay as-is on failure.
-      if (!resolvedVin && agg?.vin) void repriceForVin(myToken, agg.vin, deduped);
+      // Price refinement, then market research. The reprice runs when generated
+      // powertrain parts need their first price (they left the scan at null — never
+      // acceptable to keep them blank) or on the legacy edge path (VIN read during the
+      // catalog, not before). Research waits for it so the top-value list includes the
+      // freshly priced battery pack / engine; otherwise it fires immediately.
+      const researchNow = () =>
+        void researchMarket(myToken, ((getScanSession().parts as AIPart[]) || finalParts), agg);
+      const needsReprice = generatedParts.length > 0 || (!resolvedVin && !!agg?.vin);
+      if (needsReprice && agg) {
+        void repriceForVin(
+          myToken,
+          resolvedVin || agg.vin || null,
+          finalParts,
+          { year: agg.year, make: agg.make, model: agg.model, trim: agg.trim, engine: agg.engine },
+        ).then(researchNow);
+      } else {
+        researchNow();
+      }
     } catch (e) {
       if (!isScanRun(myToken)) return; // cancelled / superseded
       setError("We couldn't reach the analysis server. Check your connection and try again.");
@@ -516,27 +545,34 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
     }
   }
 
-  // One extra call (/api/reprice) that re-estimates each part's new price for the exact
-  // decoded VIN vehicle, then applies the same grade discount. Updates prices in place,
-  // matched by name; skips anything it can't confidently re-price. Best-effort.
-  async function repriceForVin(token: number, vin: string, current: AIPart[]) {
+  // One extra call (/api/reprice) that re-estimates each part's USED-market price for
+  // the exact vehicle (decoded VIN preferred, passed identity otherwise), then applies
+  // the same class curve + grade factor as the scan. Updates prices in place, matched
+  // by name; skips anything it can't confidently re-price. Best-effort. Also the pass
+  // that gives code-generated inferred powertrain parts their first price.
+  async function repriceForVin(
+    token: number,
+    vin: string | null,
+    current: AIPart[],
+    vehicleId?: { year?: string; make?: string; model?: string; trim?: string | null; engine?: string | null },
+  ) {
     setRepricing(true);
     try {
       const res = await fetch("/api/reprice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vin, parts: current.map((p) => ({ name: p.partName, grade: p.condition })) }),
+        body: JSON.stringify({ vin: vin || undefined, vehicle: vehicleId, parts: current.map((p) => ({ name: p.partName, grade: p.condition })) }),
       });
       const j = await res.json();
       if (!isScanRun(token)) return; // a newer scan superseded this one
       if (!j?.ok || !Array.isArray(j.parts)) return;
-      const byName = new Map<string, { suggestedPriceUsd: number | null; newPartPriceUsd: number | null; suggestedPriceLowUsd?: number | null; suggestedPriceHighUsd?: number | null }>();
+      const byName = new Map<string, { suggestedPriceUsd: number | null; usedPartPriceUsd: number | null; suggestedPriceLowUsd?: number | null; suggestedPriceHighUsd?: number | null }>();
       for (const r of j.parts) if (r && typeof r.name === "string") byName.set(r.name.toLowerCase().trim(), r);
       setParts((prev) => reconcilePairPrices(prev.map((p) => {
         const r = byName.get(p.partName.toLowerCase().trim());
-        if (!r || typeof r.newPartPriceUsd !== "number" || r.newPartPriceUsd <= 0) return p;
+        if (!r || typeof r.usedPartPriceUsd !== "number" || r.usedPartPriceUsd <= 0) return p;
         return {
-          ...p, newPartPriceUsd: r.newPartPriceUsd, suggestedPriceUsd: r.suggestedPriceUsd, _aiPrice: r.suggestedPriceUsd ?? p._aiPrice,
+          ...p, usedPartPriceUsd: r.usedPartPriceUsd, suggestedPriceUsd: r.suggestedPriceUsd, _aiPrice: r.suggestedPriceUsd ?? p._aiPrice,
           suggestedPriceLowUsd: r.suggestedPriceLowUsd ?? p.suggestedPriceLowUsd, suggestedPriceHighUsd: r.suggestedPriceHighUsd ?? p.suggestedPriceHighUsd,
         };
       })));
@@ -552,7 +588,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   // accept/dismiss badge per part; the formula prices stand until the seller accepts.
   async function researchMarket(token: number, current: AIPart[], agg: { year?: string; make?: string; model?: string; trim?: string | null; engine?: string | null } | null) {
     if (!agg?.make || !agg?.model) return; // no vehicle identity → nothing to search comps for
-    const eligible = current.filter((p) => p.condition !== "C" && !p.inferred && (p.suggestedPriceUsd || 0) >= 150);
+    // Inferred parts are INCLUDED — a BEV's battery pack or a sedan's engine is often
+    // the highest-value item on the car precisely because no photo showed it.
+    const eligible = current.filter((p) => p.condition !== "C" && (p.suggestedPriceUsd || 0) >= 150);
     if (!eligible.length) return;
     setResearch({ running: true, results: {} });
     try {
@@ -964,7 +1002,8 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                   detail="The AI's market value for the entire vehicle sold whole. It's independent of the per-part prices below — parting out usually totals more." />
               )}
               <ReportRow tone="info" icon={<Wrench size={14} color="var(--success)" />}
-                text={<>{sellable} of {parts.length} part{parts.length === 1 ? "" : "s"} priced{partsTotal > 0 ? <> · total <strong className="tnum">${partsTotal.toLocaleString()}</strong></> : null}</>} />
+                text={<>{sellable} of {parts.length} part{parts.length === 1 ? "" : "s"} priced{partsTotal > 0 ? <> · gross potential <strong className="tnum">${partsTotal.toLocaleString()}</strong></> : null}</>}
+                detail="Used-market prices at the part's grade. The total is GROSS retail potential — not every part sells, and pulling, storage, and selling costs come out of it. It is not the net you'll recover." />
               {vin && (
                 <ReportRow tone="info" icon={<ScanLine size={14} color="var(--accent)" />}
                   text={<>VIN <span className="tnum">{vin}</span> read from photos</>}
@@ -1324,6 +1363,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                 <div>
                   <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{sellMode === "both" ? "Parts value · suggested" : "Suggested parts value"}</div>
                   <div className="tnum" style={{ fontSize: 22, fontWeight: 800, color: showCar ? "var(--foreground)" : "var(--success)" }}>${partsTotal.toLocaleString()}</div>
+                  <div style={{ fontSize: 10.5, color: "var(--muted)" }}>Gross potential — not every part sells</div>
                   {repricing && (
                     <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 3, fontSize: 11.5, color: "var(--accent)" }}>
                       <Sparkles size={12} /> Refining prices for your VIN…

@@ -88,6 +88,24 @@ export function runScanQa(parts: QaPart[], wholeCarUsd?: number | null, photoCol
     });
   }
 
+  // 5b. Implausible total: parting out normally exceeds the whole-car value, but not by
+  //     a huge margin (the 2018 Model X case ran ~1.6× — panels priced near retail).
+  //     Flag it and point at the LARGEST line items first, since that's where the
+  //     over-pricing hides. Uses ALL priced parts — this total is GROSS retail
+  //     potential, and it's the gross figure that reads implausible.
+  const total = parts.reduce((s, p) => s + (p.suggestedPriceUsd || 0), 0);
+  if (wholeCarUsd && wholeCarUsd > 0 && total > wholeCarUsd * 1.5) {
+    const biggest = parts
+      .filter((p) => (p.suggestedPriceUsd || 0) > 0)
+      .sort((a, b) => (b.suggestedPriceUsd || 0) - (a.suggestedPriceUsd || 0))
+      .slice(0, 3)
+      .map((p) => `${p.partName} ($${(p.suggestedPriceUsd || 0).toLocaleString()})`);
+    flags.push({
+      level: "warn",
+      message: `Parts total ($${total.toLocaleString()}) runs ${Math.round((total / wholeCarUsd) * 100)}% of the whole-car value ($${wholeCarUsd.toLocaleString()}) — implausibly high. Re-examine the largest line items first: ${biggest.join(", ")}.`,
+    });
+  }
+
   // 6. Photos disagree on the body color → a color misread, or (worse) the photo set may
   //    mix DIFFERENT vehicles. Either way, a human should confirm before it lists.
   const cc = colorConflict(photoColors);

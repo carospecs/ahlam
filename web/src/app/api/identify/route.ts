@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { vehicleAge, ageFactor, usedPriceFromNew } from "@/lib/age-pricing";
+import { vehicleAge, ageFactor } from "@/lib/age-pricing";
+import { partClass, usedPointFromBand, usedPointFallback, gradeAdjustUsed } from "@/lib/used-pricing";
+import { classifyPowertrain, isImpossiblePart, powertrainPromptLine, type PowertrainType } from "@/lib/powertrain";
 import { geminiGenerate } from "@/lib/gemini";
 import { decodeVin, normalizeVin, engineLabel, type VinInfo, type VinDecode } from "@/lib/vin";
 import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
@@ -59,24 +61,29 @@ export interface AIPartOutput {
   conditionNotes: string;
   damageCode?: string;
   description: string;
-  // The part's estimated BRAND-NEW (OEM/retail) price from the vision model — the
-  // base the age × condition formula discounts into suggestedPriceUsd.
-  newPartPriceUsd: number | null;
-  // The model's plausible NEW-price range (its uncertainty band): low ≤ newPartPriceUsd
-  // ≤ high. Tight when it knows the part/vehicle well, wide when it's guessing.
-  newPartPriceLowUsd?: number | null;
-  newPartPriceHighUsd?: number | null;
-  // Final used price, computed server-side from newPartPriceUsd, vehicle age, and
-  // condition grade. (The model never sets this directly.)
+  // The part's typical USED/recycled selling price from the model — what this part
+  // actually sells for from a dismantler for THIS exact vehicle in good used
+  // (≈ Grade B) condition. The anchor every price derives from. (Replaced the old
+  // new-retail anchor, which priced painted panels near best-case retail and pushed
+  // parts totals implausibly past the whole-car value.)
+  usedPartPriceUsd: number | null;
+  // The model's realistic USED-market range: low ≤ usedPartPriceUsd ≤ high. The
+  // class curve positions slow movers (painted panels) near the low end.
+  usedPartPriceLowUsd?: number | null;
+  usedPartPriceHighUsd?: number | null;
+  // Final suggested price, computed server-side: class-positioned point in the used
+  // band × grade factor (lib/used-pricing). The model never sets this directly.
   suggestedPriceUsd: number | null;
-  // The used-price band: the new-price range put through the same grade discount as
-  // suggestedPriceUsd. Renders as the confidence band under the price field.
+  // The used band after the grade factor — renders as the confidence band under the
+  // price field.
   suggestedPriceLowUsd?: number | null;
   suggestedPriceHighUsd?: number | null;
   confidence: Confidence;
   lowConfidenceFields?: (keyof AIPartOutput)[];
-  // True when the model listed this part without directly seeing it (inferred/occluded,
-  // e.g. an airbag behind the wheel). Surfaced as "Inferred — verify" and left unpriced.
+  // True when this part wasn't directly seen — model-listed (airbag behind the wheel)
+  // or code-generated from the powertrain type (battery pack with no underbody photo).
+  // Surfaced as "Inferred — verify" but STILL PRICED: hidden powertrain parts are
+  // often the most valuable items on the car.
   inferred?: boolean;
   pricingInsight?: PricingInsight;
   // Set for parts whose resale is legally restricted (airbags/SRS, catalytic
@@ -114,6 +121,9 @@ export interface VehicleEstimate {
   engine?: string | null;
   drivetrain?: string | null;
   vinInfo?: VinInfo | null; // full decode for the seller-facing VIN details section
+  // Powertrain classification (lib/powertrain) — every pricing decision branches on
+  // this: which parts can exist, which high-value parts to infer, how to price them.
+  powertrainType?: PowertrainType | null;
 }
 
 // A personal-identifier region to blur before the image is shown/saved: a license plate
@@ -133,16 +143,16 @@ export type AIResult =
   | { ok: true; data: AIPartOutput[]; vehicle?: VehicleEstimate | null; vehicleFront?: string; piiRegions?: PiiRegion[] }
   | { ok: false; userMessage: string; internalError: string };
 
-// Sanitize the model's new-price range: numbers only, re-ordered if swapped, and
+// Sanitize the model's used-price range: numbers only, re-ordered if swapped, and
 // clamped to actually bracket the point estimate. A missing/garbage range → nulls
 // (the client falls back to a confidence-derived band).
-function normalizeNewPriceBand(p: { newPartPriceUsd?: unknown; newPartPriceLowUsd?: unknown; newPartPriceHighUsd?: unknown }): { newPartPriceLowUsd: number | null; newPartPriceHighUsd: number | null } {
-  const mid = typeof p.newPartPriceUsd === "number" && p.newPartPriceUsd > 0 ? p.newPartPriceUsd : null;
-  let lo = typeof p.newPartPriceLowUsd === "number" && p.newPartPriceLowUsd > 0 ? p.newPartPriceLowUsd : null;
-  let hi = typeof p.newPartPriceHighUsd === "number" && p.newPartPriceHighUsd > 0 ? p.newPartPriceHighUsd : null;
-  if (mid == null || lo == null || hi == null) return { newPartPriceLowUsd: null, newPartPriceHighUsd: null };
+function normalizeUsedPriceBand(p: { usedPartPriceUsd?: unknown; usedPartPriceLowUsd?: unknown; usedPartPriceHighUsd?: unknown }): { usedPartPriceLowUsd: number | null; usedPartPriceHighUsd: number | null } {
+  const mid = typeof p.usedPartPriceUsd === "number" && p.usedPartPriceUsd > 0 ? p.usedPartPriceUsd : null;
+  let lo = typeof p.usedPartPriceLowUsd === "number" && p.usedPartPriceLowUsd > 0 ? p.usedPartPriceLowUsd : null;
+  let hi = typeof p.usedPartPriceHighUsd === "number" && p.usedPartPriceHighUsd > 0 ? p.usedPartPriceHighUsd : null;
+  if (mid == null || lo == null || hi == null) return { usedPartPriceLowUsd: null, usedPartPriceHighUsd: null };
   if (lo > hi) [lo, hi] = [hi, lo];
-  return { newPartPriceLowUsd: Math.min(lo, mid), newPartPriceHighUsd: Math.max(hi, mid) };
+  return { usedPartPriceLowUsd: Math.min(lo, mid), usedPartPriceHighUsd: Math.max(hi, mid) };
 }
 
 const CONDITION_RUBRIC: Record<string, { detail: string }> = {
@@ -181,9 +191,9 @@ You MUST return ONLY a JSON object, no prose, with this shape:
       "conditionNotes": string,
       "damageCode": string,
       "description": string,
-      "newPartPriceUsd": number | null,
-      "newPartPriceLowUsd": number | null,
-      "newPartPriceHighUsd": number | null,
+      "usedPartPriceUsd": number | null,
+      "usedPartPriceLowUsd": number | null,
+      "usedPartPriceHighUsd": number | null,
       "confidence": "high" | "medium" | "low",
       "visiblyPresent": boolean,
       "lowConfidenceFields": string[]
@@ -230,13 +240,14 @@ VEHICLE ESTIMATE ("vehicle"):
 - "newWholeCarPriceUsd": the vehicle's ORIGINAL price BRAND NEW (its MSRP / sticker price when it was first sold), in USD — NOT its current used value. Base it on the make/model/year/trim you identified. If you cannot estimate it, use null. (The system applies depreciation from the vehicle's age automatically — do not pre-depreciate it yourself.)
 - If you are unsure of any field, set it to null and lower "confidence".
 
-PRICING — report each part's NEW price, not its used price:
-- "newPartPriceUsd": the approximate price of THIS part BRAND NEW — what a new OEM (or quality aftermarket) replacement of the same part for this make/model/year/trim costs at retail today. This is the NEW/retail price, NOT a used or salvage price.
-- The system computes the used resale price itself by discounting your new price for the vehicle's age and the part's condition grade — so do NOT discount for wear, damage, or age yourself. Report the new-replacement price and let the condition grade (A/B/C) you already assigned carry the wear.
-- Judge the new price from the part's full OEM fitment (make/model/year/trim): a part for a luxury or low-supply vehicle costs more new; a common economy-car part costs less.
-- Left & right of a paired part have the SAME new price — don't differ them. "Wheel / Rim" and "Tire" each get their own new price.
-- Use realistic round numbers. If you genuinely have no basis for a new price, use null rather than guessing.
-- "newPartPriceLowUsd" / "newPartPriceHighUsd": your plausible RANGE for that new price — how sure you are. low ≤ newPartPriceUsd ≤ high, always. When you know this exact part and vehicle well, keep the range TIGHT (±10% or less). When you're less sure (rare trim, can't see the part clearly, generic estimate), make it WIDE to be honest about the uncertainty. If newPartPriceUsd is null, both are null.
+PRICING — report each part's USED-MARKET price. This is a USED vehicle being parted out by a dismantler:
+- "usedPartPriceUsd": the typical price this part ACTUALLY SELLS FOR as a USED/recycled part — what dismantlers and salvage yards get for it on car-part.com, eBay sold listings, and LKQ for THIS exact make/model/year/trim, in good used (Grade B) condition. NEVER the new/OEM/MSRP/aftermarket-new price — a used part sells for a FRACTION of new.
+- The system applies the condition-grade adjustment itself — report the good-used baseline and let the grade (A/B/C) you already assigned carry the wear. Do not zero a damaged part; grade it C instead.
+- BE CONSERVATIVE ON LARGE PAINTED BODY PANELS (doors, liftgate/tailgate, hood, quarter panels, fenders, bumper covers, roof): they move slowly, cost a lot to ship, and face heavy local supply — they usually sell near the LOW end of any listed range, far below what body shops charge. A used door for a mainstream vehicle is typically $100–$400, not $1,000+.
+- Small fast-moving parts (mirrors, lamps, glass, modules, sensors) hold value better and sell nearer the middle of their range.
+- Left & right of a paired part have the SAME price — don't differ them. "Wheel / Rim" and "Tire" each get their own price.
+- Use realistic round numbers. If you genuinely have no basis for a price, use null rather than guessing.
+- "usedPartPriceLowUsd" / "usedPartPriceHighUsd": the realistic USED-market RANGE — what the same part sells for across condition/market variation. low ≤ usedPartPriceUsd ≤ high, always. Keep it TIGHT (±15% or less) when you know this part and vehicle well; make it WIDE when you're less sure. If usedPartPriceUsd is null, both are null.
 
 NO INFERRED / GUESSED PARTS:
 - Catalog ONLY what you can actually see in the photo. If a part is not visible, do NOT list it — never infer, guess, or assume.
@@ -312,7 +323,7 @@ function vinContext(decoded: { make?: string | null; model?: string | null; year
     decoded.drivetrain ? `drivetrain ${decoded.drivetrain}` : null,
   ].filter(Boolean).join(", ");
   return `\n\nKNOWN SOURCE VEHICLE — decoded from its VIN; treat as GROUND TRUTH and override any visual guess: ${id}${specs ? ` (${specs})` : ""}.` +
-    ` Classify each part as the correct part FOR THIS EXACT VEHICLE, set its "fitment" to this vehicle, and base "newPartPriceUsd" on a NEW OEM part for this make/model/year/trim${decoded.engine ? "/engine" : ""}.` +
+    ` Classify each part as the correct part FOR THIS EXACT VEHICLE, set its "fitment" to this vehicle, and base "usedPartPriceUsd" on what a USED part for this make/model/year/trim${decoded.engine ? "/engine" : ""} actually sells for.` +
     ` Only include a part if it visibly belongs to this vehicle.`;
 }
 
@@ -458,7 +469,17 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
   const vinForPrompt = clientVin
     ? { year: clientVin.year, make: clientVin.make, model: clientVin.model, trim: clientVin.trim, engine: engineLabel(clientVin), drivetrain: clientVin.driveType }
     : body.vin;
-  const userText = VISION_USER_INSTRUCTION + (vinForPrompt ? vinContext(vinForPrompt) : "") + photoContext;
+  // Powertrain steer for the prompt: when the up-front VIN (or passed identity) tells
+  // us the type, the model is told which parts can and cannot exist BEFORE it looks.
+  const promptPowertrain = clientVin
+    ? classifyPowertrain(clientVin)
+    : (body.vin?.make || body.vin?.model)
+      ? classifyPowertrain({ make: body.vin.make, model: body.vin.model })
+      : null;
+  const userText = VISION_USER_INSTRUCTION
+    + (vinForPrompt ? vinContext(vinForPrompt) : "")
+    + (promptPowertrain && promptPowertrain.source !== "default" ? `\n\n${powertrainPromptLine(promptPowertrain.type)}` : "")
+    + photoContext;
 
   try {
     const content = await callGemini(rawBase64, mime, userText);
@@ -559,6 +580,16 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
       if (body.vin.model) vehicle.model = body.vin.model;
       if (typeof body.vin.year === "number") { vehicle.yearStart = body.vin.year; vehicle.yearEnd = body.vin.year; }
     }
+
+    // POWERTRAIN TYPE — classified BEFORE pricing from the best identity we have
+    // (NHTSA decode fields when a VIN resolved, else the make/model name). Recorded
+    // on the vehicle and used by the impossible-part filter below. Filtering only
+    // acts on confident classifications (VIN or known-EV name), never the default.
+    const powertrain = classifyPowertrain(
+      vehicle?.vinInfo ?? clientVin ?? { make: vehicle?.make, model: vehicle?.model, trim: vehicle?.trim },
+    );
+    if (vehicle) vehicle.powertrainType = powertrain.type;
+
     const rawParts: RawPart[] = Array.isArray(parsed.parts) ? parsed.parts : parsed.partName ? [parsed] : [];
 
     const assembled: AIPartOutput[] = rawParts.map((p) => {
@@ -595,9 +626,9 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
         conditionNotes: p.conditionNotes ?? "",
         damageCode: typeof p.damageCode === "string" ? p.damageCode.slice(0, 16) : "",
         description: p.description ?? "",
-        newPartPriceUsd: typeof p.newPartPriceUsd === "number" ? p.newPartPriceUsd : null,
-        ...normalizeNewPriceBand(p),
-        suggestedPriceUsd: null, // computed from new price × age × condition below
+        usedPartPriceUsd: typeof p.usedPartPriceUsd === "number" ? p.usedPartPriceUsd : null,
+        ...normalizeUsedPriceBand(p),
+        suggestedPriceUsd: null, // computed from the used band × class curve × grade below
         confidence,
         lowConfidenceFields: Array.from(lowFields),
         inferred: p.visiblyPresent === false, // listed but not directly seen
@@ -660,31 +691,40 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     }
 
     // Inferred (not-directly-seen) parts — deterministic rule (lib/inferred-parts), since
-    // the model won't reliably self-report. Flags airbags etc. as inferred + unpriced so
-    // pricing below leaves them blank and the UI shows "Inferred — verify".
+    // the model won't reliably self-report. Flags airbags etc. as "inferred — verify".
+    // Inferred parts KEEP their price (hidden powertrain parts are often the most
+    // valuable items on the car) — the flag is the safeguard, not a blank price.
     data = markInferredParts(data);
 
-    // ── PRICING ──────────────────────────────────────────────────────────────
-    // Formula: usedPrice = newPartPriceUsd × gradeDiscount (lib/age-pricing.ts)
-    //   Grade A (like new)        → ×0.85  (15% off new price)
-    //   Grade B (normal wear)     → ×0.70  (30% off new price)
-    //   Grade C (heavily damaged) → null   (unpriced — seller sets manually)
+    // Powertrain reality filter: never emit a part that cannot exist for the detected
+    // powertrain (no catalytic converter or transmission on a BEV, no drive unit on a
+    // gas car). The prompt already says this; this is the deterministic guarantee.
+    // Only a CONFIDENT classification filters — the "default" guess never deletes parts.
+    if (powertrain.source !== "default") data = data.filter((p) => !isImpossiblePart(p.partName, powertrain.type));
+
+    // ── PRICING (lib/used-pricing) ───────────────────────────────────────────
+    // usedPartPriceUsd is the model's good-used (Grade B) market anchor. The final
+    // suggested price = point positioned in the used band by PART CLASS (painted
+    // panels → low end; fast movers → middle) × GRADE factor (A ×1.15, B ×1.0,
+    // C null — heavily damaged stays unpriced for the seller to judge).
     for (const p of data) {
       const grade: ConditionGrade = (["A", "B", "C"] as const).includes(p.condition) ? p.condition : "B";
-      // Inferred parts (listed but not seen) get NO firm price — verify before pricing.
-      const price = p.inferred ? null : usedPriceFromNew(p.newPartPriceUsd, grade);
+      const cls = partClass(p.partName);
+      const base = p.usedPartPriceLowUsd != null && p.usedPartPriceHighUsd != null
+        ? usedPointFromBand(p.usedPartPriceLowUsd, p.usedPartPriceHighUsd, cls)
+        : (p.usedPartPriceUsd != null ? usedPointFallback(p.usedPartPriceUsd, cls) : null);
+      p.usedPartPriceUsd = base; // normalized anchor — what pair-parity shares
+      const price = gradeAdjustUsed(base, grade);
       p.suggestedPriceUsd = price;
-      // The band goes through the SAME grade discount, so it brackets the suggested
-      // price in used-dollars. Null whenever the price itself is null (Grade C/inferred).
-      p.suggestedPriceLowUsd = price != null ? usedPriceFromNew(p.newPartPriceLowUsd, grade) : null;
-      p.suggestedPriceHighUsd = price != null ? usedPriceFromNew(p.newPartPriceHighUsd, grade) : null;
+      // The band gets the same grade factor so it brackets the suggested price.
+      p.suggestedPriceLowUsd = price != null ? gradeAdjustUsed(p.usedPartPriceLowUsd, grade) : null;
+      p.suggestedPriceHighUsd = price != null ? gradeAdjustUsed(p.usedPartPriceHighUsd, grade) : null;
       p.pricingInsight = price != null ? {
         suggestedPrice: price,
-        priceRange: { min: price, max: price },
+        priceRange: { min: p.suggestedPriceLowUsd ?? price, max: p.suggestedPriceHighUsd ?? price },
         similarCount: 0,
         source: "formula",
         confidence: p.confidence,
-        newPartPrice: p.newPartPriceUsd,
       } : undefined;
     }
 
