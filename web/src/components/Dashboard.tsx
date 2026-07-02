@@ -44,18 +44,18 @@ export function useData() { return useContext(DataContext); }
 // parts" is NOT in the list — it's the app's entry point, rendered as the pinned
 // "+ New scan" primary button above the groups (see Sidebar).
 const NAV = [
-  { section: "Sell" }, // the core create→post loop
+  { section: "Sell" }, // core loop + the headline value: post everywhere, then measure
   { id: "vehicles", label: "Vehicles posted", icon: Car },
   { id: "parts", label: "Parts posted", icon: Wrench },
   { id: "export", label: "Export & posting", icon: Send },
-  { id: "yard", label: "Yard", icon: MapPin }, // barcodes, bins, labels, NMVTIS — operational selling work
-  { section: "Business" }, // run the shop / close deals
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "orders", label: "Orders", icon: ShoppingBag },
-  { id: "analytics", label: "Analytics", icon: TrendingUp },
-  { id: "messages", label: "Messages", icon: MessageSquare },
-  { section: "Discover" }, // outward-facing / lookup
+  { id: "analytics", label: "Analytics", icon: TrendingUp }, // sits next to Export — the two we lead with
+  { section: "Market" }, // marketplace + buyers, kept high (daily drivers)
   { id: "browse", label: "Browse market", icon: Store },
+  { id: "messages", label: "Messages", icon: MessageSquare },
+  { id: "orders", label: "Orders", icon: ShoppingBag },
+  { section: "Business" }, // run the shop
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "yard", label: "Yard", icon: MapPin }, // barcodes, bins, labels, NMVTIS — operational selling work
   { id: "interchange", label: "Interchange", icon: BookOpen },
   { section: "Library" }, // media + documents
   { id: "gallery", label: "Gallery", icon: Images },
