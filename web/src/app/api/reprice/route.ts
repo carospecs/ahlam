@@ -66,11 +66,13 @@ export async function POST(req: Request) {
     `You price auto parts for salvage yards. For a ${id}${spec ? ` (${spec})` : ""}, give the approximate BRAND-NEW ` +
     `OEM (or quality aftermarket) retail price in USD for each part below — the NEW replacement price for THIS exact ` +
     `make/model/year/trim/engine, NOT a used or salvage price. Left & right of a paired part get the SAME price. ` +
-    `Use realistic round numbers; if you truly have no basis for one, use null.\n\n` +
-    `Return ONLY a JSON array (no prose), one object per part, shape: [{"name": string, "newPartPriceUsd": number|null}]. ` +
+    `Use realistic round numbers; if you truly have no basis for one, use null. ` +
+    `Also give your plausible RANGE for each new price as newPartPriceLowUsd / newPartPriceHighUsd (low ≤ price ≤ high): ` +
+    `tight (±10% or less) when you know the part and vehicle well, wider when you're less sure. Null range when the price is null.\n\n` +
+    `Return ONLY a JSON array (no prose), one object per part, shape: [{"name": string, "newPartPriceUsd": number|null, "newPartPriceLowUsd": number|null, "newPartPriceHighUsd": number|null}]. ` +
     `Use the exact part names given.\n\nParts:\n${list}`;
 
-  let parsed: { name?: string; newPartPriceUsd?: unknown }[] = [];
+  let parsed: { name?: string; newPartPriceUsd?: unknown; newPartPriceLowUsd?: unknown; newPartPriceHighUsd?: unknown }[] = [];
   try {
     const res = await geminiGenerate("gemini-2.5-flash", {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -84,19 +86,31 @@ export async function POST(req: Request) {
   } catch { return NextResponse.json({ ok: false, error: "parse" }, { status: 502, headers: CORS }); }
 
   // Match the model's prices back to the requested parts by name, falling back to
-  // positional order. Then apply the same grade discount the scan uses.
-  const byName = new Map<string, number | null>();
+  // positional order. Then apply the same grade discount the scan uses — to the
+  // point estimate AND to the low/high band, so the band brackets the used price.
+  const num = (v: unknown): number | null => (typeof v === "number" && v > 0 ? v : null);
+  type Priced = { mid: number | null; lo: number | null; hi: number | null };
+  const fromRaw = (r: (typeof parsed)[number] | undefined): Priced => {
+    const mid = num(r?.newPartPriceUsd);
+    let lo = num(r?.newPartPriceLowUsd), hi = num(r?.newPartPriceHighUsd);
+    if (mid == null || lo == null || hi == null) return { mid, lo: null, hi: null };
+    if (lo > hi) [lo, hi] = [hi, lo];
+    return { mid, lo: Math.min(lo, mid), hi: Math.max(hi, mid) };
+  };
+  const byName = new Map<string, Priced>();
   parsed.forEach((r) => {
-    if (typeof r?.name === "string") {
-      byName.set(r.name.toLowerCase().trim(), typeof r.newPartPriceUsd === "number" ? r.newPartPriceUsd : null);
-    }
+    if (typeof r?.name === "string") byName.set(r.name.toLowerCase().trim(), fromRaw(r));
   });
   const out = parts.map((p, i) => {
-    const newPartPriceUsd = byName.has(p.name.toLowerCase().trim())
-      ? byName.get(p.name.toLowerCase().trim())!
-      : (typeof parsed[i]?.newPartPriceUsd === "number" ? (parsed[i].newPartPriceUsd as number) : null);
+    const priced = byName.get(p.name.toLowerCase().trim()) ?? fromRaw(parsed[i]);
     const grade = (["A", "B", "C"] as const).includes(p.grade as ConditionGrade) ? (p.grade as ConditionGrade) : "B";
-    return { name: p.name, newPartPriceUsd, suggestedPriceUsd: usedPriceFromNew(newPartPriceUsd, grade) };
+    return {
+      name: p.name,
+      newPartPriceUsd: priced.mid,
+      suggestedPriceUsd: usedPriceFromNew(priced.mid, grade),
+      suggestedPriceLowUsd: usedPriceFromNew(priced.lo, grade),
+      suggestedPriceHighUsd: usedPriceFromNew(priced.hi, grade),
+    };
   });
 
   return NextResponse.json({ ok: true, vehicle: id, parts: out }, { headers: CORS });

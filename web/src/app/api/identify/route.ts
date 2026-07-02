@@ -62,9 +62,17 @@ export interface AIPartOutput {
   // The part's estimated BRAND-NEW (OEM/retail) price from the vision model — the
   // base the age × condition formula discounts into suggestedPriceUsd.
   newPartPriceUsd: number | null;
+  // The model's plausible NEW-price range (its uncertainty band): low ≤ newPartPriceUsd
+  // ≤ high. Tight when it knows the part/vehicle well, wide when it's guessing.
+  newPartPriceLowUsd?: number | null;
+  newPartPriceHighUsd?: number | null;
   // Final used price, computed server-side from newPartPriceUsd, vehicle age, and
   // condition grade. (The model never sets this directly.)
   suggestedPriceUsd: number | null;
+  // The used-price band: the new-price range put through the same grade discount as
+  // suggestedPriceUsd. Renders as the confidence band under the price field.
+  suggestedPriceLowUsd?: number | null;
+  suggestedPriceHighUsd?: number | null;
   confidence: Confidence;
   lowConfidenceFields?: (keyof AIPartOutput)[];
   // True when the model listed this part without directly seeing it (inferred/occluded,
@@ -125,6 +133,18 @@ export type AIResult =
   | { ok: true; data: AIPartOutput[]; vehicle?: VehicleEstimate | null; vehicleFront?: string; piiRegions?: PiiRegion[] }
   | { ok: false; userMessage: string; internalError: string };
 
+// Sanitize the model's new-price range: numbers only, re-ordered if swapped, and
+// clamped to actually bracket the point estimate. A missing/garbage range → nulls
+// (the client falls back to a confidence-derived band).
+function normalizeNewPriceBand(p: { newPartPriceUsd?: unknown; newPartPriceLowUsd?: unknown; newPartPriceHighUsd?: unknown }): { newPartPriceLowUsd: number | null; newPartPriceHighUsd: number | null } {
+  const mid = typeof p.newPartPriceUsd === "number" && p.newPartPriceUsd > 0 ? p.newPartPriceUsd : null;
+  let lo = typeof p.newPartPriceLowUsd === "number" && p.newPartPriceLowUsd > 0 ? p.newPartPriceLowUsd : null;
+  let hi = typeof p.newPartPriceHighUsd === "number" && p.newPartPriceHighUsd > 0 ? p.newPartPriceHighUsd : null;
+  if (mid == null || lo == null || hi == null) return { newPartPriceLowUsd: null, newPartPriceHighUsd: null };
+  if (lo > hi) [lo, hi] = [hi, lo];
+  return { newPartPriceLowUsd: Math.min(lo, mid), newPartPriceHighUsd: Math.max(hi, mid) };
+}
+
 const CONDITION_RUBRIC: Record<string, { detail: string }> = {
   A: { detail: "GRADE A — Like New. From low-mileage or newer vehicles; minimal to no visible wear. Body parts: 0–1 repair unit needed (e.g. a small dent on a door panel). Mechanical: under 60,000 miles total use, OR no more than 15,000 miles per year relative to the vehicle's model age (e.g. an engine with 30,000 miles). Most expensive tier; highest quality, least wear." },
   B: { detail: "GRADE B — Reliable, More Wear. From moderate-mileage vehicles; still fully functional. Body parts: 1–2 repair units needed; visible damage but structurally sound. Mechanical: 60,000–200,000 miles total, AND more than 15,000 miles per year relative to model age; hard ceiling of under 200,000 miles total regardless of other factors. Middle tier; savings over Grade A in exchange for more wear." },
@@ -162,6 +182,8 @@ You MUST return ONLY a JSON object, no prose, with this shape:
       "damageCode": string,
       "description": string,
       "newPartPriceUsd": number | null,
+      "newPartPriceLowUsd": number | null,
+      "newPartPriceHighUsd": number | null,
       "confidence": "high" | "medium" | "low",
       "visiblyPresent": boolean,
       "lowConfidenceFields": string[]
@@ -214,6 +236,7 @@ PRICING — report each part's NEW price, not its used price:
 - Judge the new price from the part's full OEM fitment (make/model/year/trim): a part for a luxury or low-supply vehicle costs more new; a common economy-car part costs less.
 - Left & right of a paired part have the SAME new price — don't differ them. "Wheel / Rim" and "Tire" each get their own new price.
 - Use realistic round numbers. If you genuinely have no basis for a new price, use null rather than guessing.
+- "newPartPriceLowUsd" / "newPartPriceHighUsd": your plausible RANGE for that new price — how sure you are. low ≤ newPartPriceUsd ≤ high, always. When you know this exact part and vehicle well, keep the range TIGHT (±10% or less). When you're less sure (rare trim, can't see the part clearly, generic estimate), make it WIDE to be honest about the uncertainty. If newPartPriceUsd is null, both are null.
 
 NO INFERRED / GUESSED PARTS:
 - Catalog ONLY what you can actually see in the photo. If a part is not visible, do NOT list it — never infer, guess, or assume.
@@ -573,6 +596,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
         damageCode: typeof p.damageCode === "string" ? p.damageCode.slice(0, 16) : "",
         description: p.description ?? "",
         newPartPriceUsd: typeof p.newPartPriceUsd === "number" ? p.newPartPriceUsd : null,
+        ...normalizeNewPriceBand(p),
         suggestedPriceUsd: null, // computed from new price × age × condition below
         confidence,
         lowConfidenceFields: Array.from(lowFields),
@@ -650,6 +674,10 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
       // Inferred parts (listed but not seen) get NO firm price — verify before pricing.
       const price = p.inferred ? null : usedPriceFromNew(p.newPartPriceUsd, grade);
       p.suggestedPriceUsd = price;
+      // The band goes through the SAME grade discount, so it brackets the suggested
+      // price in used-dollars. Null whenever the price itself is null (Grade C/inferred).
+      p.suggestedPriceLowUsd = price != null ? usedPriceFromNew(p.newPartPriceLowUsd, grade) : null;
+      p.suggestedPriceHighUsd = price != null ? usedPriceFromNew(p.newPartPriceHighUsd, grade) : null;
       p.pricingInsight = price != null ? {
         suggestedPrice: price,
         priceRange: { min: price, max: price },
@@ -670,7 +698,9 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     // adjacency map (propagateImpactDamage). Clear the now-stale pricing insight on anything
     // either pass unpriced.
     data = propagateImpactDamage(applyDamageZones(data, damageZones)).map((p) =>
-      p.suggestedPriceUsd == null && p.pricingInsight ? { ...p, pricingInsight: undefined } : p,
+      p.suggestedPriceUsd == null
+        ? { ...p, pricingInsight: undefined, suggestedPriceLowUsd: null, suggestedPriceHighUsd: null }
+        : p,
     );
 
     // Whole car: original MSRP discounted by age (no single grade applies to a

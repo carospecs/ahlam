@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ImageUp, Upload, ScanLine, Sparkles, Check, Info, CircleCheck, Car, Wrench, Plus, X, TriangleAlert, CheckCircle2, ArrowLeft, FileText, RotateCcw, Lock, Camera, ChevronUp, ChevronDown, Tag } from "lucide-react";
+import { ImageUp, Upload, ScanLine, Sparkles, Check, Info, CircleCheck, Car, Wrench, Plus, Minus, X, TriangleAlert, CheckCircle2, ArrowLeft, FileText, RotateCcw, Lock, Camera, ChevronUp, ChevronDown, Tag } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge } from "../UI";
 import { SELL_MODE } from "../data";
 import { csToast } from "../Dashboard";
@@ -13,6 +13,8 @@ import type { VinInfo } from "@/lib/vin";
 import { applyVinEngine, reconcilePairPrices, dropGenericWhenSided } from "@/lib/part-enrich";
 import { instanceScore, type PhotoFront } from "@/lib/photo-select";
 import { runScanQa } from "@/lib/scan-qa";
+import { bandFor, bandFraction, priceAtFraction, roundYardPrice } from "@/lib/price-band";
+import { runQaAgent, hasWarnCases, applyQaEdit, type QaAgentResolution } from "@/lib/qa-agent";
 import { redactImage, redactImageToDataUrl, type PiiBox } from "@/lib/redact";
 import { groundDescriptions } from "@/lib/describe-ground";
 import { propagateImpactDamage } from "@/lib/damage-zones";
@@ -26,6 +28,10 @@ interface AIPart {
   condition: "A" | "B" | "C"; conditionNotes: string; description: string; // ARA grade (was mistyped Good/Poor)
   newPartPriceUsd?: number | null; // brand-new price from the scan; base for L/R parity
   suggestedPriceUsd: number | null; confidence: "high" | "medium" | "low";
+  // The model's uncertainty band around suggestedPriceUsd (grade-discounted server-side).
+  // Renders as the draggable confidence band under the price field; when absent the band
+  // falls back to a confidence-derived spread (lib/price-band).
+  suggestedPriceLowUsd?: number | null; suggestedPriceHighUsd?: number | null;
   inferred?: boolean; // listed but not directly seen → "Inferred — verify", unpriced
   photoFront?: PhotoFront; // orientation of the photo this instance came from (best-shot pick)
   lowConfidenceFields?: string[];
@@ -48,6 +54,17 @@ interface VehicleEstimate {
   trim?: string | null; engine?: string | null; drivetrain?: string | null; vinInfo?: VinInfo | null; color?: string | null;
 }
 type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; vehicleFront?: string; piiRegions?: PiiBox[] } | { ok: false; userMessage: string; internalError: string };
+
+// A market-comp research result for one part (A2 agent, /api/price-research).
+type MarketCheck = { compMedianUsd: number; compCount: number; proposedPriceUsd: number; confidence: "high" | "low"; sources: { title: string; url: string }[] };
+
+// Map a scan-QA flag message to the agent case kind that can settle it (A1).
+function qaKindOf(message: string): "side" | "color" | "zone" | null {
+  if (message.startsWith("Description names the opposite side")) return "side";
+  if (message.startsWith("Photos disagree on body color")) return "color";
+  if (message.startsWith("Grade A but in a damage zone")) return "zone";
+  return null;
+}
 
 // Accent color used across the scan flow (spinner, report card). The scan engine
 // is fixed and never surfaced to the seller.
@@ -268,6 +285,10 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   const [dragging, setDragging] = React.useState(false);
   const [camOpen, setCamOpen] = React.useState(false);
   const [repricing, setRepricing] = React.useState(false); // VIN auto-refine in flight
+  // Agent state (docs/agent-layer-blueprint.md) — transient advisory results; a new scan
+  // resets both. A1 = QA resolver (settles warn flags), A2 = market-comp price research.
+  const [qaAgent, setQaAgent] = React.useState<{ running: boolean; resolutions: QaAgentResolution[] }>({ running: false, resolutions: [] });
+  const [research, setResearch] = React.useState<{ running: boolean; results: Record<string, MarketCheck> }>({ running: false, results: {} });
   const fileRef = React.useRef<HTMLInputElement>(null);
   const partSeq = React.useRef(0);
   // After a remount (e.g. returning to a restored session), continue ids above the
@@ -323,6 +344,8 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   async function runAnalysis() {
     const myToken = beginScanRun();
     setPhase("analyzing"); setError(null);
+    setQaAgent({ running: false, resolutions: [] });
+    setResearch({ running: false, results: {} });
     // VIN-FIRST: resolve the VIN BEFORE cataloging, so every photo is classified AND
     // priced for the exact vehicle on the first pass (no blind classification, no
     // after-the-fact reprice). A typed VIN wins; otherwise read it from the photos in
@@ -399,7 +422,8 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       const agg = aggregateVehicle(estimates);
       // Stash the distinct body color each photo reported, so QA can flag a gray-vs-gold
       // mismatch (a misread — or photos of different vehicles).
-      setPhotoColors([...new Set(estimates.map((e) => e?.color).filter((c): c is string => !!c).map((c) => c.trim()))]);
+      const distinctColors = [...new Set(estimates.map((e) => e?.color).filter((c): c is string => !!c).map((c) => c.trim()))];
+      setPhotoColors(distinctColors);
       const enrichedCollected = agg?.engine
         ? collected.map((p) => applyVinEngine(p, agg.engine, agg.drivetrain))
         : collected;
@@ -469,6 +493,18 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       setPhase("results");
       playSonarPing(); // sonar ring: the scan is done, results are ready
 
+      // ── AGENTS (docs/agent-layer-blueprint.md) — advisory, off the scan path ──
+      // A1 QA Resolver: if the QA guardrail raised warn flags, spend a few focused
+      // calls settling them with evidence. Proposals only — seller applies each fix.
+      if (hasWarnCases(deduped, distinctColors)) {
+        setQaAgent({ running: true, resolutions: [] });
+        void runQaAgent(deduped, photos.map((p) => display(p.url)), distinctColors)
+          .then((resolutions) => { if (isScanRun(myToken)) setQaAgent({ running: false, resolutions }); });
+      }
+      // A2 Pricing Research: market-check the top-value parts via grounded web
+      // search. Fire-and-forget; results render as accept/dismiss badges.
+      void researchMarket(myToken, deduped, agg);
+
       // Fallback only: VIN-first didn't resolve one before the catalog (read-vin found
       // nothing) but a catalog photo still read one — re-price for it so pricing anchors
       // to the VIN even on this edge path. Best-effort; prices stay as-is on failure.
@@ -494,18 +530,82 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       const j = await res.json();
       if (!isScanRun(token)) return; // a newer scan superseded this one
       if (!j?.ok || !Array.isArray(j.parts)) return;
-      const byName = new Map<string, { suggestedPriceUsd: number | null; newPartPriceUsd: number | null }>();
+      const byName = new Map<string, { suggestedPriceUsd: number | null; newPartPriceUsd: number | null; suggestedPriceLowUsd?: number | null; suggestedPriceHighUsd?: number | null }>();
       for (const r of j.parts) if (r && typeof r.name === "string") byName.set(r.name.toLowerCase().trim(), r);
       setParts((prev) => reconcilePairPrices(prev.map((p) => {
         const r = byName.get(p.partName.toLowerCase().trim());
         if (!r || typeof r.newPartPriceUsd !== "number" || r.newPartPriceUsd <= 0) return p;
-        return { ...p, newPartPriceUsd: r.newPartPriceUsd, suggestedPriceUsd: r.suggestedPriceUsd, _aiPrice: r.suggestedPriceUsd ?? p._aiPrice };
+        return {
+          ...p, newPartPriceUsd: r.newPartPriceUsd, suggestedPriceUsd: r.suggestedPriceUsd, _aiPrice: r.suggestedPriceUsd ?? p._aiPrice,
+          suggestedPriceLowUsd: r.suggestedPriceLowUsd ?? p.suggestedPriceLowUsd, suggestedPriceHighUsd: r.suggestedPriceHighUsd ?? p.suggestedPriceHighUsd,
+        };
       })));
     } catch {
       /* network/parse error — keep the original prices */
     } finally {
       if (isScanRun(token)) setRepricing(false);
     }
+  }
+
+  // PRICING RESEARCH AGENT (A2): after results land, market-check the top-value parts
+  // via grounded web search on the server. Advisory only — the results render as an
+  // accept/dismiss badge per part; the formula prices stand until the seller accepts.
+  async function researchMarket(token: number, current: AIPart[], agg: { year?: string; make?: string; model?: string; trim?: string | null; engine?: string | null } | null) {
+    if (!agg?.make || !agg?.model) return; // no vehicle identity → nothing to search comps for
+    const eligible = current.filter((p) => p.condition !== "C" && !p.inferred && (p.suggestedPriceUsd || 0) >= 150);
+    if (!eligible.length) return;
+    setResearch({ running: true, results: {} });
+    try {
+      const res = await fetch("/api/price-research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vehicle: { year: agg.year, make: agg.make, model: agg.model, trim: agg.trim, engine: agg.engine },
+          parts: eligible.map((p) => ({ name: p.partName, grade: p.condition, currentPriceUsd: p.suggestedPriceUsd })),
+        }),
+      });
+      const j = await res.json();
+      if (!isScanRun(token)) return;
+      const results: Record<string, MarketCheck> = {};
+      if (j?.ok && Array.isArray(j.results)) {
+        for (const r of j.results) {
+          if (r?.name && typeof r.proposedPriceUsd === "number" && Array.isArray(r.sources) && r.sources.length) {
+            results[String(r.name).toLowerCase().trim()] = r;
+          }
+        }
+      }
+      setResearch({ running: false, results });
+    } catch {
+      if (isScanRun(token)) setResearch({ running: false, results: {} });
+    }
+  }
+
+  // Apply an agent-proposed QA fix (A1) — seller-accepted, never automatic.
+  function applyQaResolution(r: QaAgentResolution) {
+    if (!r.edit || !r.partId) return;
+    setParts((prev) => prev.map((p) => (p._id === r.partId ? { ...p, ...applyQaEdit(p, r.edit!) } : p)));
+    csToast(r.edit.field === "condition" ? "Downgraded to Grade B and repriced" : r.edit.field === "partName" ? "Part name corrected" : "Description corrected");
+  }
+
+  // Accept / dismiss a market-comp price proposal (A2).
+  function applyMarketCheck(p: AIPart, m: MarketCheck) {
+    setPartPrice(p._id!, String(m.proposedPriceUsd));
+    dismissMarketCheck(p);
+    csToast(`Priced to market: $${m.proposedPriceUsd.toLocaleString()} (${m.compCount} sold comps)`);
+  }
+  function dismissMarketCheck(p: AIPart) {
+    setResearch((prev) => {
+      const results = { ...prev.results };
+      delete results[p.partName.toLowerCase().trim()];
+      return { ...prev, results };
+    });
+  }
+
+  // Relative nudge: ±pct% of the CURRENT price, so sellers adjust without retyping.
+  function nudgePart(p: AIPart, pct: number) {
+    const cur = p.suggestedPriceUsd || 0;
+    if (!cur) return;
+    setPartPrice(p._id!, String(Math.max(1, Math.round(cur * (1 + pct / 100)))));
   }
 
   function removePart(id: string) { setParts((prev) => prev.filter((p) => p._id !== id)); }
@@ -809,9 +909,38 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
               {priceMismatches.length > 0 && (
                 <ReportLine icon={<TriangleAlert size={14} color="var(--signal)" />} text={`Check left/right pricing — ${priceMismatches.map((m) => m.base).join(", ")} ${priceMismatches.length > 1 ? "have" : "has"} sides priced very differently. Paired parts usually sell within ~20% of each other.`} />
               )}
-              {qaFlags.map((f, i) => (
-                <ReportLine key={`qa${i}`} icon={f.level === "warn" ? <TriangleAlert size={14} color="var(--signal)" /> : <Info size={14} color="var(--muted)" />} text={f.message} />
-              ))}
+              {qaFlags.map((f, i) => {
+                // A1 QA Resolver: render the agent's verdicts under the flag they settle.
+                // "resolved" on every case → the flag collapses into a green all-clear with
+                // the evidence; otherwise each case shows its diagnosis + a one-tap fix.
+                const kind = qaKindOf(f.message);
+                const rs = kind ? qaAgent.resolutions.filter((r) => r.kind === kind) : [];
+                const allClear = rs.length > 0 && rs.every((r) => r.verdict === "resolved");
+                return (
+                  <div key={`qa${i}`} style={{ display: "grid", gap: 4 }}>
+                    <ReportLine
+                      icon={allClear ? <CircleCheck size={14} color="var(--success)" /> : f.level === "warn" ? <TriangleAlert size={14} color="var(--signal)" /> : <Info size={14} color="var(--muted)" />}
+                      text={allClear ? rs.map((r) => r.evidence).join(" ") : f.message}
+                    />
+                    {!allClear && kind && qaAgent.running && rs.length === 0 && (
+                      <div style={{ marginLeft: 22, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--accent)" }}>
+                        <Sparkles size={12} /> AI agent is double-checking this…
+                      </div>
+                    )}
+                    {!allClear && rs.map((r, k) => (
+                      <div key={k} style={{ marginLeft: 22, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12, color: "var(--muted)" }}>
+                        <Sparkles size={12} color="var(--accent)" style={{ flexShrink: 0 }} />
+                        <span style={{ flex: 1, minWidth: 180 }}>{r.evidence}</span>
+                        {r.edit && r.partId && (
+                          <button onClick={() => applyQaResolution(r)} style={{ padding: "4px 10px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--accent-tint)", color: "var(--accent)", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                            {r.edit.field === "condition" ? "Set Grade B" : r.edit.field === "partName" ? "Fix part name" : "Fix description"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
               {vin && <ReportLine icon={<ScanLine size={14} color="var(--accent)" />} text={`VIN read from your photos: ${vin}. Used to lock the exact year, make, model, and engine for accurate fitment and pricing. Confirm it below.`} />}
               {mileage && <ReportLine icon={<Lock size={14} color="var(--muted)" />} text={`Mileage read from dashboard: ${mileage}. Kept private, never shown on listings. You can share it in chat if a buyer asks.`} />}
             </div>
@@ -972,15 +1101,15 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                   <span style={{ color: "var(--muted)", fontWeight: 500 }}> · {sellMode === "both" ? "shown as suggested in your post" : "tap any field to fix it"}</span>
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  {research.running && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--accent)" }}>
+                      <Sparkles size={12} /> Checking market comps…
+                    </span>
+                  )}
                   {anyAiPriced && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 10, padding: "4px 6px 4px 11px" }}>
-                      <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)" }}>Price all:</span>
-                      {[50, 75, 90, 100].map((pct) => (
-                        <button key={pct} onClick={() => setAllPctOfSuggested(pct)} title={pct === 100 ? "Reset to AI-suggested" : `${pct}% of AI-suggested`} style={{ padding: "5px 9px", borderRadius: 7, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 12, fontWeight: 600 }}>
-                          {pct === 100 ? "Reset" : `${pct}%`}
-                        </button>
-                      ))}
-                    </div>
+                    <button onClick={() => setAllPctOfSuggested(100)} title="Reset every price to the AI's suggestion" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 12, fontWeight: 600 }}>
+                      <RotateCcw size={13} /> Reset all to AI
+                    </button>
                   )}
                   <button onClick={addBlankPart} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px", borderRadius: 11, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 14, fontWeight: 600 }}><Plus size={15} /> Add a part</button>
                 </div>
@@ -1017,11 +1146,65 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                         <textarea value={p.description || ""} placeholder="Description (AI fills this in; tap to edit)" rows={2} onChange={(e) => setPartDesc(p._id!, e.target.value)} style={{ width: "100%", marginTop: 4, fontSize: 12.5, color: "var(--muted)", border: "1px solid transparent", outline: "none", background: "transparent", resize: "vertical", fontFamily: "var(--font-sans)", lineHeight: 1.45, borderRadius: 8, padding: "4px 6px" }} onFocus={(e) => { e.target.style.borderColor = "var(--line)"; e.target.style.color = "var(--foreground)"; }} onBlur={(e) => { e.target.style.borderColor = "transparent"; e.target.style.color = "var(--muted)"; }} />
                       </div>
                       <ConditionBadge grade={p.condition} size="sm" />
-                      <div style={{ width: 110, display: "grid", gap: 2, justifyItems: "end" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 3, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 9, padding: "6px 11px" }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: price > 0 ? "var(--success)" : "var(--muted)" }}>$</span>
-                          <input type="number" min={0} value={p.suggestedPriceUsd ?? ""} placeholder="0" onChange={(e) => setPartPrice(p._id!, e.target.value)} className="tnum" style={{ width: 72, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 15, fontWeight: 700, textAlign: "right" }} />
+                      <div style={{ width: 158, display: "grid", gap: 4, justifyItems: "end" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <button onClick={() => nudgePart(p, -5)} disabled={!price} title="−5%" style={{ width: 22, height: 22, borderRadius: 7, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", cursor: "pointer", opacity: price ? 1 : 0.35, flexShrink: 0 }}><Minus size={12} color="var(--muted)" /></button>
+                          <div style={{ display: "flex", alignItems: "center", gap: 3, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 9, padding: "6px 11px" }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: price > 0 ? "var(--success)" : "var(--muted)" }}>$</span>
+                            <input type="number" min={0} value={p.suggestedPriceUsd ?? ""} placeholder="0" onChange={(e) => setPartPrice(p._id!, e.target.value)} className="tnum" style={{ width: 62, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 15, fontWeight: 700, textAlign: "right" }} />
+                          </div>
+                          <button onClick={() => nudgePart(p, 5)} disabled={!price} title="+5%" style={{ width: 22, height: 22, borderRadius: 7, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", cursor: "pointer", opacity: price ? 1 : 0.35, flexShrink: 0 }}><Plus size={12} color="var(--muted)" /></button>
                         </div>
+                        {(() => {
+                          // Confidence band: the AI's own price range (or a confidence-derived
+                          // fallback), with a draggable marker two-way synced to the field.
+                          const band = bandFor(p);
+                          if (!band) return null;
+                          return (
+                            <PriceBand
+                              low={band.low}
+                              high={band.high}
+                              value={p.suggestedPriceUsd ?? Math.round((band.low + band.high) / 2)}
+                              confidence={p.confidence}
+                              onChange={(v) => setPartPrice(p._id!, String(v))}
+                            />
+                          );
+                        })()}
+                        {(() => {
+                          // Editing affordances: ghost AI estimate + reset on edited rows,
+                          // and a round-to-yard-figure helper when the price is odd.
+                          const edited = p._aiPrice != null && p._aiPrice > 0 && p.suggestedPriceUsd !== p._aiPrice;
+                          const rounded = price > 0 ? roundYardPrice(price) : 0;
+                          if (!edited && (price === 0 || rounded === price)) return null;
+                          return (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                              {edited && <span className="tnum" style={{ fontSize: 10, color: "var(--muted)" }}>AI: ${p._aiPrice!.toLocaleString()}</span>}
+                              {edited && (
+                                <button onClick={() => setPartPrice(p._id!, String(p._aiPrice))} title="Reset to the AI's suggestion" style={{ width: 20, height: 20, borderRadius: 6, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", cursor: "pointer" }}><RotateCcw size={11} color="var(--muted)" /></button>
+                              )}
+                              {price > 0 && rounded !== price && (
+                                <button onClick={() => setPartPrice(p._id!, String(rounded))} title="Round to a yard-friendly figure" className="tnum" style={{ padding: "2px 8px", borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", fontSize: 10.5, fontWeight: 600, cursor: "pointer" }}>≈ ${rounded.toLocaleString()}</button>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        {(() => {
+                          // A2 market check: comp-backed price proposal with provenance.
+                          const m = research.results[p.partName.toLowerCase().trim()];
+                          if (!m) return null;
+                          const off = price > 0 ? Math.round(((m.proposedPriceUsd - price) / price) * 100) : 0;
+                          return (
+                            <div style={{ display: "grid", gap: 3, justifyItems: "end" }}>
+                              <span title={m.sources.map((s) => `${s.title} — ${s.url}`).join("\n")} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, color: Math.abs(off) >= 40 ? "#f59e0b" : "var(--muted)", whiteSpace: "nowrap" }}>
+                                <Sparkles size={10} /> Market: ${m.proposedPriceUsd.toLocaleString()} · {m.compCount} sold{price > 0 && off !== 0 ? ` (${off > 0 ? "+" : ""}${off}%)` : ""}
+                              </span>
+                              <div style={{ display: "flex", gap: 4 }}>
+                                <button onClick={() => applyMarketCheck(p, m)} style={{ padding: "3px 9px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--accent-tint)", color: "var(--accent)", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>Use ${m.proposedPriceUsd.toLocaleString()}</button>
+                                <button onClick={() => dismissMarketCheck(p)} title="Dismiss" style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", cursor: "pointer" }}><X size={11} color="var(--muted)" /></button>
+                              </div>
+                            </div>
+                          );
+                        })()}
                         {sellMode === "both" && <span style={{ fontSize: 10, color: "var(--muted)" }}>suggested</span>}
                         {p.pricingInsight && (() => {
                           const ins = p.pricingInsight!;
@@ -1175,6 +1358,42 @@ function Thumb({ url, w, h, icon = "Car", iconSize = 28 }: { url?: string | null
     );
   }
   return <PhotoCell icon={icon} style={{ width: w, height: h, flexShrink: 0 }} iconSize={iconSize} />;
+}
+
+// Draggable price confidence band (low → high). The marker tracks the current price and
+// dragging it writes the price back — two-way sync with the numeric field. Green and
+// tight when the model was confident, amber and wide when it wasn't (incl. the fallback
+// band low-confidence "Review" parts get from lib/price-band).
+function PriceBand({ low, high, value, confidence, onChange }: { low: number; high: number; value: number; confidence: "high" | "medium" | "low"; onChange: (price: number) => void }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = React.useState(false);
+  const frac = bandFraction({ low, high }, value);
+  const color = confidence === "high" ? "var(--success)" : "#f59e0b";
+  const fromClientX = (clientX: number) => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r || r.width <= 0) return value;
+    return priceAtFraction({ low, high }, (clientX - r.left) / r.width);
+  };
+  return (
+    <div style={{ width: "100%", display: "grid", gap: 1 }}>
+      <div
+        ref={ref}
+        onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId); setDragging(true); onChange(fromClientX(e.clientX)); }}
+        onPointerMove={(e) => { if (dragging) onChange(fromClientX(e.clientX)); }}
+        onPointerUp={() => setDragging(false)}
+        onPointerCancel={() => setDragging(false)}
+        title={`AI price range $${low.toLocaleString()}–$${high.toLocaleString()} · drag to set the price`}
+        style={{ position: "relative", height: 16, cursor: "ew-resize", touchAction: "none" }}
+      >
+        <div style={{ position: "absolute", top: 6.5, left: 0, right: 0, height: 3, borderRadius: 2, background: `color-mix(in srgb, ${color} 30%, var(--line))` }} />
+        <div style={{ position: "absolute", top: 3, left: `calc(${(frac * 100).toFixed(1)}% - 5px)`, width: 10, height: 10, borderRadius: "50%", background: color, boxShadow: "0 0 0 2px var(--surface)", pointerEvents: "none" }} />
+      </div>
+      <div className="tnum" style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--muted)", lineHeight: 1 }}>
+        <span>${low.toLocaleString()}</span>
+        <span>${high.toLocaleString()}</span>
+      </div>
+    </div>
+  );
 }
 
 function ReportLine({ icon, text }: { icon: React.ReactNode; text: string }) {

@@ -24,7 +24,9 @@ export type QaPart = {
   compliance?: { label?: string } | undefined;
 };
 
-const sideOf = (s: string): "L" | "R" | null =>
+// Which side a name/description claims. Exported for the QA-resolver agent, which
+// rebuilds the same side-conflict cases this module flags.
+export const sideOf = (s: string): "L" | "R" | null =>
   /\bpassenger\b/i.test(s) ? "R" : /\bdriver\b/i.test(s) ? "L" : null;
 
 const names = (ps: QaPart[]) => ps.map((p) => p.partName).join(", ");
@@ -32,7 +34,8 @@ const names = (ps: QaPart[]) => ps.map((p) => p.partName).join(", ");
 // Do two photos name body colors with NO shared word (e.g. "gray" vs "gold")? That's a
 // strong signal the color was misread — or, more seriously, that the photos aren't all the
 // SAME vehicle. ("gray" vs "dark gray" share "gray" → not a conflict.) Returns the pair.
-function colorConflict(colors: string[]): [string, string] | null {
+// Exported for the QA-resolver agent, which re-reads colors and re-runs this same check.
+export function colorConflict(colors: string[]): [string, string] | null {
   const distinct = [...new Set(colors.map((c) => c.toLowerCase().trim()).filter(Boolean))];
   const words = distinct.map((c) => new Set(c.split(/\s+/)));
   for (let i = 0; i < distinct.length; i++)
