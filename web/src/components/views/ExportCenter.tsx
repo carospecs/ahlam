@@ -260,6 +260,15 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
             <span>Add <code>EBAY_CLIENT_ID</code>, <code>EBAY_CLIENT_SECRET</code> and <code>EBAY_REDIRECT_URI</code> in your environment, then redeploy. See the setup guide.</span>
           </div>
         )}
+        {ebay?.configured && !ebay.connected && (
+          <div style={{ display: "flex", gap: 8, fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, background: "var(--surface2)", borderRadius: 10, padding: "11px 14px" }}>
+            <Info size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>
+              <strong style={{ color: "var(--foreground)" }}>Already sell on eBay?</strong> Connecting takes one click.{" "}
+              <strong style={{ color: "var(--foreground)" }}>New to eBay?</strong> You&apos;ll do eBay&apos;s one-time seller setup first — create a (free) eBay account, then link a bank account for payouts and verify your identity. Have your business or legal name, address, and a tax ID (EIN or SSN) handy. It&apos;s free to register; eBay only charges fees when an item sells. After that, listing is one click.
+            </span>
+          </div>
+        )}
       </Card>
 
       {/* Other channels — prepare & open */}
@@ -895,7 +904,7 @@ function classifyEbayError(raw: string) {
   if (/at least one photo|requires at least one photo|add a photo/.test(e))
     return { kind: "photo", title: "Add a photo first", blurb: "eBay requires at least one photo on every listing.", steps: ["Open the part and add at least one photo.", "Then list it on eBay again."], showRaw: false };
   if (/seller'?s account|create a seller|register.*seller|additional information to create|not registered/.test(e))
-    return { kind: "sellerreg", title: "Finish your eBay seller registration", blurb: "Your eBay account isn't set up to sell yet. eBay needs a bit more info (payment + identity) before it will publish listings.", steps: ["Click Finish setup on eBay below, and complete the seller-account setup (link a payout method + verify your identity).", "It's a one-time step on eBay's side.", "Come back and List on eBay again."], showRaw: true };
+    return { kind: "sellerreg", title: "Finish your eBay seller registration", blurb: "Your eBay account isn't set up to sell yet — a one-time step eBay asks of every new seller (shops that already sell on eBay skip this). It's free; eBay only charges fees when an item actually sells.", steps: ["Click Finish setup on eBay below — it opens eBay's seller registration.", "Sign in, or create a free eBay account. If you're a registered business, pick a Business account.", "Have ready: your business or legal name and address, a tax ID (EIN or SSN), and a bank account for payouts.", "Link that bank account and verify your identity — this is the one-time part eBay requires.", "Come back here and hit List on eBay again. From now on it's one click."], showRaw: true };
   if (/motors/.test(e))
     return { kind: "motors", title: "eBay Motors couldn't accept this car", blurb: "Whole-vehicle listings run through eBay Motors, which has extra requirements and fees.", steps: ["Make sure year, make, model and a VIN are all set on the car.", "Confirm your eBay account is approved to sell vehicles.", "Try again, or use Post elsewhere to list it manually."], showRaw: true };
   return { kind: "generic", title: "eBay couldn't publish this", blurb: "eBay returned an error. The exact message is below — it usually points to what to fix.", steps: [], showRaw: true };
