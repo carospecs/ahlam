@@ -44,20 +44,19 @@ export function useData() { return useContext(DataContext); }
 // parts" is NOT in the list — it's the app's entry point, rendered as the pinned
 // "+ New scan" primary button above the groups (see Sidebar).
 const NAV = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard }, // home — pinned to the very top
-  { section: "Sell" }, // core loop + the headline value: post everywhere, then measure
-  { id: "vehicles", label: "Vehicles posted", icon: Car },
-  { id: "parts", label: "Parts posted", icon: Wrench },
+  { section: "Sell" }, // primary: home, the headline value (post + measure), and the market
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "export", label: "Export & posting", icon: Send },
-  { id: "analytics", label: "Analytics", icon: TrendingUp }, // sits next to Export — the two we lead with
-  { section: "Market" }, // marketplace + buyers, kept high (daily drivers)
+  { id: "analytics", label: "Analytics", icon: TrendingUp },
   { id: "browse", label: "Browse market", icon: Store },
+  { section: "Business" }, // run the shop: buyers, deals, ops
   { id: "messages", label: "Messages", icon: MessageSquare },
   { id: "orders", label: "Orders", icon: ShoppingBag },
-  { section: "Business" }, // run the shop
-  { id: "yard", label: "Yard", icon: MapPin }, // barcodes, bins, labels, NMVTIS — operational selling work
+  { id: "yard", label: "Yard", icon: MapPin }, // barcodes, bins, labels, NMVTIS
   { id: "interchange", label: "Interchange", icon: BookOpen },
-  { section: "Library" }, // media + documents
+  { section: "Library" }, // your posted inventory + media + documents
+  { id: "vehicles", label: "Vehicles posted", icon: Car },
+  { id: "parts", label: "Parts posted", icon: Wrench },
   { id: "gallery", label: "Gallery", icon: Images },
   { id: "files", label: "Files", icon: FolderClosed, ownerOnly: true },
 ];
