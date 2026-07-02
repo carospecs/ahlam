@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase-server";
+import { requireAdmin } from "@/lib/admin";
 import { supabaseAdmin } from "@/lib/supabase";
 
+// Admin-only: force a user's email to confirmed via the service role. This is a
+// founder/test tool, NOT a self-serve endpoint — a signed-in user must NOT be
+// able to confirm their own (or anyone's) email and bypass verification.
 export async function POST(req: Request) {
+  const admin = await requireAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
   let body: { email?: string };
   try {
     body = await req.json();
@@ -15,29 +23,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email required" }, { status: 400 });
   }
 
-  // Require authentication — only the user themselves can confirm their email.
-  const supabase = await supabaseServer();
-  const { data: { user: authUser }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !authUser) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (authUser.email?.toLowerCase() !== email) {
-    return NextResponse.json({ error: "You can only confirm your own email" }, { status: 403 });
-  }
+  const db = supabaseAdmin();
 
-  const admin = supabaseAdmin();
-
-  const { data: users, error: listErr } = await admin.auth.admin.listUsers();
-  if (listErr) {
-    return NextResponse.json({ error: listErr.message }, { status: 500 });
+  // Page through users to find the target (listUsers is paginated).
+  let user: { id: string; email?: string } | undefined;
+  for (let page = 1; page <= 50 && !user; page++) {
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    user = data.users.find((u) => u.email?.toLowerCase() === email);
+    if (data.users.length < 200) break; // last page
   }
-
-  const user = users.users.find((u) => u.email === email);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const { error: updateErr } = await admin.auth.admin.updateUserById(user.id, {
+  const { error: updateErr } = await db.auth.admin.updateUserById(user.id, {
     email_confirm: true,
   });
   if (updateErr) {

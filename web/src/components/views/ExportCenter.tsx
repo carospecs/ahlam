@@ -18,6 +18,7 @@ import { Card, PhotoCell, ConditionBadge, SellModeBadge } from "../UI";
 import { buildListingText, buildVehicleText } from "../data";
 import { useData, csToast } from "../Dashboard";
 import { WARRANTY_DAYS, effectiveWarranty, warrantyLabel } from "@/lib/warranty";
+import { fileToJpegDataUrl } from "@/lib/image";
 
 // Platforms with no listing API — we prepare the text + photos and open the
 // posting page so the seller just pastes and hits post.
@@ -554,9 +555,9 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
     if (!arr.length) return;
     setUploading(true);
     try {
-      const b64s = await Promise.all(arr.map((f) => new Promise<string>((res, rej) => {
-        const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(f);
-      })));
+      // Normalize every photo to a downscaled JPEG data URL — converts iPhone
+      // HEIC/HEIF so it isn't stored mislabeled as JPEG (these feed eBay/export).
+      const b64s = await Promise.all(arr.map((f) => fileToJpegDataUrl(f)));
       const payload = isCar ? { vehicleId: entity.id, photosBase64: b64s } : { listingId: entity.id, photosBase64: b64s };
       const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't upload photo"); setUploading(false); return; }

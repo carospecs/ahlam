@@ -10,6 +10,7 @@ import {
   Sun, Moon, TrendingUp, BookOpen, FolderClosed, MapPin, Trash2, Maximize2,
 } from "lucide-react";
 import { armAudio, playMessageChime } from "@/lib/notifySound";
+import { fileToJpegDataUrl } from "@/lib/image";
 import { buildListingText, buildVehicleText, partsForVehicle } from "./data";
 import { Overview } from "./views/Overview";
 import { Vehicles } from "./views/Vehicles";
@@ -420,9 +421,9 @@ function ExportModal() {
     if (!arr.length) return;
     setUploading(true);
     try {
-      const b64s = await Promise.all(arr.map((f) => new Promise<string>((res, rej) => {
-        const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(f);
-      })));
+      // Normalize every photo to a downscaled JPEG data URL — converts iPhone
+      // HEIC/HEIF so it isn't stored mislabeled as JPEG.
+      const b64s = await Promise.all(arr.map((f) => fileToJpegDataUrl(f)));
       const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: listing.id, photosBase64: b64s }) });
       if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't upload photo"); setUploading(false); return; }
       setListing((prev: any) => ({ ...prev, image: b64s[0] })); // optimistic preview

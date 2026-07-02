@@ -1,0 +1,13 @@
+-- Lock down shop_integrations. This table stores every shop's eBay OAuth
+-- access_token + refresh_token (see 0016_integrations.sql). It is the only
+-- table in the schema that was created without RLS, which means the public
+-- PostgREST API served with the anon key could read every shop's tokens.
+--
+-- Deny-by-default: enable RLS with NO policies, exactly like usage_events
+-- (0033) and interchange_cache (0022). All legitimate access goes through the
+-- service-role client (web/src/lib/ebay.ts -> supabaseAdmin()), which bypasses
+-- RLS, so the OAuth callback, token reads, and refresh keep working unchanged.
+-- No anon/authenticated client (browser or mobile) ever queries this table
+-- directly, so there is deliberately nothing to grant here.
+alter table shop_integrations enable row level security;
+-- No policies on purpose: only the service role (server) reads/writes tokens.

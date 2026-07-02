@@ -1,27 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { supabaseServer } from "@/lib/supabase-server";
+import { requireAdmin } from "@/lib/admin";
 import nodemailer from "nodemailer";
 
 // SMTP runs on Node APIs (net/tls), not the Edge runtime.
 export const runtime = "nodejs";
-
-// Founder / admin allowlist for reading the waitlist. Override with the
-// ADMIN_EMAILS env var (comma-separated) in production.
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "admin@gmail.com,mohammadabbas@ahlam.io,andygarcia@ahlam.io")
-  .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-
-async function requireAdmin(): Promise<string | null> {
-  // Returns the admin email if the caller is a signed-in allowlisted user, else null.
-  try {
-    const sb = await supabaseServer();
-    const { data: { user } } = await sb.auth.getUser();
-    const email = user?.email?.toLowerCase();
-    return email && ADMIN_EMAILS.includes(email) ? email : null;
-  } catch {
-    return null;
-  }
-}
 
 function csvCell(v: unknown): string {
   if (v == null) return "";

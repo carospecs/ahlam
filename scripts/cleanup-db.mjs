@@ -13,7 +13,15 @@ for (const line of envRaw.split("\n")) {
 }
 
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
-const ADMIN_EMAILS = ["admin@gmail.com", "admin1@gmail.com"];
+// Accounts to preserve during cleanup — reuse the app's admin allowlist.
+// Fail SAFE: if it's empty this destructive script refuses to run rather than
+// deleting every account (including the admins).
+const KEEP_EMAILS = (env.ADMIN_EMAILS || process.env.ADMIN_EMAILS || "")
+  .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+if (KEEP_EMAILS.length === 0) {
+  console.error("Refusing to clean up: set ADMIN_EMAILS so this knows which accounts to keep.");
+  process.exit(1);
+}
 
 async function runSql(sql) {
   const url = `https://api.supabase.com/v1/projects/wlwhvimdbthoaravnsmq/database/query`;
@@ -38,8 +46,8 @@ async function cleanup() {
   const { data: { users }, error: luErr } = await sb.auth.admin.listUsers();
   if (luErr) throw luErr;
 
-  const adminIds = users.filter(u => ADMIN_EMAILS.includes(u.email.toLowerCase())).map(u => u.id);
-  const toDeleteUsers = users.filter(u => !ADMIN_EMAILS.includes(u.email.toLowerCase()));
+  const adminIds = users.filter(u => KEEP_EMAILS.includes(u.email.toLowerCase())).map(u => u.id);
+  const toDeleteUsers = users.filter(u => !KEEP_EMAILS.includes(u.email.toLowerCase()));
   console.log("Admin users kept: " + adminIds.length);
   console.log("Non-admin users to delete: " + toDeleteUsers.length);
 
