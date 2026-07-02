@@ -13,6 +13,8 @@ export type Lang = "en" | "es";
 // Curated seeds — instant + high quality. The rest is filled by the API.
 const SEED: Record<string, string> = {
   "Marketplace": "Mercado", "My shop": "Mi taller", "Assist": "Asistencia",
+  "Sell": "Vender", "Business": "Negocio", "Discover": "Descubrir", "Library": "Biblioteca",
+  "New scan": "Nuevo escaneo", "Orders": "Pedidos", "Yard": "Patio", "Gallery": "Galería", "Files": "Archivos",
   "Overview": "Resumen", "Browse market": "Explorar mercado", "Vehicles posted": "Vehículos publicados",
   "Parts posted": "Piezas publicadas", "Add vehicle / parts": "Añadir vehículo / piezas",
   "Interchange": "Intercambio", "Analytics": "Analíticas", "AI assistant": "Asistente IA",

@@ -38,23 +38,27 @@ import { AddressAutocomplete, ZipField } from "./AddressAutocomplete";
 export const DataContext = createContext<any>({ user: {}, shop: {}, vehicles: [], listings: [], threads: [], activity: [] });
 export function useData() { return useContext(DataContext); }
 
+// Navigation mirrors the actual workflow: scan → catalog → post (Sell), run the shop
+// (Business), look outward (Discover), reference material (Library). "Add vehicle /
+// parts" is NOT in the list — it's the app's entry point, rendered as the pinned
+// "+ New scan" primary button above the groups (see Sidebar).
 const NAV = [
-  { section: "Marketplace" },
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "browse", label: "Browse market", icon: Store },
-  { id: "orders", label: "Orders", icon: ShoppingBag },
-  { section: "My shop" },
+  { section: "Sell" }, // the core create→post loop
   { id: "vehicles", label: "Vehicles posted", icon: Car },
   { id: "parts", label: "Parts posted", icon: Wrench },
-  { id: "add", label: "Add vehicle / parts", icon: CirclePlus },
-  { id: "interchange", label: "Interchange", icon: BookOpen },
-  { id: "yard", label: "Yard", icon: MapPin },
-  { id: "analytics", label: "Analytics", icon: TrendingUp },
-  { id: "files", label: "Files", icon: FolderClosed, ownerOnly: true },
-  { section: "Assist" },
-  { id: "gallery", label: "Gallery", icon: Images },
   { id: "export", label: "Export & posting", icon: Send },
+  { id: "yard", label: "Yard", icon: MapPin }, // barcodes, bins, labels, NMVTIS — operational selling work
+  { section: "Business" }, // run the shop / close deals
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "orders", label: "Orders", icon: ShoppingBag },
+  { id: "analytics", label: "Analytics", icon: TrendingUp },
   { id: "messages", label: "Messages", icon: MessageSquare },
+  { section: "Discover" }, // outward-facing / lookup
+  { id: "browse", label: "Browse market", icon: Store },
+  { id: "interchange", label: "Interchange", icon: BookOpen },
+  { section: "Library" }, // media + documents
+  { id: "gallery", label: "Gallery", icon: Images },
+  { id: "files", label: "Files", icon: FolderClosed, ownerOnly: true },
 ];
 
 const META: Record<string, { title: string; sub: string }> = {
@@ -95,6 +99,16 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
         <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span>
         <button className="cs-navclose" onClick={onClose} style={sx.navClose}><X size={18} color="var(--muted)" /></button>
       </div>
+      {/* Primary action — every screen funnels into the scan, so it's a pinned filled
+          button above the groups, not a nav row buried mid-list. */}
+      <button
+        className="cs-raise"
+        onClick={() => onNav("add")}
+        title={t("Add vehicle / parts")}
+        style={{ ...sx.newScan, ...(active === "add" ? sx.newScanOn : {}) }}
+      >
+        <CirclePlus size={18} /> {t("New scan")}
+      </button>
       <nav style={{ display: "grid", gap: 3, marginTop: 4, overflowY: "auto" }}>
         {nav.map((n, i) => {
           if ("section" in n) {
@@ -904,6 +918,8 @@ const sx: Record<string, React.CSSProperties> = {
   logo: { width: 34, height: 34, borderRadius: 10, background: "var(--accent)", display: "grid", placeItems: "center" },
   navItem: { display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 10, border: "none", background: "transparent", color: "var(--muted)", fontSize: 14, fontWeight: 600, width: "100%", transition: "background 0.12s, color 0.12s" },
   navItemOn: { background: "var(--surface2)", color: "var(--foreground)", boxShadow: "inset 3px 0 0 var(--accent)" },
+  newScan: { display: "flex", alignItems: "center", justifyContent: "center", gap: 9, padding: "11px 14px", borderRadius: 11, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 700, width: "100%", cursor: "pointer", marginTop: 2 },
+  newScanOn: { boxShadow: "0 0 0 2px var(--surface), 0 0 0 4px var(--accent)" },
   navSection: { fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", padding: "12px 12px 4px" },
   shopCard: { display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, background: "var(--surface2)", border: "1px solid var(--line)" },
   shopIcon: { width: 30, height: 30, borderRadius: 8, background: "var(--accent-tint)", display: "grid", placeItems: "center", flexShrink: 0 },
