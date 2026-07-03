@@ -9,7 +9,7 @@ import { geminiGenerate } from "@/lib/gemini";
 import { anthropicEnabled, claudePriceParts, type RawPricedPart } from "@/lib/anthropic";
 import { decodeVin, engineLabel } from "@/lib/vin";
 import { type ConditionGrade } from "@/lib/age-pricing";
-import { partClass, usedPointFromBand, usedPointFallback, gradeAdjustUsed } from "@/lib/used-pricing";
+import { gradeAdjustUsed } from "@/lib/used-pricing";
 import { classifyPowertrain, powertrainPromptLine } from "@/lib/powertrain";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -121,8 +121,9 @@ export async function POST(req: Request) {
   const raw: RawPriced[] = parsed;
 
   // Match the model's prices back to the requested parts by name, falling back to
-  // positional order. Then the same math as the scan: class-positioned point in the
-  // used band × grade factor, band grade-adjusted so it brackets the price.
+  // positional order. Claude's typical-used-price IS the price (2026-07-03: class
+  // positioning removed — it double-discounted on top of an already-conservative
+  // estimate); only the grade factor applies, and the band renders as confidence.
   const num = (v: unknown): number | null => (typeof v === "number" && v > 0 ? v : null);
   type Priced = { mid: number | null; lo: number | null; hi: number | null };
   const fromRaw = (r: RawPriced | undefined): Priced => {
@@ -139,10 +140,7 @@ export async function POST(req: Request) {
   const out = parts.map((p, i) => {
     const priced = byName.get(p.name.toLowerCase().trim()) ?? fromRaw(raw[i]);
     const grade = (["A", "B", "C"] as const).includes(p.grade as ConditionGrade) ? (p.grade as ConditionGrade) : "B";
-    const cls = partClass(p.name);
-    const base = priced.lo != null && priced.hi != null
-      ? usedPointFromBand(priced.lo, priced.hi, cls)
-      : (priced.mid != null ? usedPointFallback(priced.mid, cls) : null);
+    const base = priced.mid;
     return {
       name: p.name,
       usedPartPriceUsd: base,

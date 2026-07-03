@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { vehicleAge, ageFactor } from "@/lib/age-pricing";
-import { partClass, usedPointFromBand, usedPointFallback, gradeAdjustUsed } from "@/lib/used-pricing";
+import { gradeAdjustUsed } from "@/lib/used-pricing";
 import { classifyPowertrain, isImpossiblePart, powertrainPromptLine, type PowertrainType } from "@/lib/powertrain";
 import { geminiGenerate } from "@/lib/gemini";
 import { decodeVin, normalizeVin, engineLabel, type VinInfo, type VinDecode } from "@/lib/vin";
@@ -707,16 +707,17 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     if (powertrain.source !== "default") data = data.filter((p) => !isImpossiblePart(p.partName, powertrain.type));
 
     // ── PRICING (lib/used-pricing) ───────────────────────────────────────────
-    // usedPartPriceUsd is the model's good-used (Grade B) market anchor. The final
-    // suggested price = point positioned in the used band by PART CLASS (painted
-    // panels → low end; fast movers → middle) × GRADE factor (A ×1.15, B ×1.0,
-    // C null — heavily damaged stays unpriced for the seller to judge).
+    // usedPartPriceUsd is the model's good-used (Grade B) market anchor and IS the
+    // base price (2026-07-03: class positioning removed — it double-discounted an
+    // already-conservative estimate). GRADE factor still applies (A ×1.15, B ×1.0,
+    // C null — heavily damaged stays unpriced for the seller to judge); the band
+    // renders as the confidence range.
     for (const p of data) {
       const grade: ConditionGrade = (["A", "B", "C"] as const).includes(p.condition) ? p.condition : "B";
-      const cls = partClass(p.partName);
-      const base = p.usedPartPriceLowUsd != null && p.usedPartPriceHighUsd != null
-        ? usedPointFromBand(p.usedPartPriceLowUsd, p.usedPartPriceHighUsd, cls)
-        : (p.usedPartPriceUsd != null ? usedPointFallback(p.usedPartPriceUsd, cls) : null);
+      const base = p.usedPartPriceUsd
+        ?? (p.usedPartPriceLowUsd != null && p.usedPartPriceHighUsd != null
+          ? Math.round((p.usedPartPriceLowUsd + p.usedPartPriceHighUsd) / 2)
+          : null);
       p.usedPartPriceUsd = base; // normalized anchor — what pair-parity shares
       const price = gradeAdjustUsed(base, grade);
       p.suggestedPriceUsd = price;

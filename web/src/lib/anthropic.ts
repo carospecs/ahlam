@@ -113,8 +113,9 @@ export async function claudePriceParts(
 }
 
 // Pure helper: pull cited source pages out of web_search_tool_result content
-// blocks (the market-check route shows these as badge tooltips). Kept free of
-// SDK/env access at call time so plain `node` can unit-test it.
+// blocks. No live call site since the advisory market check was removed
+// (2026-07-03); kept for the eval scripts and any future web-search feature.
+// Free of SDK/env access at call time so plain `node` can unit-test it.
 export function extractSearchSources(content: unknown[]): { title: string; url: string }[] {
   const out: { title: string; url: string }[] = [];
   const seen = new Set<string>();

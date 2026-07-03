@@ -56,9 +56,6 @@ interface VehicleEstimate {
 }
 type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; vehicleFront?: string; piiRegions?: PiiBox[] } | { ok: false; userMessage: string; internalError: string };
 
-// A market-comp research result for one part (A2 agent, /api/price-research).
-type MarketCheck = { compMedianUsd: number; compCount: number; proposedPriceUsd: number; confidence: "high" | "low"; sources: { title: string; url: string }[] };
-
 // Map a scan-QA flag message to the agent case kind that can settle it (A1).
 function qaKindOf(message: string): "side" | "color" | "zone" | null {
   if (message.startsWith("Description names the opposite side")) return "side";
@@ -288,10 +285,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   // Which stage of the analyzing card to narrate: vision catalog vs the blocking
   // Claude pricing pass that follows it (pricing runs before results render).
   const [scanStage, setScanStage] = React.useState<"scanning" | "pricing">("scanning");
-  // Agent state (docs/agent-layer-blueprint.md) — transient advisory results; a new scan
-  // resets both. A1 = QA resolver (settles warn flags), A2 = market-comp price research.
+  // Agent state (docs/agent-layer-blueprint.md) — transient advisory results; a new
+  // scan resets it. A1 = QA resolver (settles warn flags).
   const [qaAgent, setQaAgent] = React.useState<{ running: boolean; resolutions: QaAgentResolution[] }>({ running: false, resolutions: [] });
-  const [research, setResearch] = React.useState<{ running: boolean; results: Record<string, MarketCheck> }>({ running: false, results: {} });
   const fileRef = React.useRef<HTMLInputElement>(null);
   const partSeq = React.useRef(0);
   // After a remount (e.g. returning to a restored session), continue ids above the
@@ -348,7 +344,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
     const myToken = beginScanRun();
     setPhase("analyzing"); setError(null); setScanStage("scanning");
     setQaAgent({ running: false, resolutions: [] });
-    setResearch({ running: false, results: {} });
     // VIN-FIRST: resolve the VIN BEFORE cataloging, so every photo is classified AND
     // priced for the exact vehicle on the first pass (no blind classification, no
     // after-the-fact reprice). A typed VIN wins; otherwise read it from the photos in
@@ -538,9 +533,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
           .then((resolutions) => { if (isScanRun(myToken)) setQaAgent({ running: false, resolutions }); });
       }
 
-      // A2 market research fires immediately — pricing already completed above, so
-      // the top-value list includes the freshly priced battery pack / engine.
-      void researchMarket(myToken, shownParts, agg);
     } catch (e) {
       if (!isScanRun(myToken)) return; // cancelled / superseded
       setError("We couldn't reach the analysis server. Check your connection and try again.");
@@ -585,41 +577,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       }));
     } catch {
       return null; // network/parse error or timeout — vision prices render
-    }
-  }
-
-  // PRICING RESEARCH AGENT (A2): after results land, market-check the top-value parts
-  // via grounded web search on the server. Advisory only — the results render as an
-  // accept/dismiss badge per part; the formula prices stand until the seller accepts.
-  async function researchMarket(token: number, current: AIPart[], agg: { year?: string; make?: string; model?: string; trim?: string | null; engine?: string | null } | null) {
-    if (!agg?.make || !agg?.model) return; // no vehicle identity → nothing to search comps for
-    // Inferred parts are INCLUDED — a BEV's battery pack or a sedan's engine is often
-    // the highest-value item on the car precisely because no photo showed it.
-    const eligible = current.filter((p) => p.condition !== "C" && (p.suggestedPriceUsd || 0) >= 150);
-    if (!eligible.length) return;
-    setResearch({ running: true, results: {} });
-    try {
-      const res = await fetch("/api/price-research", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          vehicle: { year: agg.year, make: agg.make, model: agg.model, trim: agg.trim, engine: agg.engine },
-          parts: eligible.map((p) => ({ name: p.partName, grade: p.condition, currentPriceUsd: p.suggestedPriceUsd })),
-        }),
-      });
-      const j = await res.json();
-      if (!isScanRun(token)) return;
-      const results: Record<string, MarketCheck> = {};
-      if (j?.ok && Array.isArray(j.results)) {
-        for (const r of j.results) {
-          if (r?.name && typeof r.proposedPriceUsd === "number" && Array.isArray(r.sources) && r.sources.length) {
-            results[String(r.name).toLowerCase().trim()] = r;
-          }
-        }
-      }
-      setResearch({ running: false, results });
-    } catch {
-      if (isScanRun(token)) setResearch({ running: false, results: {} });
     }
   }
 
@@ -686,20 +643,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
     if (!r.edit || !r.partId) return;
     setParts((prev) => prev.map((p) => (p._id === r.partId ? { ...p, ...applyQaEdit(p, r.edit!) } : p)));
     csToast(r.edit.field === "condition" ? "Downgraded to Grade B and repriced" : r.edit.field === "partName" ? "Part name corrected" : "Description corrected");
-  }
-
-  // Accept / dismiss a market-comp price proposal (A2).
-  function applyMarketCheck(p: AIPart, m: MarketCheck) {
-    setPartPrice(p._id!, String(m.proposedPriceUsd));
-    dismissMarketCheck(p);
-    csToast(`Priced to market: $${m.proposedPriceUsd.toLocaleString()} (${m.compCount} sold comps)`);
-  }
-  function dismissMarketCheck(p: AIPart) {
-    setResearch((prev) => {
-      const results = { ...prev.results };
-      delete results[p.partName.toLowerCase().trim()];
-      return { ...prev, results };
-    });
   }
 
   // Relative nudge: ±pct% of the CURRENT price, so sellers adjust without retyping.
@@ -1226,11 +1169,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                   <span style={{ color: "var(--muted)", fontWeight: 500 }}> · {sellMode === "both" ? "shown as suggested in your post" : "tap any field to fix it"}</span>
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  {research.running && (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--accent)" }}>
-                      <Sparkles size={12} /> Checking market comps…
-                    </span>
-                  )}
                   {anyAiPriced && (
                     <button onClick={() => setAllPctOfSuggested(100)} title="Reset every price to the AI's suggestion" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 12, fontWeight: 600 }}>
                       <RotateCcw size={13} /> Reset all to AI
@@ -1310,23 +1248,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                               {price > 0 && rounded !== price && (
                                 <button onClick={() => setPartPrice(p._id!, String(rounded))} title="Round to a yard-friendly figure" className="tnum" style={{ padding: "2px 8px", borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", fontSize: 10.5, fontWeight: 600, cursor: "pointer" }}>≈ ${rounded.toLocaleString()}</button>
                               )}
-                            </div>
-                          );
-                        })()}
-                        {(() => {
-                          // A2 market check: comp-backed price proposal with provenance.
-                          const m = research.results[p.partName.toLowerCase().trim()];
-                          if (!m) return null;
-                          const off = price > 0 ? Math.round(((m.proposedPriceUsd - price) / price) * 100) : 0;
-                          return (
-                            <div style={{ display: "grid", gap: 3, justifyItems: "end" }}>
-                              <span title={m.sources.map((s) => `${s.title} — ${s.url}`).join("\n")} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, color: Math.abs(off) >= 40 ? "#f59e0b" : "var(--muted)", whiteSpace: "nowrap" }}>
-                                <Sparkles size={10} /> Market: ${m.proposedPriceUsd.toLocaleString()} · {m.compCount} sold{price > 0 && off !== 0 ? ` (${off > 0 ? "+" : ""}${off}%)` : ""}
-                              </span>
-                              <div style={{ display: "flex", gap: 4 }}>
-                                <button onClick={() => applyMarketCheck(p, m)} style={{ padding: "3px 9px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--accent-tint)", color: "var(--accent)", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>Use ${m.proposedPriceUsd.toLocaleString()}</button>
-                                <button onClick={() => dismissMarketCheck(p)} title="Dismiss" style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", cursor: "pointer" }}><X size={11} color="var(--muted)" /></button>
-                              </div>
                             </div>
                           );
                         })()}
