@@ -44,6 +44,9 @@ async function getAppToken(): Promise<string | null> {
 // it works from serverless where scraping eBay would be blocked. `partName` is
 // used only to sanity-check the answer against the band. Returns null if grounding
 // is unavailable, finds no number, or the value is implausible.
+// FOLLOW-UP: this manual PricingToggle lookup still uses Gemini grounding. The scan's
+// market check (api/price-research) moved to Claude web_search — migrate this the same
+// way (see researchPartClaude there) when touching it next.
 export async function groundedMedianPrice(query: string, partName: string): Promise<number | null> {
   try {
     const res = await geminiGenerate("gemini-2.5-flash", {

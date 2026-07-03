@@ -14,6 +14,10 @@ command -v vercel >/dev/null || { echo "Install the Vercel CLI first: npm i -g v
 # Keys the web app actually needs at runtime.
 KEYS=(
   OPENAI_API_KEY
+  GEMINI_API_KEY
+  GEMINI_API_KEY_FALLBACK
+  ANTHROPIC_API_KEY
+  PRICING_MODEL
   NEXT_PUBLIC_SUPABASE_URL
   NEXT_PUBLIC_SUPABASE_ANON_KEY
   SUPABASE_SERVICE_ROLE_KEY

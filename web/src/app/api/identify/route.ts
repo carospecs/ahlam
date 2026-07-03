@@ -40,6 +40,10 @@ export interface PricingInsight {
   // Confidence in the estimate. Mirrors the part's vision confidence; "low" when
   // the model year was unknown (age, and therefore depreciation, is a guess).
   confidence?: "high" | "medium" | "low";
+  // Which pricing engine produced the number: "claude" = the blocking price pass
+  // (the authority), "gemini" = its server-side fallback, "vision" = the per-photo
+  // scan estimate that renders only when the price pass failed. Stamped client-side.
+  pricedBy?: "claude" | "gemini" | "vision";
   // Transparency breakdown for the UI: the brand-new base price and the two
   // multipliers that produced suggestedPrice (newPartPrice × ageFactor × condition).
   newPartPrice?: number | null;

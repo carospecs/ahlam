@@ -1,11 +1,12 @@
-// VIN-anchored re-pricing — one cheap text-only Gemini call that re-estimates each
-// part's USED-market price for the EXACT decoded vehicle, then applies the same
-// class curve + grade factor as the scan (lib/used-pricing). Used by AddVehicle to
-// auto-refine prices when a VIN was found in the photos (decoded only after the
-// vision call), and to price code-generated inferred powertrain parts (battery pack,
-// drive units) that no photo showed.
+// The universal pricing pass — Claude (Opus 4.8 by default) prices every scan's
+// part list for the EXACT decoded vehicle, then the server applies the same
+// class curve + grade factor as the scan (lib/used-pricing). Runs BLOCKING in the
+// scan's critical path: the first prices the seller sees come from here. Fallback
+// tiers: Claude → the original Gemini text call (kept verbatim below) → the client
+// renders the Gemini-vision prices it already has.
 import { NextResponse } from "next/server";
 import { geminiGenerate } from "@/lib/gemini";
+import { anthropicEnabled, claudePriceParts, type RawPricedPart } from "@/lib/anthropic";
 import { decodeVin, engineLabel } from "@/lib/vin";
 import { type ConditionGrade } from "@/lib/age-pricing";
 import { partClass, usedPointFromBand, usedPointFallback, gradeAdjustUsed } from "@/lib/used-pricing";
@@ -13,7 +14,7 @@ import { classifyPowertrain, powertrainPromptLine } from "@/lib/powertrain";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 90; // Claude ≤40s + Gemini fallback + VIN decode
 
 const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -25,7 +26,26 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS });
 }
 
-type InPart = { name: string; grade: string };
+type InPart = { name: string; grade: string; inferred?: boolean };
+
+type RawPriced = { name?: string; usedPartPriceUsd?: unknown; usedPartPriceLowUsd?: unknown; usedPartPriceHighUsd?: unknown };
+
+// Tier-2 fallback: the original Gemini text-only pricing call, prompt unchanged.
+async function geminiPriceParts(prompt: string): Promise<RawPriced[] | null> {
+  try {
+    const res = await geminiGenerate("gemini-2.5-flash", {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0, responseMimeType: "application/json" },
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    const text: string = (j.candidates?.[0]?.content?.parts || []).map((p: { text?: string }) => p.text ?? "").join("");
+    const arr = JSON.parse(text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim());
+    return Array.isArray(arr) ? arr : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(req: Request) {
   // Auth: web session cookie OR Bearer token (same as /api/identify).
@@ -83,25 +103,29 @@ export async function POST(req: Request) {
     `Return ONLY a JSON array (no prose), one object per part, shape: [{"name": string, "usedPartPriceUsd": number|null, "usedPartPriceLowUsd": number|null, "usedPartPriceHighUsd": number|null}]. ` +
     `Use the exact part names given.\n\nParts:\n${list}`;
 
-  let parsed: { name?: string; usedPartPriceUsd?: unknown; usedPartPriceLowUsd?: unknown; usedPartPriceHighUsd?: unknown }[] = [];
-  try {
-    const res = await geminiGenerate("gemini-2.5-flash", {
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0, responseMimeType: "application/json" },
+  // Tier 1: Claude (the pricing authority). Tier 2: the Gemini call. Both return
+  // the same raw shape; a null falls through — the route never 500s on a model error.
+  let parsed: RawPriced[] | null = null;
+  let pricedBy: "claude" | "gemini" = "gemini";
+  if (anthropicEnabled()) {
+    const claude: RawPricedPart[] | null = await claudePriceParts({
+      vehicleId: id,
+      spec,
+      powertrainLine: powertrain.source !== "default" ? powertrainPromptLine(powertrain.type) : null,
+      parts,
     });
-    if (!res.ok) return NextResponse.json({ ok: false, error: `model ${res.status}` }, { status: 502, headers: CORS });
-    const j = await res.json();
-    const text: string = (j.candidates?.[0]?.content?.parts || []).map((p: { text?: string }) => p.text ?? "").join("");
-    const arr = JSON.parse(text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim());
-    if (Array.isArray(arr)) parsed = arr;
-  } catch { return NextResponse.json({ ok: false, error: "parse" }, { status: 502, headers: CORS }); }
+    if (claude) { parsed = claude; pricedBy = "claude"; }
+  }
+  if (!parsed) parsed = await geminiPriceParts(prompt);
+  if (!parsed) return NextResponse.json({ ok: false, error: "pricing unavailable" }, { status: 502, headers: CORS });
+  const raw: RawPriced[] = parsed;
 
   // Match the model's prices back to the requested parts by name, falling back to
   // positional order. Then the same math as the scan: class-positioned point in the
   // used band × grade factor, band grade-adjusted so it brackets the price.
   const num = (v: unknown): number | null => (typeof v === "number" && v > 0 ? v : null);
   type Priced = { mid: number | null; lo: number | null; hi: number | null };
-  const fromRaw = (r: (typeof parsed)[number] | undefined): Priced => {
+  const fromRaw = (r: RawPriced | undefined): Priced => {
     const mid = num(r?.usedPartPriceUsd);
     let lo = num(r?.usedPartPriceLowUsd), hi = num(r?.usedPartPriceHighUsd);
     if (mid == null || lo == null || hi == null) return { mid, lo: null, hi: null };
@@ -109,11 +133,11 @@ export async function POST(req: Request) {
     return { mid, lo: Math.min(lo, mid), hi: Math.max(hi, mid) };
   };
   const byName = new Map<string, Priced>();
-  parsed.forEach((r) => {
+  raw.forEach((r) => {
     if (typeof r?.name === "string") byName.set(r.name.toLowerCase().trim(), fromRaw(r));
   });
   const out = parts.map((p, i) => {
-    const priced = byName.get(p.name.toLowerCase().trim()) ?? fromRaw(parsed[i]);
+    const priced = byName.get(p.name.toLowerCase().trim()) ?? fromRaw(raw[i]);
     const grade = (["A", "B", "C"] as const).includes(p.grade as ConditionGrade) ? (p.grade as ConditionGrade) : "B";
     const cls = partClass(p.name);
     const base = priced.lo != null && priced.hi != null
@@ -128,5 +152,5 @@ export async function POST(req: Request) {
     };
   });
 
-  return NextResponse.json({ ok: true, vehicle: id, parts: out }, { headers: CORS });
+  return NextResponse.json({ ok: true, vehicle: id, pricedBy, parts: out }, { headers: CORS });
 }
