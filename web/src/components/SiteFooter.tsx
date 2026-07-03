@@ -43,15 +43,23 @@ const COLS: Col[] = [
   ] },
   { h: "Company", links: [
     { label: "Book a demo", href: CAL_DEMO_URL, external: true },
-    { label: "Contact us", href: `mailto:${RECIPIENTS}`, external: true },
+    { label: "Contact us", href: "/contact" },
     { label: "Feedback", href: `mailto:${RECIPIENTS}?subject=Ahlam%20feedback`, external: true },
+  ] },
+  { h: "Legal", links: [
+    { label: "Terms of Service", href: "/terms" },
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Refunds", href: "/refunds" },
+    { label: "Guidelines", href: "/guidelines" },
+    { label: "Acceptable Use", href: "/acceptable-use" },
+    { label: "Cookies", href: "/cookies" },
   ] },
 ];
 
 export function SiteFooter() {
   return (
     <footer style={{ borderTop: "1px solid var(--line)", position: "relative", zIndex: 1, background: "var(--background)" }}>
-      <div className="cs-footer-grid" style={{ maxWidth: 1080, margin: "0 auto", padding: "52px 24px 28px", display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr 1fr 1fr", gap: 32 }}>
+      <div className="cs-footer-grid" style={{ maxWidth: 1080, margin: "0 auto", padding: "52px 24px 28px", display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr 1fr 1fr 1fr", gap: 32 }}>
         <div style={{ maxWidth: 280 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}><BrandChip size={28} /><span style={{ fontSize: 16, fontWeight: 700 }}>Ahlam</span></div>
           <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6, margin: "14px 0 0" }}>
@@ -92,9 +100,11 @@ export function SiteFooter() {
       </div>
       <div style={{ borderTop: "1px solid var(--line)" }}>
         <div style={{ maxWidth: 1080, margin: "0 auto", padding: "18px 24px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>© {new Date().getFullYear()} Ahlam. All rights reserved.</span>
-          <a href={`mailto:${RECIPIENTS}`} style={{ ...footLink, marginLeft: "auto" }}>andygarcia@ahlam.io</a>
-          <a href={`mailto:${RECIPIENTS}`} style={footLink}>{CONTACT}</a>
+          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>© {new Date().getFullYear()} Ahlam Inc. All rights reserved.</span>
+          <Link href="/terms" style={{ ...footLink, fontSize: 12.5 }}>Terms</Link>
+          <Link href="/privacy" style={{ ...footLink, fontSize: 12.5 }}>Privacy</Link>
+          <Link href="/refunds" style={{ ...footLink, fontSize: 12.5 }}>Refunds</Link>
+          <a href={`mailto:${RECIPIENTS}`} style={{ ...footLink, marginLeft: "auto" }}>{CONTACT}</a>
           <Link href="/waitlist" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Join the waitlist</Link>
         </div>
       </div>
