@@ -244,14 +244,12 @@ VEHICLE ESTIMATE ("vehicle"):
 - "newWholeCarPriceUsd": the vehicle's ORIGINAL price BRAND NEW (its MSRP / sticker price when it was first sold), in USD — NOT its current used value. Base it on the make/model/year/trim you identified. If you cannot estimate it, use null. (The system applies depreciation from the vehicle's age automatically — do not pre-depreciate it yourself.)
 - If you are unsure of any field, set it to null and lower "confidence".
 
-PRICING — report each part's USED-MARKET price. This is a USED vehicle being parted out by a dismantler:
-- "usedPartPriceUsd": the typical price this part ACTUALLY SELLS FOR as a USED/recycled part — what dismantlers and salvage yards get for it on car-part.com, eBay sold listings, and LKQ for THIS exact make/model/year/trim, in good used (Grade B) condition. NEVER the new/OEM/MSRP/aftermarket-new price — a used part sells for a FRACTION of new.
-- The system applies the condition-grade adjustment itself — report the good-used baseline and let the grade (A/B/C) you already assigned carry the wear. Do not zero a damaged part; grade it C instead.
-- BE CONSERVATIVE ON LARGE PAINTED BODY PANELS (doors, liftgate/tailgate, hood, quarter panels, fenders, bumper covers, roof): they move slowly, cost a lot to ship, and face heavy local supply — they usually sell near the LOW end of any listed range, far below what body shops charge. A used door for a mainstream vehicle is typically $100–$400, not $1,000+.
-- Small fast-moving parts (mirrors, lamps, glass, modules, sensors) hold value better and sell nearer the middle of their range.
+PRICING — report each part's USED-LISTING price. This is a USED vehicle being parted out by a dismantler:
+- "usedPartPriceUsd": the typical price a dismantler LISTS this part for as a USED/recycled part — the realistic ASKING price you'd see on car-part.com, eBay, and dismantler listings for THIS exact make/model/year/trim, in good used (Grade B) condition. NEVER the new/OEM/MSRP/aftermarket-new price (a used part lists for a FRACTION of new), and not a fire-sale or wholesale clearance price either — the price a yard would actually put on the listing.
+- The system applies the condition-grade handling itself — report the good-used baseline and let the grade (A/B/C) you already assigned carry the wear. Do not zero a damaged part; grade it C instead.
 - Left & right of a paired part have the SAME price — don't differ them. "Wheel / Rim" and "Tire" each get their own price.
 - Use realistic round numbers. If you genuinely have no basis for a price, use null rather than guessing.
-- "usedPartPriceLowUsd" / "usedPartPriceHighUsd": the realistic USED-market RANGE — what the same part sells for across condition/market variation. low ≤ usedPartPriceUsd ≤ high, always. Keep it TIGHT (±15% or less) when you know this part and vehicle well; make it WIDE when you're less sure. If usedPartPriceUsd is null, both are null.
+- "usedPartPriceLowUsd" / "usedPartPriceHighUsd": the realistic USED-listing RANGE — what the same part lists for across condition/market variation. low ≤ usedPartPriceUsd ≤ high, always. Keep it TIGHT (±15% or less) when you know this part and vehicle well; make it WIDE when you're less sure. If usedPartPriceUsd is null, both are null.
 
 NO INFERRED / GUESSED PARTS:
 - Catalog ONLY what you can actually see in the photo. If a part is not visible, do NOT list it — never infer, guess, or assume.
@@ -327,7 +325,7 @@ function vinContext(decoded: { make?: string | null; model?: string | null; year
     decoded.drivetrain ? `drivetrain ${decoded.drivetrain}` : null,
   ].filter(Boolean).join(", ");
   return `\n\nKNOWN SOURCE VEHICLE — decoded from its VIN; treat as GROUND TRUTH and override any visual guess: ${id}${specs ? ` (${specs})` : ""}.` +
-    ` Classify each part as the correct part FOR THIS EXACT VEHICLE, set its "fitment" to this vehicle, and base "usedPartPriceUsd" on what a USED part for this make/model/year/trim${decoded.engine ? "/engine" : ""} actually sells for.` +
+    ` Classify each part as the correct part FOR THIS EXACT VEHICLE, set its "fitment" to this vehicle, and base "usedPartPriceUsd" on the typical dismantler LISTING price for a USED part for this make/model/year/trim${decoded.engine ? "/engine" : ""}.` +
     ` Only include a part if it visibly belongs to this vehicle.`;
 }
 

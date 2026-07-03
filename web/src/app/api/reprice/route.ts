@@ -92,13 +92,14 @@ export async function POST(req: Request) {
   const list = parts.map((p, i) => `${i + 1}. ${p.name}`).join("\n");
   const prompt =
     `You price USED auto parts for salvage yards / dismantlers. For a USED ${id}${spec ? ` (${spec})` : ""}, give the typical ` +
-    `price each part below ACTUALLY SELLS FOR as a USED/recycled part (car-part.com, eBay sold listings, LKQ) in good used ` +
-    `condition — NEVER the new/OEM/MSRP price; a used part sells for a fraction of new. ` +
+    `price a dismantler LISTS each part below for as a USED/recycled part — the realistic ASKING price you'd see on ` +
+    `car-part.com, eBay, and dismantler listings for this exact vehicle in good used condition. ` +
+    `NEVER the new/OEM/MSRP/aftermarket-new price (a used part lists for a fraction of new), and not a fire-sale or ` +
+    `wholesale clearance price either — the price a yard would actually put on the listing. ` +
     `${powertrain.source !== "default" ? powertrainPromptLine(powertrain.type) + " " : ""}` +
-    `Be conservative on large painted body panels (doors, liftgate, hood, fenders, quarter panels, bumper covers): they move ` +
-    `slowly and sell near the LOW end of any range. Left & right of a paired part get the SAME price. ` +
+    `Left & right of a paired part get the SAME price. ` +
     `Use realistic round numbers; if you truly have no basis for one, use null. ` +
-    `Also give the realistic USED-market RANGE as usedPartPriceLowUsd / usedPartPriceHighUsd (low ≤ price ≤ high): ` +
+    `Also give the realistic USED-listing RANGE as usedPartPriceLowUsd / usedPartPriceHighUsd (low ≤ price ≤ high): ` +
     `tight (±15% or less) when you know the part and vehicle well, wider when you're less sure. Null range when the price is null.\n\n` +
     `Return ONLY a JSON array (no prose), one object per part, shape: [{"name": string, "usedPartPriceUsd": number|null, "usedPartPriceLowUsd": number|null, "usedPartPriceHighUsd": number|null}]. ` +
     `Use the exact part names given.\n\nParts:\n${list}`;
