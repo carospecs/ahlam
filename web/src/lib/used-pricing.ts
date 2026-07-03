@@ -15,9 +15,9 @@
 // was REMOVED from live pricing — stacked on the prompt's already-conservative
 // painted-panel guidance it double-discounted and drove prices low. The model's
 // typical-used-price is now the base directly; the band renders as the confidence
-// range. Only GRADE ADJUST applies: the anchor is good-used (Grade B); Grade A
-// commands a premium (×1.15), Grade C stays unpriced (seller sets it after
-// inspection). partClass/CLASS_QUANTILE/usedPoint* below are kept for reference,
+// range. Only GRADE ADJUST applies: the anchor is good-used; A and B price as-is
+// (the Grade-A ×1.15 premium was removed the same day — it overvalued parts),
+// Grade C stays unpriced (seller sets it after inspection). partClass/CLASS_QUANTILE/usedPoint* below are kept for reference,
 // evals, and their unit tests — no live call site uses them.
 //
 // The parts TOTAL built from these prices is GROSS retail potential, not net
@@ -70,10 +70,12 @@ export function usedPointFallback(pointUsd: number, cls: PartClass): number {
   return cls === "painted-panel" ? Math.round(pointUsd * 0.75) : Math.round(pointUsd);
 }
 
-// Grade multipliers around the good-used (Grade B) anchor. C is null — heavily
-// damaged parts stay unpriced for the seller to judge (unchanged convention).
+// Grade multipliers around the good-used (Grade B) anchor. 2026-07-03: the Grade-A
+// premium (was ×1.15) removed — the model's estimate already reflects what a clean
+// used part sells for, so a markup overvalued it. A and B price as-is; C is null —
+// heavily damaged parts stay unpriced for the seller to judge (unchanged convention).
 export const GRADE_FACTOR: Record<ConditionGrade, number | null> = {
-  A: 1.15,
+  A: 1.0,
   B: 1.0,
   C: null,
 };

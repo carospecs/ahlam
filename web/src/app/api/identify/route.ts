@@ -709,9 +709,9 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     // ── PRICING (lib/used-pricing) ───────────────────────────────────────────
     // usedPartPriceUsd is the model's good-used (Grade B) market anchor and IS the
     // base price (2026-07-03: class positioning removed — it double-discounted an
-    // already-conservative estimate). GRADE factor still applies (A ×1.15, B ×1.0,
-    // C null — heavily damaged stays unpriced for the seller to judge); the band
-    // renders as the confidence range.
+    // already-conservative estimate). GRADE only gates: A/B price as-is (the ×1.15
+    // A-premium was also removed — it overvalued parts), C null — heavily damaged
+    // stays unpriced for the seller to judge; the band renders as confidence.
     for (const p of data) {
       const grade: ConditionGrade = (["A", "B", "C"] as const).includes(p.condition) ? p.condition : "B";
       const base = p.usedPartPriceUsd

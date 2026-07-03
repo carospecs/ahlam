@@ -83,8 +83,8 @@ test("no band: painted panels get the 25% haircut, others pass through", () => {
 
 // ── gradeAdjustUsed ──────────────────────────────────────────────────────────
 
-test("grade factors: A ×1.15, B ×1.0, C null", () => {
-  assert.equal(gradeAdjustUsed(1000, "A"), 1150);
+test("grade factors: A ×1.0 (premium removed 2026-07-03), B ×1.0, C null", () => {
+  assert.equal(gradeAdjustUsed(1000, "A"), 1000);
   assert.equal(gradeAdjustUsed(1000, "B"), 1000);
   assert.equal(gradeAdjustUsed(1000, "C"), null);
 });
