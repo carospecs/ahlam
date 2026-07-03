@@ -106,10 +106,25 @@ async function researchPartGemini(vehicleId: string, spec: string, part: InPart)
 }
 
 // Primary engine: Claude with the server-side web_search tool. THROWS on an API
-// failure (so the dispatcher can fall back to Gemini for that part) and returns
-// null only when the search legitimately found nothing usable.
+// failure or when the per-part wall-clock budget runs out (so the dispatcher can
+// fall back to Gemini for that part) and returns null only when the search
+// legitimately found nothing usable.
+//
+// Wall-clock budget: a web-search turn can chain pause_turn continuations, and the
+// unbounded worst case (45s × 4 calls) blew past the route's maxDuration and 504'd
+// the whole batch in production. Each part now gets CLAUDE_PART_BUDGET_MS total —
+// every call's timeout is clipped to the time remaining, and when it runs out the
+// throw hands this part to the (fast) Gemini engine with room left in the route.
+const CLAUDE_PART_BUDGET_MS = 55_000;
+
 async function researchPartClaude(vehicleId: string, spec: string, part: InPart): Promise<ResearchResult | null> {
   const query = `${vehicleId} ${part.name}`;
+  const deadline = Date.now() + CLAUDE_PART_BUDGET_MS;
+  const timeLeft = () => {
+    const ms = deadline - Date.now();
+    if (ms < 3_000) throw new Error("claude part budget exhausted");
+    return Math.min(ms, 30_000);
+  };
   const params = {
     model: pricingModel(),
     max_tokens: 16000,
@@ -122,15 +137,16 @@ async function researchPartClaude(vehicleId: string, spec: string, part: InPart)
   ];
   let resp = await getAnthropic().messages.create(
     { ...params, messages: messages as never },
-    { timeout: 45_000 },
+    { timeout: timeLeft() },
   );
   // Server-tool loop: pause_turn means the search loop hit its iteration limit —
-  // resend with the assistant content appended and it resumes. Bounded.
-  for (let i = 0; i < 3 && resp.stop_reason === "pause_turn"; i++) {
+  // resend with the assistant content appended and it resumes. Bounded by both an
+  // iteration cap and the wall-clock budget above.
+  for (let i = 0; i < 2 && resp.stop_reason === "pause_turn"; i++) {
     messages = [...messages, { role: "assistant", content: resp.content }];
     resp = await getAnthropic().messages.create(
       { ...params, messages: messages as never },
-      { timeout: 45_000 },
+      { timeout: timeLeft() },
     );
   }
   const text = resp.content.filter((b) => b.type === "text").map((b) => b.text).join("\n");
@@ -184,7 +200,14 @@ export async function POST(req: Request) {
     .slice(0, MAX_PARTS);
   if (!parts.length) return NextResponse.json({ ok: false, error: "no parts" }, { status: 400, headers: CORS });
 
-  const results = (await Promise.all(parts.map((p) => researchPart(vehicleId, spec, p)))).filter(Boolean);
+  // Race each part against a hard cap under maxDuration: a part that can't finish
+  // in time yields null (formula price stands) instead of 504ing the whole batch.
+  const capped = (p: InPart) =>
+    Promise.race<ResearchResult | null>([
+      researchPart(vehicleId, spec, p),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 80_000)),
+    ]).catch(() => null);
+  const results = (await Promise.all(parts.map(capped))).filter(Boolean);
 
   return NextResponse.json({ ok: true, vehicle: vehicleId, results }, { headers: CORS });
 }
