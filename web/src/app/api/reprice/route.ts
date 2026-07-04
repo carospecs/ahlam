@@ -1,12 +1,15 @@
-// The universal pricing pass — Claude (Opus 4.8 by default) prices every scan's
-// part list for the EXACT decoded vehicle, then the server applies the same
-// class curve + grade factor as the scan (lib/used-pricing). Runs BLOCKING in the
-// scan's critical path: the first prices the seller sees come from here. Fallback
-// tiers: Claude → the original Gemini text call (kept verbatim below) → the client
-// renders the Gemini-vision prices it already has.
+// The universal pricing pass — every scan's part list is priced for the EXACT
+// decoded vehicle through a tier ladder, BLOCKING in the scan's critical path:
+//   cached market comp (≤14d) → live web research (market-pricing agent) →
+//   Claude memory estimate → Gemini → the client's Gemini-vision prices.
+// Market tiers return evidence-based confidence + comp counts + source domains;
+// MARKET_RESEARCH=off skips both market tiers (exact pre-agent behavior).
 import { NextResponse } from "next/server";
 import { geminiGenerate } from "@/lib/gemini";
 import { anthropicEnabled, claudePriceParts, type RawPricedPart } from "@/lib/anthropic";
+import { marketPriceParts, type MarketConfidence } from "@/lib/market-pricing";
+import { compKey, readMarketComps, writeMarketComps } from "@/lib/market-cache";
+import { isSanePrice } from "@/lib/price-bands";
 import { decodeVin, engineLabel } from "@/lib/vin";
 import { type ConditionGrade } from "@/lib/age-pricing";
 import { gradeAdjustUsed } from "@/lib/used-pricing";
@@ -14,7 +17,7 @@ import { classifyPowertrain, powertrainPromptLine } from "@/lib/powertrain";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "nodejs";
-export const maxDuration = 90; // Claude ≤40s + Gemini fallback + VIN decode
+export const maxDuration = 300; // market research ≤120s + memory/Gemini fallbacks + VIN decode
 
 const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -104,27 +107,12 @@ export async function POST(req: Request) {
     `Return ONLY a JSON array (no prose), one object per part, shape: [{"name": string, "usedPartPriceUsd": number|null, "usedPartPriceLowUsd": number|null, "usedPartPriceHighUsd": number|null}]. ` +
     `Use the exact part names given.\n\nParts:\n${list}`;
 
-  // Tier 1: Claude (the pricing authority). Tier 2: the Gemini call. Both return
-  // the same raw shape; a null falls through — the route never 500s on a model error.
-  let parsed: RawPriced[] | null = null;
-  let pricedBy: "claude" | "gemini" = "gemini";
-  if (anthropicEnabled()) {
-    const claude: RawPricedPart[] | null = await claudePriceParts({
-      vehicleId: id,
-      spec,
-      powertrainLine: powertrain.source !== "default" ? powertrainPromptLine(powertrain.type) : null,
-      parts,
-    });
-    if (claude) { parsed = claude; pricedBy = "claude"; }
-  }
-  if (!parsed) parsed = await geminiPriceParts(prompt);
-  if (!parsed) return NextResponse.json({ ok: false, error: "pricing unavailable" }, { status: 502, headers: CORS });
-  const raw: RawPriced[] = parsed;
-
-  // Match the model's prices back to the requested parts by name, falling back to
-  // positional order. Claude's typical-used-price IS the price (2026-07-03: class
-  // positioning removed — it double-discounted on top of an already-conservative
-  // estimate); only the grade factor applies, and the band renders as confidence.
+  // ── THE TIER LADDER ────────────────────────────────────────────────────────
+  // cached market comp (≤14d) → live web research → Claude memory → Gemini.
+  // Every tier returns the same raw {name, price, low, high} shape; market tiers
+  // also carry evidence metadata (confidence/compCount/sources). A tier failure
+  // falls through — the route never 500s on a model error. MARKET_RESEARCH=off
+  // restores the exact pre-agent behavior (memory → Gemini).
   const num = (v: unknown): number | null => (typeof v === "number" && v > 0 ? v : null);
   type Priced = { mid: number | null; lo: number | null; hi: number | null };
   const fromRaw = (r: RawPriced | undefined): Priced => {
@@ -134,20 +122,92 @@ export async function POST(req: Request) {
     if (lo > hi) [lo, hi] = [hi, lo];
     return { mid, lo: Math.min(lo, mid), hi: Math.max(hi, mid) };
   };
-  const byName = new Map<string, Priced>();
-  raw.forEach((r) => {
-    if (typeof r?.name === "string") byName.set(r.name.toLowerCase().trim(), fromRaw(r));
-  });
+  const nameKey = (s: string) => s.toLowerCase().trim();
+  const gradeOf = (p: InPart): ConditionGrade =>
+    (["A", "B", "C"] as const).includes(p.grade as ConditionGrade) ? (p.grade as ConditionGrade) : "B";
+
+  type Meta = { confidence: MarketConfidence; compCount: number; sources: string[] };
+  const byName = new Map<string, Priced>();     // winning price rows, keyed by part name
+  const metaByName = new Map<string, Meta>();   // market-evidence metadata where a market tier priced
+  let fullRaw: RawPriced[] | null = null;       // full-list tier result — enables positional name-drift fallback
+  let pricedBy: "claude-market" | "claude" | "gemini" = "gemini";
+
+  const marketOn = process.env.MARKET_RESEARCH !== "off" && anthropicEnabled();
+  const powertrainLine = powertrain.source !== "default" ? powertrainPromptLine(powertrain.type) : null;
+
+  if (marketOn) {
+    // Tier 0 — cache: a rescan of the same vehicle prices in seconds, same numbers.
+    const cached = await readMarketComps(parts.map((p) => compKey(id, spec, p.name, gradeOf(p))));
+    const researchable: InPart[] = [];
+    for (const p of parts) {
+      const hit = cached[compKey(id, spec, p.name, gradeOf(p))];
+      if (gradeOf(p) === "C") continue; // no research spend; gradeAdjustUsed nulls it anyway
+      if (hit) {
+        byName.set(nameKey(p.name), { mid: hit.price_usd, lo: hit.low_usd, hi: hit.high_usd });
+        metaByName.set(nameKey(p.name), { confidence: hit.confidence, compCount: hit.comp_count, sources: hit.sources });
+      } else {
+        researchable.push(p);
+      }
+    }
+
+    // Tier 1 — live research: one agent call for everything the cache didn't cover.
+    const fresh = researchable.length
+      ? await marketPriceParts({ vehicleId: id, spec, powertrainLine, parts: researchable })
+      : [];
+    if (fresh) {
+      const gradeByName = new Map(researchable.map((p) => [nameKey(p.name), gradeOf(p)]));
+      const written: { part: (typeof fresh)[number]; grade: string }[] = [];
+      for (const r of fresh) {
+        const key = nameKey(r.name);
+        if (!gradeByName.has(key)) continue; // echo drift to an unknown name — ignore
+        // Sanity rail: an implausible researched price is DROPPED (never clamped)
+        // and the part falls to the vision price the client already has.
+        if (r.usedPartPriceUsd != null && !isSanePrice(r.usedPartPriceUsd, r.name)) continue;
+        byName.set(key, { mid: r.usedPartPriceUsd, lo: r.usedPartPriceLowUsd, hi: r.usedPartPriceHighUsd });
+        metaByName.set(key, { confidence: r.confidence, compCount: r.compCount, sources: r.sourceDomains });
+        written.push({ part: r, grade: gradeByName.get(key)! });
+      }
+      pricedBy = "claude-market";
+      void writeMarketComps(id, spec, written); // best-effort, evidence-backed rows only
+    }
+  }
+
+  // Tiers 2/3 — memory, then Gemini: run when research is off or its call failed.
+  // Cached market rows (if any) still win over the full-list result.
+  if (pricedBy !== "claude-market") {
+    let parsed: RawPriced[] | null = null;
+    if (anthropicEnabled()) {
+      const claude: RawPricedPart[] | null = await claudePriceParts({ vehicleId: id, spec, powertrainLine, parts });
+      if (claude) { parsed = claude; pricedBy = "claude"; }
+    }
+    if (!parsed) { parsed = await geminiPriceParts(prompt); if (parsed) pricedBy = "gemini"; }
+    if (!parsed && byName.size === 0) {
+      return NextResponse.json({ ok: false, error: "pricing unavailable" }, { status: 502, headers: CORS });
+    }
+    if (parsed) {
+      fullRaw = parsed;
+      for (const r of parsed) {
+        if (typeof r?.name !== "string") continue;
+        const key = nameKey(r.name);
+        if (!byName.has(key)) byName.set(key, fromRaw(r)); // cache overlay wins
+      }
+    }
+  }
+
+  // Claude's price IS the price (class positioning removed 2026-07-03); only the
+  // grade gate applies (A/B as-is, C unpriced) and the band renders as confidence.
   const out = parts.map((p, i) => {
-    const priced = byName.get(p.name.toLowerCase().trim()) ?? fromRaw(raw[i]);
-    const grade = (["A", "B", "C"] as const).includes(p.grade as ConditionGrade) ? (p.grade as ConditionGrade) : "B";
-    const base = priced.mid;
+    const key = nameKey(p.name);
+    const priced = byName.get(key) ?? (fullRaw ? fromRaw(fullRaw[i]) : { mid: null, lo: null, hi: null });
+    const grade = gradeOf(p);
+    const meta = metaByName.get(key);
     return {
       name: p.name,
-      usedPartPriceUsd: base,
-      suggestedPriceUsd: gradeAdjustUsed(base, grade),
+      usedPartPriceUsd: priced.mid,
+      suggestedPriceUsd: gradeAdjustUsed(priced.mid, grade),
       suggestedPriceLowUsd: gradeAdjustUsed(priced.lo, grade),
       suggestedPriceHighUsd: gradeAdjustUsed(priced.hi, grade),
+      ...(meta ? { confidence: meta.confidence, compCount: meta.compCount, sources: meta.sources } : {}),
     };
   });
 

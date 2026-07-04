@@ -33,17 +33,21 @@ export interface PricingInsight {
   suggestedPrice: number;
   priceRange: { min: number; max: number };
   similarCount: number;
-  // How the price was produced. "formula" = the deterministic age × condition
-  // model (current). The legacy comp-ladder rungs are kept in the union so any
-  // older persisted rows still type-check.
-  source?: "formula" | "shop" | "grounded" | "ebay" | "asking" | "model";
-  // Confidence in the estimate. Mirrors the part's vision confidence; "low" when
-  // the model year was unknown (age, and therefore depreciation, is a guess).
+  // How the price was produced. "market" = the market-pricing agent (live web
+  // research, evidence-based confidence, cited comp domains); "formula" = model
+  // estimate. The legacy comp-ladder rungs are kept in the union so any older
+  // persisted rows still type-check.
+  source?: "market" | "formula" | "shop" | "grounded" | "ebay" | "asking" | "model";
+  // Confidence in the estimate. For "market" it's evidence-based (comps found);
+  // otherwise it mirrors the part's vision confidence.
   confidence?: "high" | "medium" | "low";
-  // Which pricing engine produced the number: "claude" = the blocking price pass
-  // (the authority), "gemini" = its server-side fallback, "vision" = the per-photo
-  // scan estimate that renders only when the price pass failed. Stamped client-side.
-  pricedBy?: "claude" | "gemini" | "vision";
+  // Which pricing engine produced the number: "claude-market" = the market-pricing
+  // agent (live research/cache), "claude" = the memory estimate, "gemini" = its
+  // server-side fallback, "vision" = the per-photo scan estimate that renders only
+  // when the price pass failed. Stamped client-side.
+  pricedBy?: "claude-market" | "claude" | "gemini" | "vision";
+  // Market tier only: bare domains the comps came from (e.g. ["ebay.com"]).
+  sources?: string[];
   // Transparency breakdown for the UI: the brand-new base price and the two
   // multipliers that produced suggestedPrice (newPartPrice × ageFactor × condition).
   newPartPrice?: number | null;

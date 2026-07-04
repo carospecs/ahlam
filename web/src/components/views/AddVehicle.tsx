@@ -38,7 +38,7 @@ interface AIPart {
   lowConfidenceFields?: string[];
   // Pricing provenance from the ladder (AHLAM-53): which rung set the price + how
   // trustworthy it is. Spread through from the identify response.
-  pricingInsight?: { source?: "shop" | "grounded" | "ebay" | "asking" | "model" | "formula"; confidence?: "high" | "medium" | "low"; similarCount?: number; ebayMedian?: number; ebayRange?: { min: number; max: number }; pricedBy?: "claude" | "gemini" | "vision" };
+  pricingInsight?: { source?: "shop" | "grounded" | "ebay" | "asking" | "model" | "formula" | "market"; confidence?: "high" | "medium" | "low"; similarCount?: number; ebayMedian?: number; ebayRange?: { min: number; max: number }; pricedBy?: "claude-market" | "claude" | "gemini" | "vision"; sources?: string[] };
   // Restricted-resale flag from the scan (AHLAM-54), surfaced in the review summary.
   compliance?: { label: string; reason: string };
   photoUrl?: string; // the photo this part was scanned from — used as its thumbnail
@@ -556,23 +556,30 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       const res = await fetch("/api/reprice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Client-side cap: worst case the seller waits +45s, then vision prices render.
-        signal: AbortSignal.timeout(45_000),
+        // Client-side cap: live market research can take 1–3 minutes; past 210s the
+        // vision prices render instead. (Server budget: maxDuration 300.)
+        signal: AbortSignal.timeout(210_000),
         body: JSON.stringify({ vin: vin || undefined, vehicle: vehicleId, parts: current.map((p) => ({ name: p.partName, grade: p.condition, inferred: p.inferred || undefined })) }),
       });
       const j = await res.json();
       if (!isScanRun(token)) return null; // a newer scan superseded this one
       if (!j?.ok || !Array.isArray(j.parts)) return null;
-      const pricedBy: "claude" | "gemini" | undefined = j.pricedBy === "claude" || j.pricedBy === "gemini" ? j.pricedBy : undefined;
-      const byName = new Map<string, { suggestedPriceUsd: number | null; usedPartPriceUsd: number | null; suggestedPriceLowUsd?: number | null; suggestedPriceHighUsd?: number | null }>();
+      const pricedBy: "claude-market" | "claude" | "gemini" | undefined =
+        j.pricedBy === "claude-market" || j.pricedBy === "claude" || j.pricedBy === "gemini" ? j.pricedBy : undefined;
+      const byName = new Map<string, { suggestedPriceUsd: number | null; usedPartPriceUsd: number | null; suggestedPriceLowUsd?: number | null; suggestedPriceHighUsd?: number | null; confidence?: "high" | "medium" | "low"; compCount?: number; sources?: string[] }>();
       for (const r of j.parts) if (r && typeof r.name === "string") byName.set(r.name.toLowerCase().trim(), r);
       return reconcilePairPrices(current.map((p) => {
         const r = byName.get(p.partName.toLowerCase().trim());
         if (!r || typeof r.usedPartPriceUsd !== "number" || r.usedPartPriceUsd <= 0) return p;
+        // Market-priced parts carry evidence: source "market", the researched
+        // confidence, real comp count, and the domains the comps came from.
+        const market = !!r.confidence;
         return {
           ...p, usedPartPriceUsd: r.usedPartPriceUsd, suggestedPriceUsd: r.suggestedPriceUsd, _aiPrice: r.suggestedPriceUsd ?? p._aiPrice,
           suggestedPriceLowUsd: r.suggestedPriceLowUsd ?? p.suggestedPriceLowUsd, suggestedPriceHighUsd: r.suggestedPriceHighUsd ?? p.suggestedPriceHighUsd,
-          pricingInsight: { ...p.pricingInsight, source: p.pricingInsight?.source ?? "model", confidence: p.pricingInsight?.confidence ?? p.confidence, pricedBy },
+          pricingInsight: market
+            ? { source: "market" as const, confidence: r.confidence, similarCount: r.compCount ?? 0, pricedBy, sources: r.sources ?? [] }
+            : { ...p.pricingInsight, source: p.pricingInsight?.source ?? "model", confidence: p.pricingInsight?.confidence ?? p.confidence, pricedBy },
         };
       }));
     } catch {
@@ -894,15 +901,15 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             <ScanLine size={26} color={SCAN_TONE} style={{ position: "absolute", inset: 0, margin: "auto" }} />
           </div>
           <div>
-            <div style={{ fontSize: 17, fontWeight: 700 }}>{scanStage === "pricing" ? "Pricing your parts…" : "Scanning your car…"}</div>
+            <div style={{ fontSize: 17, fontWeight: 700 }}>{scanStage === "pricing" ? "Checking live market prices…" : "Scanning your car…"}</div>
             <div style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 420, marginTop: 6, lineHeight: 1.5 }}>
               {scanStage === "pricing"
-                ? "Parts identified. Now pricing each one for your exact vehicle against the used market."
+                ? "Parts identified. Now researching what each one actually lists for on the used-parts market — real comps, not guesses."
                 : "Reading your photos to identify the vehicle and every sellable part, including the VIN or stock number if they show in a picture."}
             </div>
           </div>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: "var(--signal)", background: "var(--signal-bg)", border: "1px solid color-mix(in srgb, var(--signal) 35%, transparent)", borderRadius: 999, padding: "7px 14px" }}>
-            <Info size={14} /> This usually takes under a minute. Hang tight.
+            <Info size={14} /> {scanStage === "pricing" ? "Market research can take 1–3 minutes. Hang tight." : "This usually takes under a minute. Hang tight."}
           </div>
         </Card>
       )}
@@ -1254,18 +1261,23 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                         {sellMode === "both" && <span style={{ fontSize: 10, color: "var(--muted)" }}>suggested</span>}
                         {p.pricingInsight && (() => {
                           const ins = p.pricingInsight!;
-                          const LBL: Record<string, string> = { shop: "Sold comps", grounded: "Market data", ebay: "eBay listings", asking: "Active asking", model: "AI estimate", formula: "AI estimate" };
+                          const LBL: Record<string, string> = { shop: "Sold comps", grounded: "Market data", ebay: "eBay listings", asking: "Active asking", model: "AI estimate", formula: "AI estimate", market: "Live market comps" };
                           const label = LBL[ins.source || "model"] || "AI estimate";
                           const dot = ins.confidence === "high" ? "#16a34a" : ins.confidence === "medium" ? "#f59e0b" : "var(--muted)";
                           const em = Number(ins.ebayMedian) || 0;
                           const n = Number(ins.similarCount) || 0;
                           // Provenance in the tooltip only — no vendor names surfaced to sellers.
-                          const engine = ins.pricedBy === "claude" ? " · market model" : ins.pricedBy ? " · fallback estimate" : "";
+                          const engine = ins.pricedBy === "claude-market" ? " · researched live" : ins.pricedBy === "claude" ? " · market model" : ins.pricedBy ? " · fallback estimate" : "";
                           return (
                             <>
                               <span title={`${label} · ${ins.confidence || "low"} confidence${engine}`} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap" }}>
                                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, flexShrink: 0 }} />{label}
                               </span>
+                              {ins.source === "market" && n > 0 && (
+                                <span title={(ins.sources || []).join(", ")} style={{ fontSize: 10, color: "var(--muted)", whiteSpace: "nowrap", textAlign: "right" }}>
+                                  {n} comp{n === 1 ? "" : "s"}{ins.sources?.length ? ` · ${ins.sources.slice(0, 2).join(", ")}` : ""}
+                                </span>
+                              )}
                               {em > 0 && (
                                 <span style={{ fontSize: 10, color: "var(--muted)", whiteSpace: "nowrap", textAlign: "right" }}>
                                   Selling on eBay ~${em.toLocaleString()}{n ? ` · ${n} listings` : ""}
