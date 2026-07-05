@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { sendMail, FOUNDER_REVIEWERS } from "@/lib/mailer";
 
 export const runtime = "nodejs";
 
@@ -66,13 +67,33 @@ export async function POST(req: Request) {
     .maybeSingle();
   if (existing) return NextResponse.json({ ok: true, status: "pending", duplicate: true });
 
+  const cleanDetail = detail.toString().slice(0, 500);
   const { error } = await db.from("verification_requests").insert({
     shop_id: shopId,
     method,
-    detail: detail.toString().slice(0, 500),
+    detail: cleanDetail,
     status: "pending",
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Tell the founders there's something to review. Fire-and-forget: the
+  // request is already saved and shows in the adminhost queue either way.
+  const { data: shop } = await db.from("shops").select("name").eq("id", shopId).maybeSingle();
+  sendMail({
+    to: FOUNDER_REVIEWERS,
+    subject: `Verification request: ${(shop as { name?: string } | null)?.name || "a shop"}`,
+    text: [
+      "A seller asked to be verified on Ahlam.",
+      "",
+      `Shop: ${(shop as { name?: string } | null)?.name || shopId}`,
+      `Requested by: ${user.email || user.id}`,
+      `Method: ${method}`,
+      `Detail: ${cleanDetail}`,
+      "",
+      "Review and approve it in the founder console:",
+      "https://ahlam.io/adminhost",
+    ].join("\n"),
+  }).catch(() => {});
 
   return NextResponse.json({ ok: true, status: "pending" });
 }

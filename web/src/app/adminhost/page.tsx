@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import Link from "next/link";
-import { RefreshCw, Users, LogOut, ExternalLink, Send, Trash2 } from "lucide-react";
+import { RefreshCw, Users, LogOut, ExternalLink, Send, Trash2, ShieldCheck } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
 const Login = lazy(() => import("@/components/Login").then((m) => ({ default: m.Login })));
@@ -226,6 +226,8 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                 </div>
               </div>
 
+              <VerificationQueue canEdit={canEdit} />
+
               {/* Users table */}
               {saveNote && (
                 <div style={{ marginTop: 14, fontSize: 13, fontWeight: 600, color: saveNote.startsWith("Could not") || saveNote.startsWith("Network") ? "var(--danger)" : "var(--success)" }}>
@@ -335,6 +337,91 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
             </>
           );
         })()}
+      </div>
+    </div>
+  );
+}
+
+// Seller verification review queue. Requests land here (and in the founders'
+// email); approving stamps the shop verified so the badge shows on its
+// storefront and listings.
+function VerificationQueue({ canEdit }: { canEdit: boolean }) {
+  const [requests, setRequests] = useState<
+    { id: string; shopId: string; shopName: string; method: string; detail: string; createdAt: string | null }[] | null
+  >(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+
+  const loadQueue = useCallback(() => {
+    fetch("/api/admin/verification", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setRequests(Array.isArray(d.requests) ? d.requests : []))
+      .catch(() => setRequests([]));
+  }, []);
+  useEffect(() => { loadQueue(); }, [loadQueue]);
+
+  async function decide(id: string, shopName: string, action: "approve" | "reject") {
+    setBusy(id);
+    setNote("");
+    try {
+      const r = await fetch("/api/admin/verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId: id, action }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) setNote(`Could not ${action} ${shopName}: ${d.error || r.status}`);
+      else setNote(action === "approve" ? `${shopName} is now verified.` : `Rejected ${shopName}'s request.`);
+      loadQueue();
+    } catch {
+      setNote(`Network error deciding ${shopName}. Refresh and check.`);
+    }
+    setBusy(null);
+  }
+
+  const METHOD_LABELS: Record<string, string> = { business: "Business email", phone: "Phone", license: "License / permit" };
+
+  if (requests === null || requests.length === 0) return null; // nothing pending — stay out of the way
+
+  return (
+    <div className="cs-panel" style={{ marginTop: 16, padding: "18px 20px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <ShieldCheck size={16} color="var(--accent)" />
+        <span style={{ fontSize: 13.5, fontWeight: 700 }}>Seller verification requests</span>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--accent)", background: "var(--accent-tint)", borderRadius: 999, padding: "2px 9px" }}>{requests.length} pending</span>
+      </div>
+      {note && <div style={{ fontSize: 13, fontWeight: 600, margin: "6px 0", color: note.startsWith("Could not") || note.startsWith("Network") ? "var(--danger)" : "var(--success)" }}>{note}</div>}
+      <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+        {requests.map((q) => (
+          <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 10, background: "var(--surface2)" }}>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700 }}>{q.shopName}</div>
+              <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2, wordBreak: "break-word" }}>
+                {METHOD_LABELS[q.method] || q.method}: <span style={{ color: "var(--foreground)" }}>{q.detail}</span>
+              </div>
+            </div>
+            {canEdit ? (
+              <span style={{ display: "inline-flex", gap: 8 }}>
+                <button
+                  onClick={() => decide(q.id, q.shopName, "approve")}
+                  disabled={busy === q.id}
+                  style={{ border: "none", borderRadius: 8, background: "var(--success)", color: "#fff", fontSize: 12.5, fontWeight: 700, padding: "7px 14px", cursor: "pointer", opacity: busy === q.id ? 0.6 : 1 }}
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => decide(q.id, q.shopName, "reject")}
+                  disabled={busy === q.id}
+                  style={{ border: "1px solid var(--line)", borderRadius: 8, background: "transparent", color: "var(--muted)", fontSize: 12.5, fontWeight: 600, padding: "7px 14px", cursor: "pointer", opacity: busy === q.id ? 0.6 : 1 }}
+                >
+                  Reject
+                </button>
+              </span>
+            ) : (
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>read-only</span>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
