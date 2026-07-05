@@ -710,7 +710,7 @@ function PostVisual() {
             transition={{ delay: 0.1 + i * 0.1, duration: 0.35, ease: EASE }}
             className="cs-well" style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between", padding: "12px 14px" }}
           >
-            <span style={{ display: "inline-flex", alignItems: "center", color: "var(--foreground)", opacity: c.soon ? 0.55 : 1, filter: c.soon ? "grayscale(1)" : undefined }}>{c.logo}</span>
+            <span style={{ display: "inline-flex", alignItems: "center", color: "var(--foreground)" }}>{c.logo}</span>
             {c.soon
               ? <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent)", whiteSpace: "nowrap" }}>Soon</span>
               : <Check size={15} color="var(--success)" />}
