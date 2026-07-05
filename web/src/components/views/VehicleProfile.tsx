@@ -257,7 +257,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
               {vinData && (
                 <>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    {vinData.make && <VINField icon={Building} label="Make" value={vinData.make} />}
+                    {vinData.make && <VINField icon={Building} label="Company/Brand" value={vinData.make} />}
                     {vinData.model && <VINField icon={Car} label="Model" value={vinData.model} />}
                     {vinData.year && <VINField icon={Hash} label="Year" value={String(vinData.year)} />}
                     {vinData.trim && <VINField icon={Car} label="Trim" value={vinData.trim} />}

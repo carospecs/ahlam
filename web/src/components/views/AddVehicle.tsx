@@ -1088,7 +1088,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             const dispL = vi.displacementL || (vi.displacement ? (Number(vi.displacement) / 1000).toFixed(1) : null);
             const engineStr = [dispL ? `${dispL}L` : null, vi.engineCylinders ? `${vi.engineCylinders}-cyl` : null, vi.engine].filter(Boolean).join(" ");
             const rows: [string, string | null][] = [
-              ["VIN", vi.vin], ["Year", vi.year ? String(vi.year) : null], ["Make", vi.make], ["Model", vi.model],
+              ["VIN", vi.vin], ["Year", vi.year ? String(vi.year) : null], ["Company/Brand", vi.make], ["Model", vi.model],
               ["Trim", vi.trim], ["Body", vi.bodyClass], ["Engine", engineStr || null],
               ["Fuel", vi.fuelType], ["Transmission", vi.transmission], ["Drivetrain", vi.driveType],
               ["Doors", vi.doors], ["Seating", vi.seatingCapacity], ["Built in", [vi.plantCity, vi.plantState, vi.plantCountry].filter(Boolean).join(", ") || null],

@@ -310,7 +310,7 @@ export function Browse() {
               </div>
             </>
           ) : (
-            <Select label="Make" value={vehMake} onChange={setVehMake} options={vehMakes} />
+            <Select label="Company/Brand" value={vehMake} onChange={setVehMake} options={vehMakes} />
           )}
           <Select label="Sort" value={sort} onChange={setSort} options={[["recommended", "Recommended"], ["price-asc", "Price: low to high"], ["price-desc", "Price: high to low"], ["views", "Most viewed"]]} />
           <span style={{ marginLeft: "auto", fontSize: 12.5, color: "var(--muted)" }}>

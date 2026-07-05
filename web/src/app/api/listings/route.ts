@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     if (wholeCar) {
       const year = Number(vehicle.year);
       if (!looksLikeName(vehicle.make) || !looksLikeName(vehicle.model)) {
-        return NextResponse.json({ error: "Add the vehicle's real make and model before posting.", code: "invalid" }, { status: 400 });
+        return NextResponse.json({ error: "Add the vehicle's real company/brand and model before posting.", code: "invalid" }, { status: 400 });
       }
       if (vehicle.year && (!Number.isInteger(year) || year < 1900 || year > new Date().getFullYear() + 2)) {
         return NextResponse.json({ error: "That vehicle year doesn't look right.", code: "invalid" }, { status: 400 });
