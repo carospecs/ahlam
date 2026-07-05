@@ -10,14 +10,18 @@ interface BThread {
   part: string; market: string; time: string; unread?: number; messages: BMsg[]; lastText: string;
 }
 
-// Buyer-side deletes are per-device hides (mirrors the seller inbox pattern):
-// the seller keeps their copy of the thread.
-const DELETED_BUYING_KEY = "ahlam_deleted_buying";
-function loadDeleted(): Set<string> {
-  try { return new Set(JSON.parse(localStorage.getItem(DELETED_BUYING_KEY) || "[]")); } catch { return new Set(); }
+// Buyer-side deletes are per-device hides (the seller keeps their copy), keyed
+// to the thread's message count at delete time so NEW activity resurfaces the
+// conversation instead of silently vanishing forever.
+const DELETED_BUYING_KEY = "ahlam_deleted_buying_v2";
+function loadDeleted(): Record<string, number> {
+  try {
+    const v = JSON.parse(localStorage.getItem(DELETED_BUYING_KEY) || "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  } catch { return {}; }
 }
-function saveDeleted(s: Set<string>) {
-  try { localStorage.setItem(DELETED_BUYING_KEY, JSON.stringify([...s])); } catch { /* private mode */ }
+function saveDeleted(m: Record<string, number>) {
+  try { localStorage.setItem(DELETED_BUYING_KEY, JSON.stringify(m)); } catch { /* private mode */ }
 }
 
 // The buyer's side of messaging: the conversations the signed-in user started by
@@ -32,7 +36,7 @@ export function BuyerMessages() {
   const [query, setQuery] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [sending, setSending] = React.useState(false);
-  const [deleted, setDeleted] = React.useState<Set<string>>(loadDeleted);
+  const [deleted, setDeleted] = React.useState<Record<string, number>>(loadDeleted);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const gridRef = React.useRef<HTMLDivElement>(null);
 
@@ -45,15 +49,21 @@ export function BuyerMessages() {
   }, []);
 
   React.useEffect(() => { load(); const iv = setInterval(load, 20000); return () => clearInterval(iv); }, [load]);
+  // Hidden only while nothing new happened since the delete.
+  const isHidden = React.useCallback(
+    (th: BThread) => deleted[th.id] != null && th.messages.length <= deleted[th.id],
+    [deleted],
+  );
+
   React.useEffect(() => {
     if (activeId === "" && threads.length) {
-      const first = threads.find((th) => !deleted.has(th.id));
+      const first = threads.find((th) => !isHidden(th));
       if (first) setActiveId(first.id);
     }
-  }, [threads, activeId, deleted]);
+  }, [threads, activeId, isHidden]);
 
   const ql = query.trim().toLowerCase();
-  const notDeleted = threads.filter((th) => !deleted.has(th.id));
+  const notDeleted = threads.filter((th) => !isHidden(th));
   const visible = ql
     ? notDeleted.filter((th) => `${th.shopName} ${th.part} ${th.lastText}`.toLowerCase().includes(ql))
     : notDeleted;
@@ -78,16 +88,21 @@ export function BuyerMessages() {
   }, [activeId, t?.messages.length, loading]);
 
   function deleteThread(id: string) {
-    setDeleted((prev) => { const n = new Set(prev); n.add(id); saveDeleted(n); return n; });
+    const th = threads.find((x) => x.id === id);
+    setDeleted((prev) => { const n = { ...prev, [id]: th?.messages.length ?? 0 }; saveDeleted(n); return n; });
     if (activeId === id) {
       const next = notDeleted.find((x) => x.id !== id);
       setActiveId(next ? next.id : null);
     }
-    csToast("Conversation deleted from your inbox");
+    csToast("Conversation deleted. It comes back if the seller replies.");
   }
 
   async function send() {
     if (!t || sending || !draft.trim()) return;
+    // Sending to a thread always unhides it.
+    if (deleted[t.id] != null) {
+      setDeleted((prev) => { const n = { ...prev }; delete n[t.id]; saveDeleted(n); return n; });
+    }
     const text = draft.trim();
     setDraft("");
     setSending(true);
