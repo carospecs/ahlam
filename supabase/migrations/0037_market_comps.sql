@@ -1,7 +1,8 @@
--- Market comp cache for the market-pricing agent (web/src/lib/market-cache.ts).
--- Evidence-backed researched prices (confidence high/medium, comp_count > 0) are
--- cached per vehicle|spec|part|grade and reused for 14 days, so a rescan of the
--- same vehicle prices in seconds instead of re-running web research.
+-- Market comp cache for comps-first pricing (web/src/lib/market-cache.ts).
+-- Evidence-backed judged prices (confidence high/medium, comp_count > 0) are
+-- cached per vehicle|spec|part|grade with a short TTL (48h, enforced at read
+-- time), so a near-term rescan of the same vehicle reuses its numbers without
+-- serving stale asking prices as live.
 create table if not exists public.market_comps (
   comp_key   text primary key,          -- lib/market-cache compKey(): vehicle|spec|part|grade, normalized
   vehicle    text not null,

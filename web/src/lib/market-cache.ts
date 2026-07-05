@@ -1,13 +1,15 @@
-// MARKET COMP CACHE — researched prices are stable for days and identical across
-// scans of the same vehicle, so evidence-backed comps (confidence high/medium)
-// are cached in the market_comps table (migration 0037, RLS deny-all, server-only)
-// and reused for 14 days. The cache is strictly best-effort: every function here
-// swallows its own errors — a missing table or a down database must never break
-// the pricing route, it just means a fresh research call.
+// MARKET COMP CACHE — comp-judged prices are identical across near-term rescans
+// of the same vehicle, so evidence-backed results (confidence high/medium) are
+// cached in the market_comps table (migration 0037, RLS deny-all, server-only).
+// TTL is deliberately SHORT (48h): the comps-first path is fast, and a rescan
+// must not serve stale asking prices as live — that would quietly reintroduce
+// the staleness the design exists to prevent. Strictly best-effort: every
+// function here swallows its own errors — a missing table or a down database
+// never breaks the pricing route, it just means a fresh comps run.
 import { supabaseAdmin } from "./supabase";
 import type { MarketConfidence, MarketPricedPart } from "./market-pricing";
 
-export const CACHE_TTL_DAYS = 14;
+export const CACHE_TTL_HOURS = 48;
 
 export type CachedComp = {
   price_usd: number;
@@ -25,12 +27,12 @@ export function compKey(vehicleId: string, spec: string, partName: string, grade
   return [norm(vehicleId), norm(spec), norm(partName), norm(grade || "B")].join("|");
 }
 
-// Read fresh (≤14d) cached comps for the given keys. Returns a key→comp map;
+// Read fresh (≤48h) cached comps for the given keys. Returns a key→comp map;
 // empty map on any error.
 export async function readMarketComps(keys: string[]): Promise<Record<string, CachedComp>> {
   if (!keys.length) return {};
   try {
-    const cutoff = new Date(Date.now() - CACHE_TTL_DAYS * 24 * 3600 * 1000).toISOString();
+    const cutoff = new Date(Date.now() - CACHE_TTL_HOURS * 3600 * 1000).toISOString();
     const { data, error } = await supabaseAdmin()
       .from("market_comps")
       .select("comp_key, price_usd, low_usd, high_usd, confidence, comp_count, sources")
@@ -55,8 +57,8 @@ export async function readMarketComps(keys: string[]): Promise<Record<string, Ca
   }
 }
 
-// Write back evidence-backed research results (high/medium with real comps only —
-// a knowledge estimate must not pin a price for 14 days). Best-effort.
+// Write back evidence-backed results (high/medium with real comps only — a
+// knowledge estimate must not pin a price even for 48h). Best-effort.
 export async function writeMarketComps(
   vehicleId: string,
   spec: string,

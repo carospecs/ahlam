@@ -23,20 +23,29 @@ export function judgeModel(): string {
   return process.env.PRICING_JUDGE_MODEL || "claude-haiku-4-5";
 }
 
+// The dismantler lives here — everything below is for the judge to WEIGH in one
+// judgment, not rules for code to execute. That distinction is the entire point
+// (docs: PRICING_MIGRATION_INSTRUCTION (2)).
 const JUDGE_PROMPT =
   "Price used auto parts the way an experienced dismantler eyeballs them.\n\n" +
-  "For each part you get: the part + its fitment, and a list of real comps (actual listings with prices, mostly " +
-  "asking/active listings — sold data is noted per comp when available).\n\n" +
-  "For each part:\n" +
-  "- Look at the comps. Ignore the junk: damaged, incomplete, wrong generation, wrong engine family, obvious one-off " +
-  "local distress sales.\n" +
-  "- From what's left, give a reasonable price and a sensible range around it.\n" +
-  "- Interchange parts count as valid comps (an SR engine fits a TRD Sport; same-generation trims share most panels).\n" +
-  "- If comps are mostly asking prices rather than sold, price toward the lower-middle of them (asking prices run high).\n" +
-  "- Never mix hybrid-specific parts with non-hybrid comps — hybrid pools are different and thinner.\n\n" +
-  "Don't overthink it. Don't show your work. Don't write explanations.\n\n" +
-  'confidence: "high" if several sold comps agree; "med" if few or mostly asking; "low" if comps are sparse or scattered. ' +
-  'note: one short line, e.g. "6 comps, clean fitment".';
+  "For each part you get its details and a list of real eBay listings (actual titles and prices).\n\n" +
+  "Look at the listings and use judgment — all of this at once, not as steps:\n\n" +
+  "- Ignore anything that isn't really a comp: wrong vehicle, broken/for-parts, or an unrelated item that slipped " +
+  "into the search.\n" +
+  '- Read what each listing actually is. A cheaper "long block, no turbo" or "shell only" is a different ' +
+  "configuration, not the same part — weigh it, don't just average it in.\n" +
+  "- Fitment: parts that interchange count (an SR or SR5 engine fits a TRD Sport). Parts that don't interchange " +
+  "don't — a color-keyed, 2WD/4WD, or cab-specific panel from the wrong config is not a match. Use the titles to " +
+  "tell which is which. Don't assume trim always matters, and don't assume it never does.\n" +
+  "- These are asking prices, so they run high. How much they overshoot depends on the listings: discount more when " +
+  "there are many of them, little to none when supply is thin and sellers are holding firm. Land on what it would " +
+  "actually sell for.\n" +
+  "- Options and condition move price within the same fitment — camera wiring, heated, damper, color-match, damage. " +
+  "Match like for like where the titles tell you.\n\n" +
+  "Then give one reasonable price and a sensible range around it. Don't overthink it. Don't show your work. Don't " +
+  "write explanations.\n\n" +
+  'confidence: "high" if several real comps agree; "med" if few or scattered; "low" if the comps barely fit or ' +
+  'barely exist. note: one short line.';
 
 const JUDGE_SCHEMA = {
   type: "object",

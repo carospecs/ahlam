@@ -1,6 +1,6 @@
 // The universal pricing pass — every scan's part list is priced for the EXACT
 // decoded vehicle through a tier ladder, BLOCKING in the scan's critical path:
-//   cached market comp (≤14d)
+//   cached market comp (≤48h)
 //   → COMPS-FIRST: our code pulls real eBay listings in parallel (lib/ebay-comps),
 //     then ONE batched fast-tier judgment call prices everything with comps
 //     (lib/price-judge — a function, not an agent; see PRICING_MIGRATION_INSTRUCTION)
@@ -115,7 +115,8 @@ export async function POST(req: Request) {
     `Use the exact part names given.\n\nParts:\n${list}`;
 
   // ── THE TIER LADDER ────────────────────────────────────────────────────────
-  // cached market comp (≤14d) → live web research → Claude memory → Gemini.
+  // cached market comp (≤48h) → comps-first judgment (+ zero-comp grounded
+  // fallback) → Claude memory → Gemini.
   // Every tier returns the same raw {name, price, low, high} shape; market tiers
   // also carry evidence metadata (confidence/compCount/sources). A tier failure
   // falls through — the route never 500s on a model error. MARKET_RESEARCH=off
@@ -143,7 +144,7 @@ export async function POST(req: Request) {
   const powertrainLine = powertrain.source !== "default" ? powertrainPromptLine(powertrain.type) : null;
 
   if (marketOn) {
-    // Tier 0 — cache: a rescan of the same vehicle prices in seconds, same numbers.
+    // Tier 0 — cache (48h TTL): a near-term rescan prices in seconds, same numbers.
     const cached = await readMarketComps(parts.map((p) => compKey(id, spec, p.name, gradeOf(p))));
     const researchable: InPart[] = [];
     for (const p of parts) {

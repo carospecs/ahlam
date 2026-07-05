@@ -5,8 +5,8 @@
 // Uses the Browse API with an application (client-credentials) token — no seller
 // account needed, public listing data only. NOTE on sold-vs-asking: eBay's
 // sold/completed data API (Marketplace Insights) is approval-gated, so retrieval
-// returns ACTIVE/ASKING listings; the judgment prompt prices toward the
-// lower-middle of asking comps to compensate. Every function here fails soft:
+// returns ACTIVE/ASKING listings; how much asking overshoots is the judge's call
+// from the supply in front of it (not a flat rule). Every function here fails soft:
 // a config/auth/network problem returns null and the caller skips the comps tier.
 // (No lib imports on purpose — keeps this loadable by the plain-node tests.)
 
@@ -15,12 +15,14 @@ const API = ENV === "sandbox" ? "https://api.sandbox.ebay.com" : "https://api.eb
 // eBay Motors → Car & Truck Parts. Env-overridable, same var the lister uses.
 const CATEGORY_ID = process.env.EBAY_CATEGORY_ID || "6028";
 
+// The FULL listing goes to the judge — the title is how it reads fitment,
+// completeness, configuration, and options. Code must not reduce or interpret it
+// (docs: PRICING_MIGRATION_INSTRUCTION (2) — "blinding the judge is what forces
+// the code to make these calls badly").
 export type Comp = {
   price: number;
-  title: string;          // doubles as the fitment note — the judge reads it
+  title: string;
   condition: string;      // eBay condition label ("Used", "For parts or not working", …)
-  sold: boolean;          // Browse API = active listings, so always false today
-  source: "ebay";
 };
 
 // ── App token (client credentials), cached in-module until near expiry ────────
@@ -48,21 +50,24 @@ async function appToken(): Promise<string | null> {
 
 // ── Pure helpers (unit-tested with plain node) ────────────────────────────────
 
-// Interchange-aware query: year + make + model + part, deliberately WITHOUT the
-// trim — same-generation trims share most panels and an SR/SR5 engine fits a TRD
-// Sport. The judge sees each comp's full title and handles the nuance.
+// WIDE retrieval net: year + make + model + part, no trim filter — so SR/SR5
+// donors surface for a TRD Sport. Whether a given listing actually fits (an
+// interchangeable engine vs a color-keyed or 4WD-specific panel) is the JUDGE's
+// call, made per part from the listing titles — never a query or code rule.
 export function compQuery(fitment: { year?: string | number | null; make?: string | null; model?: string | null }, partName: string): string {
   return [fitment.year, fitment.make, fitment.model, partName].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 }
 
-// Light mechanical hygiene, in code (the brief's list): drop core/shell/for-parts/
-// broken junk, drop obvious wrong-generation hits by title years, dedupe, cap.
-// Nuanced fitment calls stay with the judgment model.
-const JUNK = /\b(core(?:\s+only)?|for\s+parts|not\s+working|parts\s+only|shell\s+only|cover\s+only|bare|broken|cracked|repair(?:able)?|salvage\s+title|damaged)\b/i;
+// Minimal mechanical hygiene ONLY (docs: PRICING_MIGRATION_INSTRUCTION (2)):
+// drop clearly-broken "for parts / not working" cores, dedupe exact repeats, cap.
+// EVERYTHING else — shell-only, long-block-no-turbo, wrong generation, wrong
+// trim/config — stays in the pool for the judge to read and weigh. A cheaper
+// configuration is information, not junk; fitment is a per-part judgment the
+// titles carry, not a rule code can execute.
+const CLEARLY_BROKEN = /\b(for\s+parts|not\s+working|parts\s+only)\b/i;
 
 export function cleanComps(
   raw: { price: number; title: string; condition?: string }[],
-  fitmentYear: number | null,
   cap = 12,
 ): Comp[] {
   const seen = new Set<string>();
@@ -71,18 +76,12 @@ export function cleanComps(
     if (!r || typeof r.price !== "number" || !Number.isFinite(r.price) || r.price <= 0) continue;
     if (typeof r.title !== "string" || !r.title.trim()) continue;
     const title = r.title.trim();
-    if (JUNK.test(title)) continue;
+    if (CLEARLY_BROKEN.test(title)) continue;
     if ((r.condition || "").toLowerCase().includes("parts")) continue; // "For parts or not working"
-    // Obvious wrong generation: the title names model years and NONE is within
-    // ±5 of the fitment year. Titles with no year tokens pass through.
-    if (fitmentYear) {
-      const years = [...title.matchAll(/\b(19|20)(\d{2})\b/g)].map((m) => Number(`${m[1]}${m[2]}`));
-      if (years.length && !years.some((y) => Math.abs(y - fitmentYear) <= 5)) continue;
-    }
     const key = `${title.toLowerCase().replace(/\s+/g, " ").slice(0, 60)}|${Math.round(r.price)}`;
-    if (seen.has(key)) continue;
+    if (seen.has(key)) continue; // exact repeat (eBay artifact) — real supply still shows as distinct listings
     seen.add(key);
-    out.push({ price: Math.round(r.price), title, condition: r.condition || "Used", sold: false, source: "ebay" });
+    out.push({ price: Math.round(r.price), title, condition: r.condition || "Used" });
     if (out.length >= cap) break;
   }
   return out;
@@ -90,7 +89,7 @@ export function cleanComps(
 
 // ── Retrieval ─────────────────────────────────────────────────────────────────
 
-async function searchOne(token: string, query: string, fitmentYear: number | null): Promise<Comp[]> {
+async function searchOne(token: string, query: string): Promise<Comp[]> {
   try {
     const p = new URLSearchParams({
       q: query,
@@ -112,7 +111,7 @@ async function searchOne(token: string, query: string, fitmentYear: number | nul
       title: s.title ?? "",
       condition: s.condition,
     }));
-    return cleanComps(raw, fitmentYear);
+    return cleanComps(raw);
   } catch {
     return [];
   }
@@ -127,9 +126,8 @@ export async function fetchCompsForParts(
 ): Promise<Record<string, Comp[]> | null> {
   const token = await appToken();
   if (!token) return null;
-  const fitmentYear = Number(fitment.year) || null;
   const results = await Promise.all(
-    partNames.map(async (name) => [name, await searchOne(token, compQuery(fitment, name), fitmentYear)] as const),
+    partNames.map(async (name) => [name, await searchOne(token, compQuery(fitment, name))] as const),
   );
   return Object.fromEntries(results);
 }
