@@ -21,6 +21,7 @@ type Lang = "en" | "es";
 const PRIMARY: { label: string; href: string }[] = [
   { label: "How it works", href: "/#how" },
   { label: "Marketplace", href: "/#marketplace" },
+  { label: "Pricing", href: "/#pricing" },
   { label: "Guides", href: "/guides" },
 ];
 
@@ -122,6 +123,7 @@ export function SiteHeader({
             )}
           </div>
 
+          <Link href="/#pricing" style={navLink}>Pricing</Link>
           <Link href="/guides" style={navLink}>Guides</Link>
         </nav>
 

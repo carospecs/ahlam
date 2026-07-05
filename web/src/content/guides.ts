@@ -246,6 +246,70 @@ export const GUIDES: Guide[] = [
       { q: "Is Ahlam a yard management system?", a: "No. Hollander and Checkmate are ERP-grade inventory systems for high-volume dismantlers. Ahlam is a photo-to-listing tool built so a one or two person yard can price and post a whole car in minutes." },
     ],
   },
+  {
+    slug: "how-dismantlers-can-use-doordash-to-sell-auto-parts",
+    title: "How Dismantlers Can Use DoorDash to Sell and Deliver Auto Parts",
+    description:
+      "Same-day local delivery is changing how used auto parts sell. Here is how salvage yards and dismantlers can use DoorDash-style delivery to win repair shop and DIY business.",
+    category: "Selling strategy",
+    readMinutes: 7,
+    updated: "2026-07-05",
+    image: "/img/guide-doordash.svg",
+    intro:
+      "The big retail parts chains already deliver same-day through DoorDash: a shop orders a part and a driver drops it at the service bay within the hour. Used parts have not caught up, and that is an opening. A dismantler who can get a tested alternator across town in 45 minutes competes on the two things that matter most to a repair shop: price and speed.",
+    sections: [
+      {
+        heading: "Why local delivery matters for used parts",
+        paragraphs: [
+          "Most used parts sell in one of two ways today: shipped through eBay (slow, with packing overhead) or picked up at the yard (fast, but the buyer has to stop working and drive). Local delivery splits the difference. The buyer keeps working, the part arrives the same day, and you charge for the convenience.",
+          "The buyers who care most are professional: repair shops and mobile mechanics with a car on the lift and a customer waiting. A shop paying $120 for a used part delivered in an hour still beats paying $300 for a new one delivered tomorrow. Speed is what unlocks that sale.",
+        ],
+      },
+      {
+        heading: "How DoorDash delivery works for a parts business",
+        paragraphs: [
+          "Beyond restaurant delivery, DoorDash runs a white-label service (DoorDash Drive) that businesses use to dispatch a driver on demand from their own website or system. The retail chains like AutoZone and O'Reilly already use this model for same-day parts delivery.",
+          "For a dismantler, the flow looks like this: a local buyer finds your part online, pays, and instead of choosing pickup they choose local delivery. A driver is dispatched to your yard, your counter person hands over the boxed part, and it arrives at the buyer's shop within the hour. You never leave the yard and you do not maintain a delivery truck or driver.",
+        ],
+        bullets: [
+          "Works best for parts one person can carry: alternators, starters, ECUs, mirrors, lamps, sensors, small body hardware.",
+          "Charge the delivery fee to the buyer, or bake it into a delivered price for professional accounts.",
+          "Keep a stack of boxes and basic padding at the counter so handoff takes a minute, not fifteen.",
+        ],
+      },
+      {
+        heading: "What sells well by courier, and what does not",
+        paragraphs: [
+          "Courier delivery has a practical weight and size ceiling. Engines, transmissions, doors, and hoods still move by pickup, freight, or your own truck. The sweet spot is the high-margin small and medium parts that fail suddenly and stop a repair job cold.",
+        ],
+        bullets: [
+          "Great by courier: starters, alternators, coil packs, window regulators, mirrors, headlights and tail lights, control modules, sensors, interior trim.",
+          "Case by case: wheels, radiators, driveshafts, seats (depends on the vehicle the driver has).",
+          "Not by courier: engines, transmissions, axles, hoods, doors, quarter panels.",
+        ],
+      },
+      {
+        heading: "Pricing delivered parts",
+        paragraphs: [
+          "Delivered same-day is a premium service, so price it like one. Start from your normal comp-based price, then add the actual courier cost plus a handling margin. Professional buyers accept a delivered premium because their alternative is sending an employee to you, which costs them shop time.",
+          "Be explicit in the listing: pickup price and delivered price, with a realistic delivery window. Clarity converts better than a single vague number.",
+        ],
+      },
+      {
+        heading: "Where Ahlam fits",
+        paragraphs: [
+          "Ahlam already turns a photo of a car into priced, ready-to-post listings for eBay, Facebook, and OfferUp, plus your own storefront and the Ahlam marketplace. DoorDash-powered local delivery is in development: the goal is that a local buyer can find your part on your Ahlam storefront and have it couriered from your yard the same hour, with the dispatch handled for you.",
+          "Until that ships, the playbook above works manually today: list the part, flag same-day local delivery in the description, and dispatch a courier when the order lands. The yards that build the delivery habit early will own the repair shop relationships in their area.",
+        ],
+      },
+    ],
+    faqs: [
+      { q: "Do I need a DoorDash partnership to start?", a: "Not to test the concept. You can dispatch on-demand couriers per order today, or simply offer your own local dropoff for orders inside a radius. A formal integration just automates the dispatch." },
+      { q: "Who pays for the delivery?", a: "The buyer, almost always. Either as a visible delivery fee at checkout or baked into a delivered price. Repair shops happily pay it because a stalled lift costs more than the courier." },
+      { q: "What about returns on delivered parts?", a: "Use the same warranty terms as pickup sales, and grade honestly. A tested part with a 30-day guarantee generates repeat professional buyers, which is the real prize of offering delivery." },
+      { q: "When is Ahlam's DoorDash integration coming?", a: "It is in development now, alongside Craigslist and Car-Part.com support. Join the waitlist and you will hear the moment it goes live." },
+    ],
+  },
 ];
 
 export function getGuide(slug: string): Guide | undefined {

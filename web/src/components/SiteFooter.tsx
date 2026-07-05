@@ -30,6 +30,7 @@ const COLS: Col[] = [
   { h: "Product", links: [
     { label: "How it works", href: "/#how" },
     { label: "Marketplace", href: "/#marketplace" },
+    { label: "Pricing", href: "/#pricing" },
     { label: "Compare", href: "/guides/ahlam-vs-car-part-ebay-hollander-spreadsheets" },
   ] },
   { h: "Audiences", links: [

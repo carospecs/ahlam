@@ -274,6 +274,10 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
                 <a href="#" style={{ color: "var(--accent)", fontWeight: 600 }} onClick={(e) => { e.preventDefault(); setError(""); setNotice(""); setMode("signin"); }}>Back to sign in</a>
               </p>
             ) : null}
+            <p style={{ ...lx.switch, marginTop: 12 }}>
+              By continuing you agree to our{" "}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "var(--muted)", fontWeight: 600, textDecoration: "underline" }}>Privacy Policy</a>.
+            </p>
           </div>
         </div>
       </motion.div>

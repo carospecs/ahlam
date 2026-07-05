@@ -33,7 +33,7 @@ const FAQS = [
   { q: "Which marketplaces can I post to?", a: "Auto-post to eBay, and one-tap copy clean listings for Facebook Marketplace and OfferUp, plus your own Ahlam storefront. Craigslist, Car-Part.com, and DoorDash local delivery are in development and coming soon." },
   { q: "Can I list a part or car manually?", a: "Yes. AI scanning is the fast path, but you can type in a vehicle or a single part by hand any time, with the AI helping write and price it." },
   { q: "Is my VIN and mileage private?", a: "Yes. VIN and mileage are read for accuracy but stay hidden on public listings until you choose to share them." },
-  { q: "What does it cost to start?", a: "Nothing. Your first month is free with every feature unlocked and no card required. After that, pick the plan that fits: Solo $19, Growth $100, Max $200, or Ultimate $350 a month." },
+  { q: "What does it cost to start?", a: "Nothing. Your first month is free with every feature unlocked and no card required. After that, pick the plan that fits: Growth $100, Max $200, or Ultimate $350 a month." },
 ];
 
 // Sample marketplace listings — varied vehicles and a deliberate A/B/C grade mix.
@@ -170,7 +170,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
                 {[
                   { n: "Hundreds", l: "of sellable parts on an average car, most of them never listed." },
                   { n: "Minutes", l: "to scan a whole vehicle into priced, ready-to-post listings." },
-                  { n: "4 places", l: "to sell at once: eBay, Facebook, OfferUp, your storefront. Craigslist, Car-Part.com, and DoorDash coming soon." },
+                  { n: "7 places", l: "to sell at once: eBay, Facebook, OfferUp, and the Ahlam marketplace, with Craigslist, Car-Part.com, and DoorDash in development." },
                 ].map((s) => (
                   <Reveal key={s.n}>
                     <div style={{ paddingTop: 18, borderTop: "2px solid var(--accent)" }}>
@@ -306,7 +306,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
               <Reveal style={{ textAlign: "center", maxWidth: 680, margin: "0 auto" }}>
                 <div className="cs-kicker">Pricing</div>
                 <h2 className="cs-display" style={h2}>Simple, transparent pricing</h2>
-                <p style={{ color: "var(--muted)", fontSize: 15.5, marginTop: 10, lineHeight: 1.6 }}>Every plan starts with a free first month, no card to begin. Cancel anytime.</p>
+                <p style={{ color: "var(--muted)", fontSize: 15.5, marginTop: 10, lineHeight: 1.6 }}>Your first month is the full Growth plan, free for the first 50 yards. No card to begin, cancel anytime.</p>
               </Reveal>
               <Reveal i={1} style={{ maxWidth: 1180, margin: "38px auto 0" }}>
                 <PricingPlans onChoose={onGetStarted} />

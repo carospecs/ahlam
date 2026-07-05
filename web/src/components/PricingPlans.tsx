@@ -17,6 +17,7 @@ export interface Plan {
   desc: string;
   features: string[];
   highlight?: boolean;
+  badge?: string;
 }
 
 export const PLANS: Plan[] = [
@@ -25,28 +26,10 @@ export const PLANS: Plan[] = [
     name: "Free trial",
     price: "$0",
     per: "/first month",
-    desc: "Your first month is a full month of Growth, free and with no card required: AI scanning, eBay and Facebook posting, unlimited manual listings.",
+    desc: "The full Growth plan, free for your first month. The first 50 yards to join get every feature unlocked, no card required.",
     features: [
-      "Free for your first month",
-      "AI scan: 10 cars included (photo-to-listing)",
-      "Auto-post to eBay + Facebook cross-posting",
-      "Unlimited manual listings",
-      "Access to Ahlam marketplace",
-    ],
-  },
-  {
-    id: "solo",
-    name: "Solo",
-    price: "$19",
-    per: "/mo",
-    desc: "For individuals and flippers who mostly want the cross-posting extension, with a few AI scans each month.",
-    features: [
-      "Single user",
-      "AI scan: 3 cars per month (photo-to-listing)",
-      "Cross-post to Facebook with the Ahlam browser extension",
-      "Post up to 1 car a day",
-      "Export up to 20 cars / 100 parts a month",
-      "List on the Ahlam marketplace",
+      "Up to 10 AI car scans",
+      "Every feature we've built, included",
     ],
   },
   {
@@ -54,19 +37,18 @@ export const PLANS: Plan[] = [
     name: "Growth",
     price: "$100",
     per: "/mo",
-    desc: "For dismantlers selling on eBay and Facebook who want AI scanning and automation.",
+    desc: "For dismantlers selling on eBay, Facebook, and OfferUp who want AI scanning and automation.",
     features: [
       "AI scan: 10 cars per month (photo-to-listing)",
-      "Auto-post to eBay",
-      "Facebook cross-posting with the Ahlam extension",
+      "Cross-post to eBay, Facebook & OfferUp",
       "Unlimited manual listings",
       "Team access: Owner & Editor",
       "AI Interchange Assistant (parts fitment across vehicles)",
-      "AI Auto-Repricing (market watch, updates prices automatically)",
       "Inventory analytics",
       "List on the Ahlam marketplace",
     ],
     highlight: true,
+    badge: "Most popular",
   },
   {
     id: "max",
@@ -76,11 +58,10 @@ export const PLANS: Plan[] = [
     desc: "For high-volume yards that need full team access and cross-platform selling power.",
     features: [
       "AI scan: 25 cars per month (photo-to-listing)",
-      "Cross-post everywhere: eBay, Facebook, OfferUp",
+      "Cross-post to eBay, Facebook & OfferUp",
       "Unlimited manual listings",
       "Team access: Owner & Unlimited Editors",
       "AI Interchange Assistant (parts fitment across vehicles)",
-      "AI Auto-Repricing (market watch, updates prices automatically)",
       "Full inventory analytics & profit tracking",
     ],
   },
@@ -92,15 +73,15 @@ export const PLANS: Plan[] = [
     desc: "Everything in Max, plus we build and host a professional website for your business with your own custom domain, fully managed by Ahlam.",
     features: [
       "Unlimited AI car scans (photo-to-listing)",
-      "Cross-post everywhere: eBay, Facebook, OfferUp",
+      "Cross-post to eBay, Facebook & OfferUp",
       "Unlimited manual listings",
       "Team access: Owner & Unlimited Editors",
       "AI Interchange Assistant (parts fitment across vehicles)",
-      "AI Auto-Repricing (market watch, updates prices automatically)",
       "Full inventory analytics & profit tracking",
-      "Custom business website, built for you",
+      "Custom business website, built for you: the inventory you upload on Ahlam links straight to your own site, so customers can browse it, interact, and ask questions",
       "Managed domain registration & hosting · priority support",
     ],
+    badge: "Greatest value",
   },
 ];
 
@@ -135,9 +116,9 @@ export function PricingPlans({
             background: p.highlight ? "color-mix(in srgb, var(--accent) 5%, var(--surface))" : "var(--surface)",
           }}
         >
-          {p.highlight && (
+          {p.badge && (
             <span style={{ position: "absolute", top: -12, left: 28, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#fff", background: "var(--accent)", borderRadius: 999, padding: "4px 12px" }}>
-              Most popular
+              {p.badge}
             </span>
           )}
           <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{p.name}</div>

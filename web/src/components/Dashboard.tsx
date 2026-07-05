@@ -135,6 +135,7 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
           </div>
         )}
         <button style={sx.signout} onClick={onSignOut}><LogOut size={16} /> {t("Sign out")}</button>
+        <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ display: "block", textAlign: "center", marginTop: 8, fontSize: 11.5, color: "var(--muted)", textDecoration: "none" }}>{t("Privacy Policy")}</a>
       </div>
     </aside>
   );
