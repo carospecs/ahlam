@@ -1,13 +1,20 @@
 // The universal pricing pass — every scan's part list is priced for the EXACT
 // decoded vehicle through a tier ladder, BLOCKING in the scan's critical path:
-//   cached market comp (≤14d) → live web research (market-pricing agent) →
-//   Claude memory estimate → Gemini → the client's Gemini-vision prices.
+//   cached market comp (≤14d)
+//   → COMPS-FIRST: our code pulls real eBay listings in parallel (lib/ebay-comps),
+//     then ONE batched fast-tier judgment call prices everything with comps
+//     (lib/price-judge — a function, not an agent; see PRICING_MIGRATION_INSTRUCTION)
+//   → zero-comp parts only: grounded web-search fallback on the strong model
+//     (lib/market-pricing), run concurrently so it never blocks the fast majority
+//   → Claude memory estimate → Gemini → the client's Gemini-vision prices.
 // Market tiers return evidence-based confidence + comp counts + source domains;
-// MARKET_RESEARCH=off skips both market tiers (exact pre-agent behavior).
+// MARKET_RESEARCH=off skips the market tiers entirely (memory → Gemini only).
 import { NextResponse } from "next/server";
 import { geminiGenerate } from "@/lib/gemini";
 import { anthropicEnabled, claudePriceParts, type RawPricedPart } from "@/lib/anthropic";
 import { marketPriceParts, type MarketConfidence } from "@/lib/market-pricing";
+import { fetchCompsForParts } from "@/lib/ebay-comps";
+import { priceParts, type JudgeInputPart } from "@/lib/price-judge";
 import { compKey, readMarketComps, writeMarketComps } from "@/lib/market-cache";
 import { isSanePrice } from "@/lib/price-bands";
 import { decodeVin, engineLabel } from "@/lib/vin";
@@ -17,7 +24,7 @@ import { classifyPowertrain, powertrainPromptLine } from "@/lib/powertrain";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "nodejs";
-export const maxDuration = 300; // market research ≤120s + memory/Gemini fallbacks + VIN decode
+export const maxDuration = 180; // parallel comps + one fast judgment call; the ≤120s grounded fallback only runs for zero-comp parts
 
 const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -150,25 +157,60 @@ export async function POST(req: Request) {
       }
     }
 
-    // Tier 1 — live research: one agent call for everything the cache didn't cover.
-    const fresh = researchable.length
-      ? await marketPriceParts({ vehicleId: id, spec, powertrainLine, parts: researchable })
-      : [];
-    if (fresh) {
+    // Tier 1 — comps-first: OUR code pulls real eBay listings for every uncached
+    // part in parallel, then one batched fast-tier call judges them. Parts with
+    // zero usable comps route to the grounded-search fallback on the strong model,
+    // concurrently, so the slow path never blocks the fast majority.
+    if (researchable.length) {
       const gradeByName = new Map(researchable.map((p) => [nameKey(p.name), gradeOf(p)]));
-      const written: { part: (typeof fresh)[number]; grade: string }[] = [];
-      for (const r of fresh) {
-        const key = nameKey(r.name);
-        if (!gradeByName.has(key)) continue; // echo drift to an unknown name — ignore
-        // Sanity rail: an implausible researched price is DROPPED (never clamped)
-        // and the part falls to the vision price the client already has.
-        if (r.usedPartPriceUsd != null && !isSanePrice(r.usedPartPriceUsd, r.name)) continue;
-        byName.set(key, { mid: r.usedPartPriceUsd, lo: r.usedPartPriceLowUsd, hi: r.usedPartPriceHighUsd });
-        metaByName.set(key, { confidence: r.confidence, compCount: r.compCount, sources: r.sourceDomains });
-        written.push({ part: r, grade: gradeByName.get(key)! });
+      const written: { part: { name: string; usedPartPriceUsd: number | null; usedPartPriceLowUsd: number | null; usedPartPriceHighUsd: number | null; confidence: MarketConfidence; compCount: number; sourceDomains: string[] }; grade: string }[] = [];
+      const accept = (row: { name: string; usedPartPriceUsd: number | null; usedPartPriceLowUsd: number | null; usedPartPriceHighUsd: number | null; confidence: MarketConfidence; compCount: number; sourceDomains: string[] }) => {
+        const key = nameKey(row.name);
+        if (!gradeByName.has(key)) return; // echo drift to an unknown name — ignore
+        // Sanity rail: an implausible price is DROPPED (never clamped) and the
+        // part falls to the vision price the client already has.
+        if (row.usedPartPriceUsd != null && !isSanePrice(row.usedPartPriceUsd, row.name)) return;
+        byName.set(key, { mid: row.usedPartPriceUsd, lo: row.usedPartPriceLowUsd, hi: row.usedPartPriceHighUsd });
+        metaByName.set(key, { confidence: row.confidence, compCount: row.compCount, sources: row.sourceDomains });
+        written.push({ part: row, grade: gradeByName.get(key)! });
+      };
+
+      const fitment = { year: v.year, make: v.make, model: v.model, trim: v.trim, engine: v.engine };
+      const comps = await fetchCompsForParts(fitment, researchable.map((p) => p.name));
+      if (comps) {
+        const withComps = researchable.filter((p) => (comps[p.name] ?? []).length > 0);
+        const zeroComp = researchable.filter((p) => (comps[p.name] ?? []).length === 0);
+        const judgeInput: JudgeInputPart[] = withComps.map((p) => ({
+          part_id: p.name,
+          name: p.name,
+          condition: gradeOf(p) === "A" ? "good" : gradeOf(p) === "B" ? "fair" : "unknown",
+          fitment,
+          comps: comps[p.name] ?? [],
+        }));
+        const [judged, fallback] = await Promise.all([
+          priceParts(judgeInput),
+          zeroComp.length ? marketPriceParts({ vehicleId: id, spec, powertrainLine, parts: zeroComp }) : Promise.resolve([]),
+        ]);
+        for (const r of judged ?? []) {
+          accept({
+            name: r.part_id,
+            usedPartPriceUsd: r.estimate,
+            usedPartPriceLowUsd: r.low,
+            usedPartPriceHighUsd: r.high,
+            confidence: r.confidence === "med" ? "medium" : r.confidence,
+            compCount: comps[r.part_id]?.length ?? 0,
+            sourceDomains: ["ebay.com"],
+          });
+        }
+        for (const r of fallback ?? []) accept(r);
+        if ((judged && judged.length) || (fallback && fallback.length)) pricedBy = "claude-market";
+      } else {
+        // eBay itself unavailable (creds/auth/network) — don't treat every part as
+        // zero-comp and stampede the slow fallback; the memory tier below handles it.
       }
-      pricedBy = "claude-market";
-      void writeMarketComps(id, spec, written); // best-effort, evidence-backed rows only
+      if (written.length) void writeMarketComps(id, spec, written); // best-effort, evidence-backed rows only
+    } else if (byName.size) {
+      pricedBy = "claude-market"; // fully served from cache
     }
   }
 

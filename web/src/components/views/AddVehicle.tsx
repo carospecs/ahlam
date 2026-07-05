@@ -556,9 +556,10 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       const res = await fetch("/api/reprice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Client-side cap: live market research can take 1–3 minutes; past 210s the
-        // vision prices render instead. (Server budget: maxDuration 300.)
-        signal: AbortSignal.timeout(210_000),
+        // Client-side cap: comps-first pricing is parallel retrieval + one fast
+        // judgment call (~10–30s); only zero-comp stragglers hit the slower
+        // grounded fallback. Past 150s the vision prices render instead.
+        signal: AbortSignal.timeout(150_000),
         body: JSON.stringify({ vin: vin || undefined, vehicle: vehicleId, parts: current.map((p) => ({ name: p.partName, grade: p.condition, inferred: p.inferred || undefined })) }),
       });
       const j = await res.json();
@@ -909,7 +910,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             </div>
           </div>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: "var(--signal)", background: "var(--signal-bg)", border: "1px solid color-mix(in srgb, var(--signal) 35%, transparent)", borderRadius: 999, padding: "7px 14px" }}>
-            <Info size={14} /> {scanStage === "pricing" ? "Market research can take 1–3 minutes. Hang tight." : "This usually takes under a minute. Hang tight."}
+            <Info size={14} /> {scanStage === "pricing" ? "Checking real listings — usually under a minute. Hang tight." : "This usually takes under a minute. Hang tight."}
           </div>
         </Card>
       )}
