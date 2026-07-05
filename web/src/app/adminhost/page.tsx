@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import Link from "next/link";
-import { RefreshCw, Users, LogOut, ExternalLink, Send } from "lucide-react";
+import { RefreshCw, Users, LogOut, ExternalLink, Send, Trash2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
 const Login = lazy(() => import("@/components/Login").then((m) => ({ default: m.Login })));
@@ -21,6 +21,7 @@ const Loading = () => (
  */
 
 type Row = {
+  userId: string;
   email: string; joined: string | null; lastSignIn: string | null;
   shopId: string | null; shopName: string | null; accountType: string | null;
   plan: string | null; planRaw: string | null; planId: string | null;
@@ -121,6 +122,30 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
     setSavingShop(null);
   }
 
+  // Delete a user (two-step confirm per row). Their shop goes too when they
+  // were its only member.
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  async function deleteUser(userId: string, email: string) {
+    setDeleting(userId);
+    setSaveNote("");
+    try {
+      const r = await fetch("/api/admin/user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) setSaveNote(`Could not delete ${email}: ${d.error || r.status}`);
+      else setSaveNote(`Deleted ${email}${d.shopDeleted ? " and their shop" : ""}.`);
+      await load();
+    } catch {
+      setSaveNote(`Network error deleting ${email}. Refresh and check.`);
+    }
+    setDeleting(null);
+    setConfirmDelete(null);
+  }
+
   const fmtDate = (iso: string | null) => {
     if (!iso) return "—";
     try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
@@ -206,7 +231,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
                     <thead>
                       <tr style={{ textAlign: "left", color: "var(--muted)", background: "var(--surface2)" }}>
-                        {["User", "Shop", "Plan", "Expires", "Autopay", "Scans (mo)", "Listings", "Joined", "Last seen"].map((h) => (
+                        {["User", "Shop", "Plan", "Expires", "Autopay", "Scans (mo)", "Listings", "Joined", "Last seen", ""].map((h) => (
                           <th key={h} style={{ padding: "12px 14px", fontWeight: 700, fontSize: 11.5, letterSpacing: "0.04em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                         ))}
                       </tr>
@@ -252,6 +277,34 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                           <td style={tdNum}>{r.listings ? `${r.activeListings}/${r.listings}` : "0"}</td>
                           <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtDate(r.joined)}</td>
                           <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtDate(r.lastSignIn)}</td>
+                          <td style={{ ...td, whiteSpace: "nowrap", textAlign: "right" }}>
+                            {confirmDelete === r.userId ? (
+                              <span style={{ display: "inline-flex", gap: 6 }}>
+                                <button
+                                  onClick={() => deleteUser(r.userId, r.email)}
+                                  disabled={deleting === r.userId}
+                                  style={{ border: "none", borderRadius: 8, background: "var(--danger)", color: "#fff", fontSize: 12, fontWeight: 700, padding: "6px 10px", cursor: "pointer", opacity: deleting === r.userId ? 0.6 : 1 }}
+                                >
+                                  {deleting === r.userId ? "Deleting…" : "Really delete?"}
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDelete(null)}
+                                  style={{ border: "1px solid var(--line)", borderRadius: 8, background: "transparent", color: "var(--muted)", fontSize: 12, fontWeight: 600, padding: "6px 10px", cursor: "pointer" }}
+                                >
+                                  Keep
+                                </button>
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDelete(r.userId)}
+                                title={`Delete ${r.email}`}
+                                aria-label={`Delete ${r.email}`}
+                                style={{ border: "1px solid var(--line)", borderRadius: 8, background: "transparent", color: "var(--muted)", padding: "6px 8px", cursor: "pointer", display: "inline-grid", placeItems: "center" }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -259,7 +312,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                 </div>
                 <div style={{ padding: "10px 14px", fontSize: 11.5, color: "var(--muted)", borderTop: "1px solid var(--line)" }}>
                   <Users size={12} style={{ verticalAlign: "-2px", marginRight: 5 }} />
-                  Changing the plan applies instantly. Picking Free trial or Founding member starts a fresh 30-day clock. Listings shows live/total. Autopay comes from Stripe; if a customer later buys a plan at checkout, Stripe overwrites whatever is set here.
+                  Changing the plan applies instantly. Picking Free trial or Founding member starts a fresh 30-day clock. Listings shows live/total. Autopay comes from Stripe; if a customer later buys a plan at checkout, Stripe overwrites whatever is set here. Deleting a user also removes their shop and its listings when they were its only member.
                 </div>
               </div>
             </>

@@ -68,6 +68,7 @@ export async function GET() {
         const trialDaysLeft = trialEnd ? Math.max(0, Math.ceil((trialEnd.getTime() - Date.now()) / 86400000)) : null;
         const lst = shopId ? listingsByShop.get(shopId) : null;
         return {
+          userId: u.id,
           email: u.email ?? "",
           joined: u.created_at ?? null,
           lastSignIn: u.last_sign_in_at ?? null,
