@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import { PublicHeader } from "@/components/PublicHeader";
 import { normalizeGrade } from "@/lib/grade";
@@ -47,25 +47,21 @@ export default async function ProfilePage({ params }: Params) {
   const { id } = await params;
   if (!UUID_RE.test(id)) notFound();
   let profile: any = null;
-  let shop: any = null;
+  let shopId: string | null = null;
   let listingRows: any[] = [];
   try {
     const db = supabaseAdmin();
     const { data: p } = await db.from("profiles").select("*").eq("id", id).single();
     profile = p;
-    if (profile) {
-      if (profile.shop_id) {
-        const { data: s } = await db.from("shops").select("id, name, verified, location").eq("id", profile.shop_id).maybeSingle();
-        shop = s || null;
-      }
-      // Their personal listings AND their shop's — most listings hang off the
-      // shop, not the person, so a person-only query shows a bogus empty page.
-      const ors = [`seller_id.eq.${id}`, `created_by.eq.${id}`];
-      if (shop?.id) ors.push(`shop_id.eq.${shop.id}`);
+    if (profile?.shop_id) {
+      const { data: s } = await db.from("shops").select("id").eq("id", profile.shop_id).maybeSingle();
+      shopId = (s as { id?: string } | null)?.id || null;
+    }
+    if (profile && !shopId) {
       const { data: l } = await db
         .from("listings")
         .select("*, shops(name, location)")
-        .or(ors.join(","))
+        .or(`seller_id.eq.${id},created_by.eq.${id}`)
         .eq("status", "active")
         .order("created_at", { ascending: false });
       listingRows = l || [];
@@ -74,6 +70,10 @@ export default async function ProfilePage({ params }: Params) {
     // fall through
   }
   if (!profile) notFound();
+  // Their shop storefront IS their real profile: vehicles being parted out,
+  // parts, rating, and the message box all live there. The person-page below
+  // only covers shop-less accounts. (redirect() throws — keep it outside try.)
+  if (shopId) redirect(`/shop/${shopId}`);
 
   const name = profile.display_name || "Ahlam User";
   const initials = name.split(" ").map((s: string) => s[0]).join("").toUpperCase().slice(0, 2);
@@ -116,13 +116,8 @@ export default async function ProfilePage({ params }: Params) {
                 </span>
               </div>
               {profile.bio && <p style={{ margin: "8px 0 0", maxWidth: 600, color: "var(--muted)", fontSize: 14, lineHeight: 1.5 }}>{profile.bio}</p>}
-              <div style={{ marginTop: 6, color: "var(--muted)", fontSize: 13, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <span>{parts.length} listing{parts.length === 1 ? "" : "s"}</span>
-                {shop && (
-                  <Link href={`/shop/${shop.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 999, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>
-                    {shop.name}{shop.verified ? " · Verified" : ""} →
-                  </Link>
-                )}
+              <div style={{ marginTop: 6, color: "var(--muted)", fontSize: 13 }}>
+                {parts.length} listing{parts.length === 1 ? "" : "s"}
               </div>
             </div>
           </div>
