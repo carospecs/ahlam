@@ -17,7 +17,7 @@ function BrandPanel({ onHome }: { onHome: () => void }) {
       </a>
       <div style={{ maxWidth: 380 }}>
         <span style={lx.pill}>
-          <span style={lx.dot} /> Pilot shops · early access
+          <span style={lx.dot} /> Now live · first month free
         </span>
         <h1 style={lx.headline}>Photograph a part.<br /><span style={{ color: "var(--accent)" }}>List it in seconds.</span></h1>
         <p style={lx.sub}>Sign in to your shop to add vehicles, review AI-graded parts, and post listings everywhere you sell.</p>
@@ -77,11 +77,13 @@ function Field({ label, icon, right, children }: { label: string; icon: string; 
   );
 }
 
-export function Login({ onLogin, onClose, signInOnly }: { onLogin: () => void; onClose?: () => void; signInOnly?: boolean }) {
+export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: () => void; onClose?: () => void; signInOnly?: boolean; initialMode?: "signin" | "signup" }) {
   // Return to the marketing landing. onClose flips the parent back to <Landing>
   // (SPA, keeps state); fall back to a hard nav to "/" if it isn't provided.
   const goHome = () => { if (onClose) onClose(); else window.location.href = "/"; };
-  const [mode, setMode] = useState<"signin" | "signup" | "forgot" | "recover">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot" | "recover">(
+    initialMode === "signup" && !signInOnly ? "signup" : "signin",
+  );
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
@@ -133,14 +135,19 @@ export function Login({ onLogin, onClose, signInOnly }: { onLogin: () => void; o
     const sb = supabaseBrowser();
     try {
       if (mode === "signup") {
-        const { error: signUpErr } = await sb.auth.signUp({
-          email,
-          password,
-          options: { data: { full_name: displayName || email.split("@")[0] } },
+        // Create the account through our API (rate-limited, works even with
+        // Supabase-side public signups disabled), then sign straight in — no
+        // confirmation-link detour on launch.
+        const r = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, displayName }),
         });
-        if (signUpErr) { setError(signUpErr.message); setBusy(false); return; }
-        setNotice("Check your email for a confirmation link to activate your account.");
-        setBusy(false);
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { setError(d.error || "Couldn't create your account. Try again."); setBusy(false); return; }
+        const { error: signInErr } = await sb.auth.signInWithPassword({ email, password });
+        if (signInErr) { setError(signInErr.message); setBusy(false); return; }
+        onLogin();
       } else if (mode === "forgot") {
         const { error: resetErr } = await sb.auth.resetPasswordForEmail(email, {
           redirectTo: `${location.origin}/`,

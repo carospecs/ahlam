@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { normalizeGrade } from "@/lib/grade";
+import { effectivePlan, planLabel } from "@/lib/plan-limits";
 
 export async function GET() {
   const supabase = await supabaseServer();
@@ -21,7 +22,7 @@ export async function GET() {
 
   const shopId = profile?.shop_id || null;
 
-  let shop: any = { name: "", location: "", phone: "", members: [], plan: "Pro", trialDaysLeft: 18 };
+  let shop: any = { name: "", location: "", phone: "", members: [], plan: "Pro", planId: "pro", trialDaysLeft: 18 };
   let vehicles: any[] = [];
   let listings: any[] = [];
   let threads: any[] = [];
@@ -138,12 +139,14 @@ export async function GET() {
       const s = shopRes.data;
       const trialEnd = s.trial_ends_at ? new Date(s.trial_ends_at) : null;
       const trialLeft = trialEnd ? Math.max(0, Math.ceil((trialEnd.getTime() - Date.now()) / 86400000)) : 0;
-      const planName = s.plan || "Pro";
+      // planId is what limits are enforced against (an expired free month
+      // becomes "free"); plan stays the display label.
+      const planId = effectivePlan(s.plan, s.trial_ends_at);
       shop = {
         id: s.id, name: s.name, location: s.location || "",
         phone: s.business_phone || "", email: s.email || "", website: s.website || "",
         description: s.description || "", hours: s.hours || "", logoUrl: s.logo_url || null,
-        coverUrl: s.cover_url || null, members, plan: planName, trialDaysLeft: trialLeft,
+        coverUrl: s.cover_url || null, members, plan: planLabel(s.plan), planId, trialDaysLeft: trialLeft,
         defaultWarrantyDays: typeof s.default_warranty_days === "number" ? s.default_warranty_days : 30,
         returnsPolicy: s.returns_policy || "",
       };

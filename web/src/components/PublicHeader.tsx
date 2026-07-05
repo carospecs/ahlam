@@ -22,12 +22,11 @@ export function PublicHeader() {
         <nav className="cs-pill-links" style={{ display: "flex", alignItems: "center", gap: 2 }}>
           <Link href="/guidance" style={navLink}>How it works</Link>
           <Link href="/guides" style={navLink}>Guides</Link>
-          <Link href="/waitlist" style={{ ...navLink, color: "var(--accent)", background: "var(--accent-tint)", fontWeight: 700 }}>Waitlist</Link>
         </nav>
         <span style={navDivider} />
         <ThemeToggle size={31} />
         <Link href="/?signin=1" style={ghostBtnSm} className="cs-pill-links">Sign in</Link>
-        <Link href="/?signin=1" className="cs-raise" style={solidBtnSm}>Get started</Link>
+        <Link href="/?signup=1" className="cs-raise" style={solidBtnSm}>Get started</Link>
       </header>
     </div>
   );

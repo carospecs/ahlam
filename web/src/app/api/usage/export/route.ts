@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
+import { effectivePlan } from "@/lib/plan-limits";
 
 export const runtime = "nodejs";
 
@@ -26,16 +27,16 @@ export async function POST(req: Request) {
     const { data: prof } = await db.from("profiles").select("shop_id").eq("id", user.id).single();
     const shopId = (prof?.shop_id as string) || null;
     if (!shopId) return NextResponse.json({ allowed: true });
-    const { data: shopRow } = await db.from("shops").select("plan").eq("id", shopId).single();
-    const plan = (shopRow?.plan as string) || null;
+    const { data: shopRow } = await db.from("shops").select("plan, trial_ends_at").eq("id", shopId).single();
+    const plan = effectivePlan(shopRow?.plan as string, shopRow?.trial_ends_at as string);
 
     if (cars) {
       const u = await checkUsage(db, shopId, plan, "export_car", cars);
-      if (!u.allowed) return NextResponse.json({ allowed: false, message: limitMessage("export_car", u.limit ?? 0) });
+      if (!u.allowed) return NextResponse.json({ allowed: false, message: limitMessage("export_car", u.limit ?? 0, plan) });
     }
     if (parts) {
       const u = await checkUsage(db, shopId, plan, "export_part", parts);
-      if (!u.allowed) return NextResponse.json({ allowed: false, message: limitMessage("export_part", u.limit ?? 0) });
+      if (!u.allowed) return NextResponse.json({ allowed: false, message: limitMessage("export_part", u.limit ?? 0, plan) });
     }
     // Within quota — record the export.
     if (cars) void recordUsage(db, shopId, "export_car", cars);

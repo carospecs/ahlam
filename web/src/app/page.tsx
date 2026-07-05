@@ -11,36 +11,42 @@ const Dashboard = lazy(() => import("@/components/Dashboard").then((m) => ({ def
 export default function Home() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [showLogin, setShowLogin] = useState(false);
+  const [loginMode, setLoginMode] = useState<"signin" | "signup">("signin");
 
-  // Show the login form AND mark it in the URL (?signin) so a refresh keeps the
-  // user on the auth screen instead of bouncing back to the marketing page.
-  const openLogin = () => {
+  // Show the auth form AND mark it in the URL (?signin / ?signup) so a refresh
+  // keeps the user on the auth screen instead of bouncing back to marketing.
+  const openAuth = (mode: "signin" | "signup") => {
+    setLoginMode(mode);
     setShowLogin(true);
     const url = new URL(window.location.href);
-    if (!url.searchParams.has("signin")) {
-      url.searchParams.set("signin", "1");
-      // pushState (not replaceState) so the sign-in screen is its OWN history
-      // entry — pressing browser "back" pops it and returns to the homepage,
-      // never to whatever page (e.g. /waitlist) preceded it.
-      window.history.pushState({ signin: true }, "", url);
+    if (!url.searchParams.has(mode)) {
+      url.searchParams.delete(mode === "signin" ? "signup" : "signin");
+      url.searchParams.set(mode, "1");
+      // pushState (not replaceState) so the auth screen is its OWN history
+      // entry — pressing browser "back" pops it and returns to the homepage.
+      window.history.pushState({ [mode]: true }, "", url);
     }
   };
 
-  // Leaving the auth screen (e.g. sign-out) clears the ?signin marker.
+  // Leaving the auth screen (e.g. sign-out) clears the ?signin/?signup marker.
   const closeLogin = () => {
     setShowLogin(false);
     const url = new URL(window.location.href);
-    if (url.searchParams.has("signin")) {
+    if (url.searchParams.has("signin") || url.searchParams.has("signup")) {
       url.searchParams.delete("signin");
+      url.searchParams.delete("signup");
       window.history.replaceState({}, "", url);
     }
   };
 
   useEffect(() => {
-    // Jump straight to the auth form for sign-in intents (OAuth error, ?signin,
-    // or a password-recovery link) rather than showing the marketing landing.
+    // Jump straight to the auth form for auth intents (OAuth error, ?signin,
+    // ?signup, or a password-recovery link) rather than the marketing landing.
     const params = new URLSearchParams(window.location.search);
-    if (params.has("signin") || params.get("error") === "auth" || window.location.hash.includes("type=recovery")) {
+    if (params.has("signup")) {
+      setLoginMode("signup");
+      setShowLogin(true);
+    } else if (params.has("signin") || params.get("error") === "auth" || window.location.hash.includes("type=recovery")) {
       setShowLogin(true);
     }
 
@@ -73,8 +79,12 @@ export default function Home() {
     });
 
     // Keep the login view in sync with browser history: pressing "back" from the
-    // sign-in screen pops the pushed entry (no ?signin) → close login → homepage.
-    const onPop = () => setShowLogin(new URLSearchParams(window.location.search).has("signin"));
+    // auth screen pops the pushed entry (no ?signin/?signup) → close → homepage.
+    const onPop = () => {
+      const p = new URLSearchParams(window.location.search);
+      if (p.has("signup")) setLoginMode("signup");
+      setShowLogin(p.has("signin") || p.has("signup"));
+    };
     window.addEventListener("popstate", onPop);
 
     return () => {
@@ -92,11 +102,7 @@ export default function Home() {
   }
 
   if (authed) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Dashboard onSignOut={() => { supabaseBrowser().auth.signOut(); closeLogin(); setAuthed(false); }} /></Suspense>;
-  // Auth screen stays reachable here only for OAuth-callback / password-recovery
-  // links (?signin / type=recovery). The public landing no longer links to it.
-  if (showLogin) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Login onLogin={() => setAuthed(true)} onClose={closeLogin} /></Suspense>;
-  // Sign in / sign up are closed to the public pre-launch: every landing CTA goes
-  // to the waitlist. Admins log in via the hidden /adminhost route.
-  const goWaitlist = () => { window.location.href = "/waitlist"; };
-  return <I18nProvider><Landing onGetStarted={goWaitlist} onSignIn={goWaitlist} /></I18nProvider>;
+  if (showLogin) return <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--background)", color: "var(--muted)", fontSize: 14 }}>Loading…</div>}><Login key={loginMode} initialMode={loginMode} onLogin={() => setAuthed(true)} onClose={closeLogin} /></Suspense>;
+  // Launched: the landing's CTAs open sign-up (create account) or sign-in.
+  return <I18nProvider><Landing onGetStarted={() => openAuth("signup")} onSignIn={() => openAuth("signin")} /></I18nProvider>;
 }

@@ -4,7 +4,6 @@ import React from "react";
 import { motion, AnimatePresence, MotionConfig, type Variants } from "framer-motion";
 import { ScanLine, Send, ArrowRight, Tag, Check, ChevronDown, CalendarCheck, Mail, MessageSquare, Compass, Wrench, DollarSign, ShoppingBag, BarChart3, Download, Users, Building2, X, Camera, Boxes, VolumeOff } from "lucide-react";
 import { BrandMark } from "./BrandMark";
-import { LaunchCountdown } from "./LaunchCountdown";
 import { useI18n } from "@/lib/i18n";
 import { CONDITION_COLOR } from "./data";
 import { PricingPlans } from "./PricingPlans";
@@ -18,10 +17,13 @@ import { SiteFooter } from "./SiteFooter";
 
 const EASE = [0.22, 0.8, 0.26, 1] as const;
 
-// Pricing is hidden on the public landing for now (pre-launch). Flip to true to
-// bring the Pricing section + nav links back. The PricingPlans component and the
-// plan data stay in the codebase either way.
-const SHOW_PRICING = false;
+// Pricing is public since launch (Jul 2026). Flip to false to hide the Pricing
+// section again; the PricingPlans component and plan data stay either way.
+const SHOW_PRICING = true;
+
+// Chrome Web Store listing for the Ahlam Auto-Poster extension (fills the
+// Facebook / OfferUp forms; the seller reviews and publishes).
+const EXTENSION_URL = "https://chromewebstore.google.com/detail/ahlam-auto-poster/fpiebljechdcjfjhfbmbnkjjmoinobkj";
 
 const RECIPIENTS = "mohammadabbas@ahlam.io,andygarcia@ahlam.io";
 const GMAIL_COMPOSE = (to: string, subject: string) =>
@@ -34,7 +36,7 @@ const FAQS = [
   { q: "Which marketplaces can I post to?", a: "Auto-post to eBay, and one-tap copy clean listings for Facebook Marketplace and OfferUp, plus your own Ahlam storefront. Craigslist, Car-Part.com, and DoorDash local delivery are in development and coming soon." },
   { q: "Can I list a part or car manually?", a: "Yes. AI scanning is the fast path, but you can type in a vehicle or a single part by hand any time, with the AI helping write and price it." },
   { q: "Is my VIN and mileage private?", a: "Yes. VIN and mileage are read for accuracy but stay hidden on public listings until you choose to share them." },
-  { q: "What does it cost to start?", a: "Nothing. Start free with no card. The first 50 yards get a full month with every feature unlocked." },
+  { q: "What does it cost to start?", a: "Nothing. Your first month is free with every feature unlocked and no card required. After that, pick the plan that fits: Solo $19, Growth $100, Max $200, or Ultimate $350 a month." },
 ];
 
 // Sample marketplace listings — varied vehicles and a deliberate A/B/C grade mix.
@@ -67,7 +69,7 @@ function Reveal({ children, i = 0, style, className }: { children: React.ReactNo
   );
 }
 
-export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?: () => void }) {
+export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; onSignIn?: () => void }) {
   const { lang, setLang } = useI18n();
 
   return (
@@ -76,7 +78,7 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?:
         <div className="cs-page-wash" aria-hidden="true" />
 
         <div className="cs-landing-body" style={{ position: "relative", zIndex: 1 }}>
-          <SiteHeader onGetStarted={onGetStarted} lang={lang} setLang={setLang} />
+          <SiteHeader onGetStarted={onGetStarted} onSignIn={onSignIn} lang={lang} setLang={setLang} />
 
           {/* Hero — asymmetric: copy left, framed real photo + review card right */}
           <section style={{ borderBottom: "1px solid var(--line)" }}>
@@ -115,18 +117,14 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?:
             </div>
           </section>
 
-          {/* Beta notice + launch countdown */}
+          {/* Launch notice */}
           <section style={{ borderBottom: "1px solid var(--line)" }}>
             <Reveal style={{ maxWidth: 940, margin: "0 auto", padding: "24px 24px" }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 13, justifyContent: "center", flexWrap: "wrap", background: "var(--accent-tint)", border: "1px solid color-mix(in srgb, var(--accent) 26%, transparent)", borderRadius: 14, padding: "15px 22px" }}>
-                <span style={{ display: "inline-flex", marginTop: 1, fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)", borderRadius: 999, padding: "2px 8px", flexShrink: 0 }}>BETA</span>
+                <span style={{ display: "inline-flex", marginTop: 1, fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)", borderRadius: 999, padding: "2px 8px", flexShrink: 0 }}>LIVE</span>
                 <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.6, maxWidth: 740 }}>
-                  <strong style={{ color: "var(--foreground)" }}>Ahlam is in beta.</strong> Posting to eBay is live now. Facebook, OfferUp, and more are in development. We launch right after the Fourth of July weekend, starting with yards in California and Texas. The first 50 yards to join the waitlist get a full month free with every feature unlocked.
+                  <strong style={{ color: "var(--foreground)" }}>Ahlam is live.</strong> Create your account and your first month is free with every feature unlocked. Posting to eBay is automatic; Facebook Marketplace and OfferUp post through the <a href={EXTENSION_URL} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "none" }}>Ahlam Auto-Poster Chrome extension</a>, which fills each form for you.
                 </span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 11, marginTop: 20 }}>
-                <span className="cs-kicker">Launching in</span>
-                <LaunchCountdown />
               </div>
             </Reveal>
           </section>
@@ -311,7 +309,7 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?:
               <Reveal style={{ textAlign: "center", maxWidth: 680, margin: "0 auto" }}>
                 <div className="cs-kicker">Pricing</div>
                 <h2 className="cs-display" style={h2}>Simple, transparent pricing</h2>
-                <p style={{ color: "var(--muted)", fontSize: 15.5, marginTop: 10, lineHeight: 1.6 }}>Free for the first 50 yards, or go Solo for $19/mo if it&apos;s just you. No card to begin, cancel anytime.</p>
+                <p style={{ color: "var(--muted)", fontSize: 15.5, marginTop: 10, lineHeight: 1.6 }}>Every plan starts with a free first month, no card to begin. Cancel anytime.</p>
               </Reveal>
               <Reveal i={1} style={{ maxWidth: 1180, margin: "38px auto 0" }}>
                 <PricingPlans onChoose={onGetStarted} />
@@ -347,11 +345,11 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?:
                       <div className="cs-kicker">Get started</div>
                       <h2 className="cs-display" style={{ ...h2, margin: "10px 0 0" }}>See Ahlam on your own inventory</h2>
                       <p style={{ color: "var(--muted)", fontSize: 16, lineHeight: 1.6, margin: "12px 0 0", maxWidth: 520 }}>
-                        Join the waitlist for the free first month, or book a 15-minute walkthrough and we&apos;ll scan one of your cars live.
+                        Create your account for the free first month, or book a 15-minute walkthrough and we&apos;ll scan one of your cars live.
                       </p>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtn, justifyContent: "center", padding: "14px 24px", fontSize: 15.5 }}>Join the waitlist <ArrowRight size={17} /></button>
+                      <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtn, justifyContent: "center", padding: "14px 24px", fontSize: 15.5 }}>Start free <ArrowRight size={17} /></button>
                       <a href={CAL_DEMO_URL} target="_blank" rel="noopener noreferrer" style={{ ...ghostBtn, justifyContent: "center", padding: "13px 22px", fontSize: 15 }}><CalendarCheck size={16} /> Book a demo</a>
                       <button onClick={() => window.open(GMAIL_COMPOSE(RECIPIENTS, "Ahlam question"), "_blank", "noopener")} style={{ ...ghostBtn, justifyContent: "center", padding: "13px 22px", fontSize: 15, cursor: "pointer" }}><Mail size={16} /> Contact us</button>
                     </div>

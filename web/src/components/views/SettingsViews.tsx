@@ -515,7 +515,7 @@ export function Billing(_: ViewProps) {
             {busy === "checkout" ? <LoaderCircle size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : null} Add card
           </button>
         </div>
-        <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 12, opacity: 0.7 }}>Payments are processed securely by Stripe. Set STRIPE_SECRET_KEY and STRIPE_PRICE_ID to enable live billing.</div>
+        <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 12, opacity: 0.7 }}>Payments are processed securely by Stripe. Set STRIPE_SECRET_KEY and the STRIPE_PRODUCT_* ids to enable live billing.</div>
       </Card>
     </div>
   );

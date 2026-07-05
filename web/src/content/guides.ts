@@ -236,7 +236,7 @@ export const GUIDES: Guide[] = [
         heading: "The fastest way to compare is to scan one car",
         paragraphs: [
           "Every option here earns its place for someone. The question is whether it does the part that actually slows you down: knowing what a part is, what it is worth, and getting it listed.",
-          "Join the waitlist for your free first month, or book a 15-minute walkthrough and we will scan one of your vehicles live and price every part on the spot.",
+          "Create your account for your free first month, or book a 15-minute walkthrough and we will scan one of your vehicles live and price every part on the spot.",
         ],
       },
     ],

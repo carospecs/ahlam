@@ -3,6 +3,7 @@ import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { floorPrice } from "@/lib/price-bands";
 import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
+import { effectivePlan } from "@/lib/plan-limits";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -53,14 +54,16 @@ export async function POST(req: Request) {
   // Save-as-draft keeps everything private (not surfaced in the public market).
   const status = body.draft ? "draft" : "active";
 
-  // Solo plan caps whole-car posts per day. Only an actually-posted (active) car
-  // counts; drafts are free. Fail-open if usage isn't migrated / lookup errors.
+  // Some plans cap whole-car posts per day (Solo 1/day; an expired free month
+  // blocks posting). Only an actually-posted (active) car counts; drafts are
+  // free. Fail-open if usage isn't migrated / lookup errors.
   if (status === "active") {
     try {
-      const { data: shopRow } = await db.from("shops").select("plan").eq("id", shopId).single();
-      const usage = await checkUsage(db, shopId, (shopRow?.plan as string) || null, "car_post");
+      const { data: shopRow } = await db.from("shops").select("plan, trial_ends_at").eq("id", shopId).single();
+      const plan = effectivePlan(shopRow?.plan as string, shopRow?.trial_ends_at as string);
+      const usage = await checkUsage(db, shopId, plan, "car_post");
       if (!usage.allowed) {
-        return NextResponse.json({ error: limitMessage("car_post", usage.limit ?? 0), code: "quota" }, { status: 402 });
+        return NextResponse.json({ error: limitMessage("car_post", usage.limit ?? 0, plan), code: "quota" }, { status: 402 });
       }
     } catch { /* fail-open: never block a post on a usage-lookup error */ }
   }

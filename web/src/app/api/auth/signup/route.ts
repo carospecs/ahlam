@@ -2,16 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 
-// Public signups are CLOSED pre-launch — the only public action is joining the
-// waitlist. (This route uses the service-role admin API, which bypasses the
-// Supabase "disable signup" auth setting, so it must be gated here too.)
-// Admins/test accounts are created directly in Supabase, not through this route.
-const SIGNUPS_OPEN = false;
+// Public signups are OPEN (launched Jul 2026). This route uses the service-role
+// admin API, which bypasses the Supabase "disable signup" auth setting, so the
+// project-level setting can stay off while all signups flow through here (with
+// rate limiting). Flip to false to close signups again.
+const SIGNUPS_OPEN = true;
 
 export async function POST(req: NextRequest) {
   if (!SIGNUPS_OPEN) {
     return NextResponse.json(
-      { error: "Signups are closed. Join the waitlist at /waitlist." },
+      { error: "Signups are closed right now. Check back soon." },
       { status: 403 }
     );
   }
@@ -49,11 +49,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // email_confirm: true — no confirmation-link step. There is no self-serve
+  // confirm flow (and launch emails point people straight here), so a new
+  // account signs in immediately after creation.
   const admin = supabaseAdmin();
   const { data, error } = await admin.auth.admin.createUser({
     email,
     password,
-    email_confirm: false,
+    email_confirm: true,
     user_metadata: { full_name: displayName || email.split("@")[0] },
   });
 

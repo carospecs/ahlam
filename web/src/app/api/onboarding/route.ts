@@ -56,18 +56,31 @@ export async function POST(req: NextRequest) {
   const type = accountType === "individual" ? "individual" : "shop";
   const shopLocation = location || address || null;
 
+  // Launch grants: everyone starts with a free month (plan "starter"). Waitlist
+  // members get the founding month instead — every top-tier feature unlocked,
+  // 5 AI car scans, unlimited manual posting (enforced in lib/plan-limits.ts).
+  let plan = "starter";
+  if (user.email) {
+    const { data: wl } = await db
+      .from("waitlist").select("email").ilike("email", user.email).limit(1).maybeSingle();
+    if (wl) plan = "founder";
+  }
+  const trialEndsAt = new Date(Date.now() + 30 * 86400000).toISOString();
+
   // Try to persist account_type; if the column doesn't exist yet, fall back gracefully.
-  let { data: shop, error: shopErr } = await db
-    .from("shops").insert({
-      name: name.trim(), location: shopLocation, business_phone: phone || null,
-      lat, lng, zip_code: zip, address_line: address || null,
-      account_type: type,
-    }).select().single();
-  if (shopErr && /account_type/.test(shopErr.message || "")) {
-    ({ data: shop, error: shopErr } = await db.from("shops").insert({
-      name: name.trim(), location: shopLocation, business_phone: phone || null,
-      lat, lng, zip_code: zip, address_line: address || null,
-    }).select().single());
+  const shopRow: Record<string, unknown> = {
+    name: name.trim(), location: shopLocation, business_phone: phone || null,
+    lat, lng, zip_code: zip, address_line: address || null,
+    account_type: type, plan, trial_ends_at: trialEndsAt,
+  };
+  let { data: shop, error: shopErr } = await db.from("shops").insert(shopRow).select().single();
+  for (let attempt = 0; shopErr && attempt < 3; attempt++) {
+    let dropped = false;
+    for (const col of ["account_type", "plan", "trial_ends_at"]) {
+      if (col in shopRow && new RegExp(col, "i").test(shopErr.message || "")) { delete shopRow[col]; dropped = true; }
+    }
+    if (!dropped) break;
+    ({ data: shop, error: shopErr } = await db.from("shops").insert(shopRow).select().single());
   }
   if (shopErr || !shop) return NextResponse.json({ error: shopErr?.message || "Could not create account" }, { status: 500 });
 
