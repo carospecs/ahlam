@@ -205,6 +205,10 @@ export async function POST(req: Request) {
           zeroComp.length ? marketPriceParts({ vehicleId: id, spec, powertrainLine, parts: zeroComp }) : Promise.resolve([]),
         ]);
         for (const r of judged ?? []) {
+          // Null estimate = the judge saw a junk pool (accessories/sub-components,
+          // no real comps) and declined to invent a number. Leave the part to the
+          // lower tiers / vision price instead of shipping a fabricated price.
+          if (r.estimate == null) continue;
           accept({
             name: r.part_id,
             usedPartPriceUsd: r.estimate,

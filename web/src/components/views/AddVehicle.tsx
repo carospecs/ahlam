@@ -10,7 +10,7 @@ import { playSonarPing } from "@/lib/sound";
 import { ManualListing } from "./ManualListing";
 import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, type ScanSession } from "@/lib/scanSession";
 import type { VinInfo } from "@/lib/vin";
-import { applyVinEngine, reconcilePairPrices, dropGenericWhenSided } from "@/lib/part-enrich";
+import { applyVinEngine, reconcilePairPrices, dropGenericWhenSided, dropGenericWhenPositioned } from "@/lib/part-enrich";
 import { instanceScore, type PhotoFront } from "@/lib/photo-select";
 import { runScanQa } from "@/lib/scan-qa";
 import { bandFor, bandFraction, priceAtFraction, roundYardPrice } from "@/lib/price-band";
@@ -468,7 +468,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       // Then ground descriptions (Stage 5): lock the one body color + hedge barely-seen parts.
       const deduped = groundDescriptions(
         propagateImpactDamage(
-          reconcilePairPrices(dropGenericWhenSided([...byName.values()]).sort(comparePartsForDisplay)),
+          reconcilePairPrices(dropGenericWhenPositioned(dropGenericWhenSided([...byName.values()])).sort(comparePartsForDisplay)),
         ).sort((a, b) => (a.inferred ? 1 : 0) - (b.inferred ? 1 : 0)),
         { bodyColor: agg?.color },
       ).map((p) => ({ ...p, _id: newId(), _aiPrice: p.suggestedPriceUsd ?? null }));

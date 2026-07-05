@@ -10,9 +10,9 @@ export type JudgeConfidence = "high" | "med" | "low";
 
 export type JudgedPrice = {
   part_id: string;
-  estimate: number;
-  low: number;
-  high: number;
+  estimate: number | null; // null = the judge found no usable comps (junk pool) — leave unpriced
+  low: number | null;
+  high: number | null;
   confidence: JudgeConfidence;
   note: string;
 };
@@ -45,7 +45,11 @@ const JUDGE_PROMPT =
   "there are many of them, little to none when supply is thin and sellers are holding firm. Land on what it would " +
   "actually sell for.\n" +
   "- Options and condition move price within the same fitment — camera wiring, heated, damper, color-match, damage. " +
-  "Match like for like where the titles tell you.\n\n" +
+  "Match like for like where the titles tell you.\n" +
+  "- You are pricing COMPLETE assemblies pulled off a whole vehicle. Match complete-assembly comps; cheaper partial " +
+  "configurations (shell only, bare panel, no glass, no hardware) set a lower bound — they are NOT the anchor.\n" +
+  "- If the listings contain NO real comps for the part (only accessories, sub-components, or unrelated items), set " +
+  "estimate/low/high to null instead of inventing a number — a null price falls back safely; a fabricated one ships.\n\n" +
   "Then give one reasonable price and a sensible range around it. Don't overthink it. Don't show your work. Don't " +
   "write explanations.\n\n" +
   'confidence: "high" if several real comps agree; "med" if few or scattered; "low" if the comps barely fit or ' +
@@ -64,9 +68,9 @@ const JUDGE_SCHEMA = {
         required: ["part_id", "estimate", "low", "high", "confidence", "note"],
         properties: {
           part_id: { type: "string" },
-          estimate: { type: "number" },
-          low: { type: "number" },
-          high: { type: "number" },
+          estimate: { type: ["number", "null"] },
+          low: { type: ["number", "null"] },
+          high: { type: ["number", "null"] },
           confidence: { type: "string", enum: ["high", "med", "low"] },
           note: { type: "string" },
         },
@@ -89,12 +93,15 @@ export function sanitizeJudgedRow(row: unknown): JudgedPrice | null {
   if (!r || typeof r.part_id !== "string" || !r.part_id.trim()) return null;
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.round(v) : null);
   const estimate = num(r.estimate);
-  if (estimate == null) return null;
+  const confidence: JudgeConfidence = r.confidence === "high" || r.confidence === "med" || r.confidence === "low" ? r.confidence : "low";
+  const note = typeof r.note === "string" ? r.note.slice(0, 120) : "";
+  // A null estimate is a VALID answer: "no usable comps" (junk pool). The caller
+  // leaves the part unpriced by this tier instead of shipping a fabricated number.
+  if (estimate == null) return { part_id: r.part_id.trim(), estimate: null, low: null, high: null, confidence: "low", note };
   let low = num(r.low) ?? estimate, high = num(r.high) ?? estimate;
   if (low > high) [low, high] = [high, low];
   low = Math.min(low, estimate); high = Math.max(high, estimate);
-  const confidence: JudgeConfidence = r.confidence === "high" || r.confidence === "med" || r.confidence === "low" ? r.confidence : "low";
-  return { part_id: r.part_id.trim(), estimate, low, high, confidence, note: typeof r.note === "string" ? r.note.slice(0, 120) : "" };
+  return { part_id: r.part_id.trim(), estimate, low, high, confidence, note };
 }
 
 // ONE batched model call over every part that has comps. Returns null on any

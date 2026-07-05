@@ -12,15 +12,22 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 if (!process.env.__EBAY_COMPS_TEST_CHILD) {
   const fs = await import("node:fs");
   const hookPath = pathResolve(HERE, ".ebay-comps.ext-hook.mjs");
+  // Hook resolves both relative extensionless .ts imports AND the "@/…" alias
+  // (part-enrich.ts imports "@/lib/age-pricing"), mapping @/ to web/src/.
+  const SRC = pathResolve(HERE, "..");
   fs.writeFileSync(
     hookPath,
     [
       'import { fileURLToPath, pathToFileURL } from "node:url";',
       'import { existsSync } from "node:fs";',
       'import { dirname, resolve as pathResolve } from "node:path";',
+      `const SRC = ${JSON.stringify(SRC)};`,
       "export function resolve(specifier, context, nextResolve) {",
-      '  if ((specifier.startsWith("./") || specifier.startsWith("../")) && context.parentURL?.startsWith("file:")) {',
-      "    const abs = pathResolve(dirname(fileURLToPath(context.parentURL)), specifier);",
+      '  const aliased = specifier.startsWith("@/");',
+      '  if ((aliased || specifier.startsWith("./") || specifier.startsWith("../")) && context.parentURL?.startsWith("file:")) {',
+      "    const abs = aliased",
+      "      ? pathResolve(SRC, specifier.slice(2))",
+      "      : pathResolve(dirname(fileURLToPath(context.parentURL)), specifier);",
       "    if (!existsSync(abs)) {",
       '      for (const ext of [".ts", ".tsx"]) {',
       "        if (existsSync(abs + ext)) return nextResolve(pathToFileURL(abs + ext).href, context);",
@@ -43,6 +50,7 @@ if (!process.env.__EBAY_COMPS_TEST_CHILD) {
 const assert = (await import("node:assert/strict")).default;
 const { compQuery, cleanComps } = await import("./ebay-comps.ts");
 const { sanitizeJudgedRow } = await import("./price-judge.ts");
+const { dropGenericWhenPositioned } = await import("./part-enrich.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -114,10 +122,36 @@ test("passes a clean judged row; clamps estimate into band", () => {
   assert.deepEqual(r, { part_id: "Tailgate", estimate: 700, low: 650, high: 750, confidence: "high", note: "6 comps" });
 });
 
-test("rejects rows without id or positive estimate; coerces unknown confidence", () => {
+test("rejects rows without id; coerces unknown confidence", () => {
   assert.equal(sanitizeJudgedRow({ estimate: 100 }), null);
-  assert.equal(sanitizeJudgedRow({ part_id: "X", estimate: -5 }), null);
   assert.equal(sanitizeJudgedRow({ part_id: "X", estimate: 100, low: 90, high: 110, confidence: "sure", note: "" }).confidence, "low");
+});
+
+test("null/invalid estimate is a VALID 'no usable comps' answer, not a rejection", () => {
+  const a = sanitizeJudgedRow({ part_id: "Windshield", estimate: null, low: null, high: null, confidence: "low", note: "no true glass comps" });
+  assert.deepEqual(a, { part_id: "Windshield", estimate: null, low: null, high: null, confidence: "low", note: "no true glass comps" });
+  const b = sanitizeJudgedRow({ part_id: "X", estimate: -5, confidence: "high", note: "" });
+  assert.equal(b.estimate, null); // invalid coerces to the null answer
+  assert.equal(b.confidence, "low");
+});
+
+// ── dropGenericWhenPositioned (merge synonym dedupe) ─────────────────────────
+
+test("bare synonym drops when a positioned sibling exists", () => {
+  const out = dropGenericWhenPositioned([
+    { partName: "Rear Spoiler" }, { partName: "Spoiler" },
+    { partName: "Front Door Panel" }, { partName: "Door Panel" },
+    { partName: "Hood" }, // no positioned sibling — stays
+  ]);
+  assert.deepEqual(out.map((p) => p.partName), ["Rear Spoiler", "Front Door Panel", "Hood"]);
+});
+
+test("positioned-only or bare-only groups are untouched", () => {
+  const out = dropGenericWhenPositioned([
+    { partName: "Front Bumper Cover" }, { partName: "Rear Bumper Cover" }, // both positioned — distinct parts
+    { partName: "Grille" },
+  ]);
+  assert.equal(out.length, 3);
 });
 
 test("missing band collapses to the estimate", () => {
