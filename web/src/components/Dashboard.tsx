@@ -931,8 +931,8 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 }
 
 const sx: Record<string, React.CSSProperties> = {
-  layout: { display: "grid", gridTemplateColumns: "248px 1fr", height: "100vh", overflow: "hidden" },
-  sidebar: { background: "var(--surface)", borderRight: "1px solid var(--line)", padding: 18, display: "flex", flexDirection: "column", gap: 6 },
+  layout: { display: "grid", gridTemplateColumns: "248px 1fr", gridTemplateRows: "minmax(0, 1fr)", height: "100vh", overflow: "hidden" },
+  sidebar: { background: "var(--surface)", borderRight: "1px solid var(--line)", padding: 18, display: "flex", flexDirection: "column", gap: 6, minHeight: 0, overflowY: "auto" },
   brand: { display: "flex", alignItems: "center", gap: 10, padding: "6px 8px 14px" },
   navClose: { display: "none", marginLeft: "auto", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: "transparent", placeItems: "center" },
   hamburger: { display: "none", width: 40, height: 40, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", placeItems: "center", flexShrink: 0 },

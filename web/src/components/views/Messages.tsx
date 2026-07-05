@@ -219,8 +219,8 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "100%", minHeight: 380, border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)", maxWidth: 1180 }} className="cs-chat">
-      <div style={{ display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gridTemplateRows: "minmax(0, 1fr)", height: "100%", minHeight: 380, border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)", maxWidth: 1180 }} className="cs-chat">
+      <div style={{ display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0, minHeight: 0 }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "grid", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <Inbox size={16} color="var(--muted)" />
@@ -243,7 +243,7 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
             })}
           </div>
         </div>
-        <div style={{ overflowY: "auto", flex: 1 }}>
+        <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
           {visibleThreads2.length === 0 && <div style={{ padding: 24, textAlign: "center", fontSize: 12.5, color: "var(--muted)" }}>{
             query ? `No conversations match “${query}”.` : statusFilter === "all" ? "No conversations." : `No ${STATUS_META[statusFilter as ConvStatus].label.toLowerCase()} conversations.`
           }</div>}
@@ -292,7 +292,7 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
       {!t ? (
         <div style={{ flex: 1, display: "grid", placeItems: "center", color: "var(--muted)", fontSize: 14 }}>Select a conversation</div>
       ) : (
-      <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 18px", borderBottom: "1px solid var(--line)" }}>
           {(() => { const m2 = marketMeta[t.market]; const IconComp = m2?.icon; return (
           <div style={{ width: 38, height: 38, borderRadius: 999, background: m2 ? `${m2.color}18` : "var(--surface2)", display: "grid", placeItems: "center", flexShrink: 0, border: "1px solid var(--line)" }}>
@@ -339,7 +339,7 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
             );
           })()}
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 12, background: "var(--background)" }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 12, background: "var(--background)" }}>
           {msgs.map((m: LocalMsg, i: number) => (
             <div key={i} style={{ display: "flex", justifyContent: m.from === "me" ? "flex-end" : "flex-start" }}>
               <div style={{ maxWidth: "70%", padding: "10px 14px", borderRadius: 14, fontSize: 13.5, lineHeight: 1.45, background: m.from === "me" ? "var(--accent)" : "var(--surface2)", color: m.from === "me" ? "#fff" : "var(--foreground)", borderBottomRightRadius: m.from === "me" ? 4 : 14, borderBottomLeftRadius: m.from === "me" ? 14 : 4 }}>
