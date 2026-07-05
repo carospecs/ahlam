@@ -34,6 +34,7 @@ export function BuyerMessages() {
   const [sending, setSending] = React.useState(false);
   const [deleted, setDeleted] = React.useState<Set<string>>(loadDeleted);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const gridRef = React.useRef<HTMLDivElement>(null);
 
   const load = React.useCallback(async () => {
     try {
@@ -58,10 +59,14 @@ export function BuyerMessages() {
     : notDeleted;
   const t = activeId ? visible.find((x) => x.id === activeId) || null : null;
 
-  // Always land on the newest message.
+  // Always land on the newest message, and keep the outer grid pinned:
+  // focusing a child of an overflow:hidden box can scroll the box itself,
+  // clipping the pane headers out of view.
   React.useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
+    const g = gridRef.current;
+    if (g) { g.scrollTop = 0; g.scrollLeft = 0; }
   }, [activeId, t?.messages.length]);
 
   function deleteThread(id: string) {
@@ -103,7 +108,7 @@ export function BuyerMessages() {
   const waHref = waNumber ? `https://wa.me/${waNumber}` : null;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "calc(100dvh - 250px)", minHeight: 430, border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)", maxWidth: 1180 }} className="cs-chat">
+    <div ref={gridRef} style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "calc(100dvh - 250px)", minHeight: 430, border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)", maxWidth: 1180 }} className="cs-chat">
       <div style={{ display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0 }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "grid", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -181,7 +186,6 @@ export function BuyerMessages() {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder={`Message ${t.shopName}…`}
-              autoFocus
               style={{ flex: 1, border: "1px solid var(--line)", background: "var(--surface2)", borderRadius: 10, padding: "11px 14px", color: "var(--foreground)", fontSize: 13.5, outline: "none" }}
               onKeyDown={(e) => { if (e.key === "Enter") send(); }}
             />
