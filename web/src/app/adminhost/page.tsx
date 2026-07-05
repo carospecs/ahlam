@@ -22,9 +22,11 @@ const Loading = () => (
 
 type Row = {
   email: string; joined: string | null; lastSignIn: string | null;
-  shopName: string | null; accountType: string | null;
-  plan: string | null; planId: string | null; subscriptionStatus: string | null;
-  trialDaysLeft: number | null; scansThisMonth: number; carPostsThisMonth: number;
+  shopId: string | null; shopName: string | null; accountType: string | null;
+  plan: string | null; planRaw: string | null; planId: string | null;
+  subscriptionStatus: string | null; hasStripeCustomer: boolean;
+  trialEndsAt: string | null; trialDaysLeft: number | null;
+  scansThisMonth: number; carPostsThisMonth: number;
   listings: number; activeListings: number; vehicles: number;
 };
 type Stats = {
@@ -32,7 +34,7 @@ type Stats = {
     users: number; newUsers7d: number; shops: number;
     waitlist: number; waitlistEmailed: number;
     listings: number; activeListings: number; vehicles: number;
-    scansThisMonth: number; carPostsThisMonth: number;
+    scansThisMonth: number; carPostsThisMonth: number; paying: number;
   };
   planCounts: Record<string, number>;
   rows: Row[];
@@ -97,6 +99,28 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // Per-shop plan change straight from the table.
+  const [savingShop, setSavingShop] = useState<string | null>(null);
+  const [saveNote, setSaveNote] = useState("");
+  async function changePlan(shopId: string, shopName: string, plan: string) {
+    setSavingShop(shopId);
+    setSaveNote("");
+    try {
+      const r = await fetch("/api/admin/shop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shopId, plan }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) setSaveNote(`Could not change ${shopName}: ${d.error || r.status}`);
+      else setSaveNote(`${shopName} is now on ${plan}${plan === "starter" || plan === "founder" ? " (fresh 30-day clock)" : ""}.`);
+      await load();
+    } catch {
+      setSaveNote(`Network error changing ${shopName}. Refresh and check.`);
+    }
+    setSavingShop(null);
+  }
+
   const fmtDate = (iso: string | null) => {
     if (!iso) return "—";
     try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
@@ -132,6 +156,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
           const { totals, planCounts, rows } = state.stats;
           const tiles = [
             { label: "Users", value: totals.users, sub: `+${totals.newUsers7d} this week` },
+            { label: "Paying (autopay)", value: totals.paying, sub: "live Stripe subscriptions" },
             { label: "Shops", value: totals.shops, sub: `${totals.vehicles} vehicles in inventory` },
             { label: "Waitlist", value: totals.waitlist, sub: `${totals.waitlistEmailed} emailed` },
             { label: "Listings", value: totals.listings, sub: `${totals.activeListings} live on the market` },
@@ -171,12 +196,17 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
               </div>
 
               {/* Users table */}
-              <div className="cs-panel" style={{ marginTop: 16, padding: 0, overflow: "hidden" }}>
+              {saveNote && (
+                <div style={{ marginTop: 14, fontSize: 13, fontWeight: 600, color: saveNote.startsWith("Could not") || saveNote.startsWith("Network") ? "var(--danger)" : "var(--success)" }}>
+                  {saveNote}
+                </div>
+              )}
+              <div className="cs-panel" style={{ marginTop: 12, padding: 0, overflow: "hidden" }}>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
                     <thead>
                       <tr style={{ textAlign: "left", color: "var(--muted)", background: "var(--surface2)" }}>
-                        {["User", "Shop", "Plan", "Scans (mo)", "Cars (mo)", "Listings", "Joined", "Last seen"].map((h) => (
+                        {["User", "Shop", "Plan", "Expires", "Autopay", "Scans (mo)", "Listings", "Joined", "Last seen"].map((h) => (
                           <th key={h} style={{ padding: "12px 14px", fontWeight: 700, fontSize: 11.5, letterSpacing: "0.04em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                         ))}
                       </tr>
@@ -187,19 +217,38 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                           <td style={{ padding: "11px 14px", fontWeight: 600 }}>{r.email}</td>
                           <td style={td}>{r.shopName ? `${r.shopName}${r.accountType === "individual" ? " · individual" : ""}` : "no shop yet"}</td>
                           <td style={td}>
-                            {r.plan ? (
-                              <span>
-                                <span style={{ fontWeight: 700, color: "var(--foreground)" }}>{r.plan}</span>
-                                {r.planId === "starter" || r.planId === "founder"
-                                  ? <span style={{ color: "var(--muted)" }}> · {r.trialDaysLeft}d left</span>
-                                  : r.subscriptionStatus === "active"
-                                    ? <span style={{ color: "var(--success)" }}> · paying</span>
-                                    : null}
-                              </span>
+                            {r.shopId && r.planRaw ? (
+                              <select
+                                value={r.planRaw.toLowerCase()}
+                                disabled={savingShop === r.shopId}
+                                onChange={(e) => changePlan(r.shopId!, r.shopName || r.email, e.target.value)}
+                                style={{ background: "var(--surface2)", color: "var(--foreground)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 8px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: savingShop === r.shopId ? 0.5 : 1 }}
+                              >
+                                {PLAN_ORDER.map((p) => (
+                                  <option key={p} value={p}>{PLAN_LABELS[p] ?? p}</option>
+                                ))}
+                              </select>
                             ) : "—"}
                           </td>
+                          <td style={{ ...td, whiteSpace: "nowrap" }}>
+                            {r.planId === "starter" || r.planId === "founder"
+                              ? <span style={{ color: "var(--foreground)" }}>{fmtDate(r.trialEndsAt)} <span style={{ color: "var(--muted)" }}>({r.trialDaysLeft}d)</span></span>
+                              : r.planId === "free"
+                                ? <span style={{ color: "var(--danger)", fontWeight: 600 }}>expired</span>
+                                : r.subscriptionStatus === "active"
+                                  ? "auto-renews"
+                                  : "—"}
+                          </td>
+                          <td style={{ ...td, whiteSpace: "nowrap" }}>
+                            {r.subscriptionStatus === "active"
+                              ? <span style={{ color: "var(--success)", fontWeight: 700 }}>on</span>
+                              : r.subscriptionStatus === "canceled"
+                                ? <span style={{ color: "var(--danger)", fontWeight: 600 }}>canceled</span>
+                                : r.hasStripeCustomer
+                                  ? <span style={{ color: "var(--muted)" }}>card on file</span>
+                                  : <span style={{ color: "var(--muted)" }}>off</span>}
+                          </td>
                           <td style={tdNum}>{r.scansThisMonth}</td>
-                          <td style={tdNum}>{r.carPostsThisMonth}</td>
                           <td style={tdNum}>{r.listings ? `${r.activeListings}/${r.listings}` : "0"}</td>
                           <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtDate(r.joined)}</td>
                           <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtDate(r.lastSignIn)}</td>
@@ -210,7 +259,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                 </div>
                 <div style={{ padding: "10px 14px", fontSize: 11.5, color: "var(--muted)", borderTop: "1px solid var(--line)" }}>
                   <Users size={12} style={{ verticalAlign: "-2px", marginRight: 5 }} />
-                  Listings shows live/total. Change a shop&apos;s plan in Supabase → shops → the plan dropdown.
+                  Changing the plan applies instantly. Picking Free trial or Founding member starts a fresh 30-day clock. Listings shows live/total. Autopay comes from Stripe; if a customer later buys a plan at checkout, Stripe overwrites whatever is set here.
                 </div>
               </div>
             </>

@@ -30,7 +30,7 @@ export async function GET() {
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
     const [profilesR, shopsR, listingsR, vehiclesR, usageR, waitlistR] = await Promise.all([
       db.from("profiles").select("id, shop_id"),
-      db.from("shops").select("id, name, plan, trial_ends_at, subscription_status, account_type, created_at"),
+      db.from("shops").select("id, name, plan, trial_ends_at, subscription_status, stripe_customer_id, account_type, created_at"),
       db.from("listings").select("shop_id, status").limit(20000),
       db.from("vehicles").select("shop_id").limit(20000),
       db.from("usage_events").select("shop_id, kind, quantity").gte("created_at", monthStart).limit(20000),
@@ -75,8 +75,11 @@ export async function GET() {
           shopName: shop?.name ?? null,
           accountType: shop?.account_type ?? null,
           plan: shop ? planLabel(shop.plan) : null,
+          planRaw: shop?.plan ?? null,
           planId,
           subscriptionStatus: shop?.subscription_status ?? null,
+          hasStripeCustomer: !!shop?.stripe_customer_id,
+          trialEndsAt: shop?.trial_ends_at ?? null,
           trialDaysLeft,
           scansThisMonth: shopId ? usageByShop.get(shopId)?.scans ?? 0 : 0,
           carPostsThisMonth: shopId ? usageByShop.get(shopId)?.posts ?? 0 : 0,
@@ -109,6 +112,7 @@ export async function GET() {
         vehicles: (vehiclesR.data ?? []).length,
         scansThisMonth: [...usageByShop.values()].reduce((s, e) => s + e.scans, 0),
         carPostsThisMonth: [...usageByShop.values()].reduce((s, e) => s + e.posts, 0),
+        paying: (shopsR.data ?? []).filter((s) => s.subscription_status === "active").length,
       },
       planCounts,
       rows,
