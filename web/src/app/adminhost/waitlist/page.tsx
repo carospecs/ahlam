@@ -136,7 +136,7 @@ type Preview = { total: number; pending: number; alreadySent: number; notifySupp
 function LaunchEmailCard() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [showBody, setShowBody] = useState(false);
-  const [busy, setBusy] = useState<"test" | "all" | null>(null);
+  const [busy, setBusy] = useState<"test" | "all" | "mark" | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [result, setResult] = useState<string>("");
 
@@ -148,7 +148,7 @@ function LaunchEmailCard() {
   }, []);
   useEffect(() => { loadPreview(); }, [loadPreview]);
 
-  async function send(mode: "test" | "all") {
+  async function send(mode: "test" | "all" | "mark") {
     setBusy(mode);
     setResult("");
     try {
@@ -160,8 +160,9 @@ function LaunchEmailCard() {
       const d = await r.json().catch(() => ({}));
       if (!r.ok) setResult(d.error || `Send failed (${r.status})`);
       else if (mode === "test") setResult(`Test sent to ${d.to}. Check your inbox.`);
+      else if (mode === "mark") setResult(`Marked ${d.marked} members as already emailed. Nothing was sent.`);
       else setResult(`Sent ${d.sent}, skipped ${d.skipped} already notified${d.remaining ? `, ${d.remaining} remaining` : ""}${d.failed?.length ? `, FAILED: ${d.failed.join(", ")}` : ""}.${d.warning ? ` Warning: ${d.warning}` : ""}`);
-      if (mode === "all") loadPreview();
+      if (mode === "all" || mode === "mark") loadPreview();
     } catch {
       setResult("Network error. Nothing may have been sent; reload and check the pending count.");
     }
@@ -180,6 +181,11 @@ function LaunchEmailCard() {
           </span>
         )}
         <div style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {preview !== null && preview.pending > 0 && (
+            <button onClick={() => send("mark")} disabled={busy !== null} title="Use when the announcement was emailed outside Ahlam" style={{ ...emailBtnGhost, opacity: busy ? 0.6 : 1 }}>
+              {busy === "mark" ? <LoaderCircle size={14} style={{ animation: "spin 0.8s linear infinite" }} /> : null} Mark as already sent
+            </button>
+          )}
           <button onClick={() => send("test")} disabled={busy !== null} className="cs-raise" style={{ ...emailBtnGhost, opacity: busy ? 0.6 : 1 }}>
             {busy === "test" ? <LoaderCircle size={14} style={{ animation: "spin 0.8s linear infinite" }} /> : null} Send me a test
           </button>

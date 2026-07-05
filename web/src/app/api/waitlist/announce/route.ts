@@ -85,13 +85,31 @@ export async function GET() {
  *       { mode: "all" }   → sends to every waitlist member not yet notified,
  *                           marking waitlist.notified_at as it goes so a rerun
  *                           only picks up the ones that failed or are new.
+ *       { mode: "mark" }  → marks everyone as notified WITHOUT sending — for
+ *                           when the announcement went out by hand, so the
+ *                           send button can't double-email the list.
  */
 export async function POST(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
-  const mode = body.mode === "all" ? "all" : "test";
+  const mode = body.mode === "all" ? "all" : body.mode === "mark" ? "mark" : "test";
+
+  if (mode === "mark") {
+    try {
+      const { data, error } = await supabaseAdmin()
+        .from("waitlist")
+        .update({ notified_at: new Date().toISOString() })
+        .is("notified_at", null)
+        .select("email");
+      if (error) throw error;
+      return NextResponse.json({ ok: true, mode, marked: data?.length ?? 0 });
+    } catch (e) {
+      console.error("announce mark failed", e);
+      return NextResponse.json({ error: "Couldn't mark the list. Is migration 0038 applied?" }, { status: 500 });
+    }
+  }
 
   const user = process.env.GMAIL_USER;
   const pass = process.env.GMAIL_APP_PASSWORD;
