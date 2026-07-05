@@ -428,6 +428,10 @@ export function Billing(_: ViewProps) {
   const identified = listings.length;
   const revenue = listings.filter((l: any) => l.status === "Sold").reduce((s: number, l: any) => s + (l.price || 0), 0);
   const trialLeft = shop.trialDaysLeft ?? 0;
+  // Trial copy only makes sense on the free-month plans; legacy "Pro" and paid
+  // plans have no trial clock (their trialDaysLeft is 0 and would read as an
+  // expired trial).
+  const onTrial = shop.planId === "starter" || shop.planId === "founder";
   const [busy, setBusy] = React.useState<"checkout" | "portal" | null>(null);
 
   // Send the user to Stripe. The endpoints go live once STRIPE_SECRET_KEY +
@@ -455,7 +459,7 @@ export function Billing(_: ViewProps) {
             <div style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 700, color: "var(--success)", background: "color-mix(in srgb, var(--success) 14%, transparent)", borderRadius: 999, padding: "4px 11px" }}>
               <Shield size={13} /> {shop.plan || "Pro"} plan
             </div>
-            <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 10 }}>{shop.members?.length || 1} team seats · {trialLeft} days left in trial. Choose or change your plan below.</div>
+            <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 10 }}>{shop.members?.length || 1} team seats{onTrial ? ` · ${trialLeft} days left in your free month` : ""}. Choose or change your plan below.</div>
           </div>
           <button onClick={() => go("portal")} disabled={busy !== null} style={{ ...saveBtn, opacity: busy ? 0.6 : 1 }}>
             {busy === "portal" ? <LoaderCircle size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : null} Manage subscription
@@ -474,11 +478,12 @@ export function Billing(_: ViewProps) {
 
       <PayoutCard canManage={user?.role === "owner"} />
 
-      {/* What happens when the trial ends — clear, no anxiety. */}
-      <Card style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+      {/* What happens when the free month ends — clear, no anxiety. Only shown
+          to shops actually on a free month. */}
+      {onTrial && <Card style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
         <span style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", background: "color-mix(in srgb, var(--signal) 16%, transparent)", flexShrink: 0 }}><Info size={17} color="var(--signal)" /></span>
         <div style={{ fontSize: 13, color: "var(--foreground)", lineHeight: 1.55 }}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>What happens after the {trialLeft}-day trial?</div>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>What happens after your free month?</div>
           Your data and listings are <b>never deleted</b>. If you don't add a card, your shop switches to read-only — existing listings stay <b>visible</b> on the marketplace, but you won't be able to add new vehicles, post, or message buyers until you subscribe. Add a card anytime to keep everything active. Cancel whenever — no contracts.
           <div style={{ marginTop: 10 }}>
             <button onClick={() => go("checkout")} disabled={busy !== null} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 600, opacity: busy ? 0.6 : 1 }}>
@@ -486,7 +491,7 @@ export function Billing(_: ViewProps) {
             </button>
           </div>
         </div>
-      </Card>
+      </Card>}
 
       <div>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
