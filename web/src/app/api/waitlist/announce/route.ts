@@ -31,8 +31,8 @@ function launchBody(): string {
     `${founderScans} AI car scans, auto-posting to eBay, Facebook ` +
     "cross-posting, and unlimited manual listings (normally $100).\n\n" +
     "One more thing: install the Ahlam Auto-Poster Chrome extension. It " +
-    "opens Facebook Marketplace and OfferUp with your listing already " +
-    "filled in, so you just review and hit publish:\n\n" +
+    "opens Facebook Marketplace with your listing already filled in, so " +
+    "you just review and hit publish:\n\n" +
     `${EXTENSION_URL}\n\n` +
     "Questions? Just reply to this email.\n\n" +
     "Best,\n" +
