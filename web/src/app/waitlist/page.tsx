@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 const STEPS = [
   { icon: Camera, title: "Snap a photo", desc: "Take a picture of the part. No parts expert needed on staff." },
   { icon: ScanLine, title: "AI identifies and grades it", desc: "It names the part, finds the fitment, grades condition, and prices it from real comps." },
-  { icon: Send, title: "Post everywhere", desc: "Review the card, then cross-post to eBay, Facebook, OfferUp, Craigslist, and Car-Part.com." },
+  { icon: Send, title: "Post everywhere", desc: "Review the card, then cross-post to eBay, Facebook, and OfferUp. Craigslist, Car-Part.com, and DoorDash delivery coming soon." },
 ];
 
 const FEATURES = [

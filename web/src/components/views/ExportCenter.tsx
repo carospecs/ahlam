@@ -21,12 +21,15 @@ import { WARRANTY_DAYS, effectiveWarranty, warrantyLabel } from "@/lib/warranty"
 import { fileToJpegDataUrl } from "@/lib/image";
 
 // Platforms with no listing API — we prepare the text + photos and open the
-// posting page so the seller just pastes and hits post.
-const PREPARE_CHANNELS = [
+// posting page so the seller just pastes and hits post. Channels flagged `soon`
+// render as "Coming soon" and can't be picked yet.
+type PrepareChannel = { key: string; name: string; icon: typeof Share2; color: string; url: string; note: string; soon?: boolean };
+const PREPARE_CHANNELS: PrepareChannel[] = [
   { key: "facebook", name: "Facebook Marketplace", icon: Share2, color: "#1877f2", url: "https://www.facebook.com/marketplace/create/item", note: "No posting API — we copy your text, save the photos, and open the form to paste & drag in. For bulk, use the Facebook catalog CSV below." },
   { key: "offerup", name: "OfferUp", icon: Tag, color: "var(--accent)", url: "https://offerup.com/post/", note: "Copies text and saves your photos so you just paste & drag them in." },
-  { key: "craigslist", name: "Craigslist", icon: Globe, color: "var(--success)", url: "https://post.craigslist.org/", note: "Copies the formatted listing text and saves photos; pick your city." },
+  { key: "craigslist", name: "Craigslist", icon: Globe, color: "var(--success)", url: "https://post.craigslist.org/", note: "In development — Craigslist posting is coming soon.", soon: true },
 ];
+const LIVE_CHANNELS = PREPARE_CHANNELS.filter((c) => !c.soon);
 
 export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
   const { listings, vehicles, shop } = useData();
@@ -277,10 +280,13 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
         <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>These don't allow third-party auto-posting — we prep your text + photos and open the form so you just paste.</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
           {PREPARE_CHANNELS.map((c) => (
-            <Card key={c.name} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <Card key={c.name} style={{ display: "flex", gap: 12, alignItems: "flex-start", opacity: c.soon ? 0.6 : 1 }}>
               <span style={{ width: 38, height: 38, borderRadius: 10, background: "var(--surface2)", display: "grid", placeItems: "center", flexShrink: 0 }}><c.icon size={18} color={c.color} /></span>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700 }}>{c.name}</div>
+                <div style={{ fontSize: 13.5, fontWeight: 700 }}>
+                  {c.name}
+                  {c.soon && <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 45%, transparent)", borderRadius: 999, padding: "1.5px 7px", verticalAlign: "middle" }}>Coming soon</span>}
+                </div>
                 <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>{c.note}</div>
               </div>
             </Card>
@@ -290,14 +296,17 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
 
       {/* Car-Part.com / URG — the wholesale salvage channel (CSV / feed) */}
       <div>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Car-Part.com · URG <span style={{ color: "var(--muted)", fontWeight: 500 }}>wholesale</span></div>
-        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>The pro wholesale channel — repair shops and the wrecker network search it from their estimating software. Export your priced parts as a recycler-standard interchange CSV, then upload it in Car-Part.com&apos;s inventory tool (or map it into a URG-compatible feed).</div>
-        <Card style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+          Car-Part.com · URG <span style={{ color: "var(--muted)", fontWeight: 500 }}>wholesale</span>
+          <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 45%, transparent)", borderRadius: 999, padding: "1.5px 7px", verticalAlign: "middle" }}>Coming soon</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>The pro wholesale channel — repair shops and the wrecker network search it from their estimating software. The recycler-standard interchange CSV export for Car-Part.com&apos;s inventory tool (and URG-compatible feeds) is in development.</div>
+        <Card style={{ display: "flex", gap: 12, alignItems: "flex-start", opacity: 0.6 }}>
           <span style={{ width: 38, height: 38, borderRadius: 10, background: "var(--surface2)", display: "grid", placeItems: "center", flexShrink: 0 }}><Boxes size={18} color="var(--accent)" /></span>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 13.5, fontWeight: 700 }}>Inventory CSV</div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>Dealer, Stock #, Year/Make/Model, Part Type, <strong>Interchange/Hollander #</strong>, Grade, Price, Location. Add Hollander/interchange numbers to your parts for the best matching.</div>
-            <button onClick={exportCarPartCSV} disabled={!ready.length} style={{ ...advBtn, marginTop: 10 }}><Download size={16} color="var(--accent)" /> Download Car-Part CSV{ready.length ? ` · ${ready.length}` : ""}</button>
+            <button disabled style={{ ...advBtn, marginTop: 10, cursor: "not-allowed", opacity: 0.7 }}><Download size={16} color="var(--accent)" /> Car-Part CSV — coming soon</button>
           </div>
         </Card>
       </div>
@@ -326,7 +335,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
                     {busy === `car:${v.id}` ? <LoaderCircle size={14} className="spin" /> : <Car size={14} />} List on eBay
                   </button>
                 ) : null}
-                <PrepareMenu channels={PREPARE_CHANNELS} onPick={(ch) => prepareCar(ch, v)} />
+                <PrepareMenu channels={LIVE_CHANNELS} onPick={(ch) => prepareCar(ch, v)} />
               </div>
             ))}
           </Card>
@@ -388,7 +397,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
                           {busy === `part:${l.id}` ? <LoaderCircle size={14} className="spin" /> : <ShoppingBag size={14} />} List on eBay
                         </button>
                       ) : null}
-                      <PrepareMenu channels={PREPARE_CHANNELS} onPick={(ch) => prepareAndOpen(ch, l)} />
+                      <PrepareMenu channels={LIVE_CHANNELS} onPick={(ch) => prepareAndOpen(ch, l)} />
                     </div>
                   ))}
                 </Card>
@@ -808,7 +817,7 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
             <div style={{ display: "grid", gap: 7 }}>
               <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 700 }}>Post to (tap to choose):</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {PREPARE_CHANNELS.map((c) => {
+                {LIVE_CHANNELS.map((c) => {
                   const on = selected.has(c.key);
                   return (
                     <button key={c.key} onClick={() => toggleSel(c.key)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 12px", borderRadius: 999, border: `1.5px solid ${on ? c.color : "var(--line)"}`, background: on ? `color-mix(in srgb, ${c.color} 14%, transparent)` : "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>

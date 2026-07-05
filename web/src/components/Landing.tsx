@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion, AnimatePresence, MotionConfig, type Variants } from "framer-motion";
-import { ScanLine, Send, ArrowRight, Tag, Check, ChevronDown, CalendarCheck, Mail, MessageSquare, Compass, Wrench, DollarSign, ShoppingBag, BarChart3, Download, Users, Building2, X, Camera, Boxes } from "lucide-react";
+import { ScanLine, Send, ArrowRight, Tag, Check, ChevronDown, CalendarCheck, Mail, MessageSquare, Compass, Wrench, DollarSign, ShoppingBag, BarChart3, Download, Users, Building2, X, Camera, Boxes, VolumeOff } from "lucide-react";
 import { BrandMark } from "./BrandMark";
 import { LaunchCountdown } from "./LaunchCountdown";
 import { useI18n } from "@/lib/i18n";
@@ -31,7 +31,7 @@ const CAL_DEMO_URL = "https://cal.com/team/ahlam-team";
 const FAQS = [
   { q: "Do I need to know parts to use it?", a: "No. That is the point. Photograph the car and the AI names every sellable part, grades its condition, and prices it. You review and post." },
   { q: "How accurate is the pricing?", a: "We look up what the same part actually sells for across eBay, Facebook, and OfferUp, then suggest the median of those real sales. We use the median, not the average, so a few suspiciously cheap listings (often stolen or knock-off parts) can't drag your price down. Every number is editable, and you can see how confident the AI is on each one." },
-  { q: "Which marketplaces can I post to?", a: "Auto-post to eBay, and one-tap copy clean listings for Facebook Marketplace, OfferUp, Craigslist, and Car-Part.com, plus your own Ahlam storefront." },
+  { q: "Which marketplaces can I post to?", a: "Auto-post to eBay, and one-tap copy clean listings for Facebook Marketplace and OfferUp, plus your own Ahlam storefront. Craigslist, Car-Part.com, and DoorDash local delivery are in development and coming soon." },
   { q: "Can I list a part or car manually?", a: "Yes. AI scanning is the fast path, but you can type in a vehicle or a single part by hand any time, with the AI helping write and price it." },
   { q: "Is my VIN and mileage private?", a: "Yes. VIN and mileage are read for accuracy but stay hidden on public listings until you choose to share them." },
   { q: "What does it cost to start?", a: "Nothing. Start free with no card. The first 50 yards get a full month with every feature unlocked." },
@@ -137,11 +137,22 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?:
               <Reveal style={{ textAlign: "center", marginBottom: 22 }}>
                 <div className="cs-kicker">Posts to the places buyers already shop</div>
               </Reveal>
-              <Reveal i={1} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 44, flexWrap: "wrap" }}>
+              <Reveal i={1} style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24, maxWidth: 680, margin: "0 auto" }}>
                 {PARTNERS.map((p) => (
                   <div key={p.caption} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 9, opacity: 0.9 }}>
                     <div style={{ height: 26, display: "flex", alignItems: "center" }}>{p.logo}</div>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)" }}>{p.caption}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textAlign: "center" }}>{p.caption}</span>
+                  </div>
+                ))}
+              </Reveal>
+              <Reveal i={2} style={{ textAlign: "center", marginTop: 34 }}>
+                <div className="cs-kicker" style={{ fontSize: 11 }}>Coming soon</div>
+              </Reveal>
+              <Reveal i={3} style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24, maxWidth: 680, margin: "18px auto 0" }}>
+                {PARTNERS_SOON.map((p) => (
+                  <div key={p.caption} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 9 }}>
+                    <div style={{ height: 26, display: "flex", alignItems: "center" }}>{p.logo}</div>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textAlign: "center" }}>{p.caption}</span>
                   </div>
                 ))}
               </Reveal>
@@ -164,7 +175,7 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?:
                 {[
                   { n: "Hundreds", l: "of sellable parts on an average car, most of them never listed." },
                   { n: "Minutes", l: "to scan a whole vehicle into priced, ready-to-post listings." },
-                  { n: "5 places", l: "to sell at once: eBay, Facebook, OfferUp, Craigslist, your storefront." },
+                  { n: "4 places", l: "to sell at once: eBay, Facebook, OfferUp, your storefront. Craigslist, Car-Part.com, and DoorDash coming soon." },
                 ].map((s) => (
                   <Reveal key={s.n}>
                     <div style={{ paddingTop: 18, borderTop: "2px solid var(--accent)" }}>
@@ -184,6 +195,13 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void; onSignIn?:
               <h2 className="cs-display" style={h2}>From a photo to posted, in four steps</h2>
               <p style={{ color: "var(--muted)", fontSize: 16.5, marginTop: 12, lineHeight: 1.6 }}>
                 Snap photos and let the AI catalog, grade, and price. Prefer to type it in? Manual entry is there whenever you want it.
+              </p>
+            </Reveal>
+
+            <Reveal i={1} style={{ maxWidth: 880, margin: "48px auto 0" }}>
+              <DemoVideo />
+              <p style={{ textAlign: "center", fontSize: 13, color: "var(--muted)", marginTop: 12 }}>
+                Watch a whole car go from photos to posted listings, in about a minute.
               </p>
             </Reveal>
 
@@ -354,9 +372,52 @@ const PARTNERS: { logo: React.ReactNode; caption: string }[] = [
   { logo: <LogoImg src="/logos/ebay.svg" alt="eBay" h={28} />, caption: "eBay" },
   { logo: <LogoImg src="/logos/facebook.svg" alt="Facebook Marketplace" h={26} />, caption: "Facebook Marketplace" },
   { logo: <LogoImg src="/logos/offerup.svg" alt="OfferUp" h={22} />, caption: "OfferUp" },
+];
+
+const PARTNERS_SOON: { logo: React.ReactNode; caption: string }[] = [
   { logo: <LogoImg src="/logos/craigslist.svg" alt="Craigslist" h={19} />, caption: "Craigslist" },
   { logo: <span style={{ background: "#fff", borderRadius: 7, padding: "4px 8px", display: "inline-flex", alignItems: "center" }}><LogoImg src="/logos/carpart.jpg" alt="Car-Part.com" h={17} /></span>, caption: "Car-Part.com" },
+  { logo: <LogoImg src="/logos/doordash.svg" alt="DoorDash" h={16} />, caption: "DoorDash delivery" },
 ];
+
+// --- Demo video: framed like the hero showcase; plays muted when scrolled into
+// view (the demo is caption-driven, no voice-over) and pauses when scrolled away.
+function DemoVideo() {
+  const ref = React.useRef<HTMLVideoElement>(null);
+  React.useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    const io = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) v.play().catch(() => {}); else v.pause(); },
+      { threshold: 0.35 },
+    );
+    io.observe(v);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div className="cs-frame" style={{ overflow: "hidden" }}>
+      <div className="cs-frame__bar">
+        <span className="cs-frame__dot" style={{ background: "#ff5f57" }} />
+        <span className="cs-frame__dot" style={{ background: "#febc2e" }} />
+        <span className="cs-frame__dot" style={{ background: "#28c840" }} />
+        <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600 }}>Ahlam · 60-second demo</span>
+        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: "var(--muted)", background: "color-mix(in srgb, var(--muted) 14%, transparent)", borderRadius: 999, padding: "2px 9px" }}><VolumeOff size={11} /> No audio · captions on screen</span>
+      </div>
+      <video
+        ref={ref}
+        src="/video/ahlam-demo-16x9.mp4"
+        poster="/video/ahlam-demo-poster.jpg"
+        muted
+        loop
+        playsInline
+        controls
+        preload="metadata"
+        aria-label="Ahlam demo: photograph a car, review the AI listing card, and post it"
+        style={{ display: "block", width: "100%", height: "auto", background: "#000" }}
+      />
+    </div>
+  );
+}
 
 // --- Hero showcase: framed real photo + a solid AI-review card overlapping ----
 function HeroShowcase({ onPost }: { onPost?: () => void }) {
@@ -395,7 +456,7 @@ function HeroShowcase({ onPost }: { onPost?: () => void }) {
 const BRAIN_NODES = [
   { label: "Scanning", icon: ScanLine, x: 50, y: 13, desc: "Photograph a car and the AI finds every sellable part. No parts expert on staff required." },
   { label: "Listing", icon: Tag, x: 74, y: 20, desc: "Clean, ready-to-post listings written for you, with titles, fitment, condition, and sorted photos." },
-  { label: "Exporting", icon: Send, x: 89, y: 39, desc: "Auto-post to eBay and prep Facebook, OfferUp, and Craigslist. One scan reaches every channel." },
+  { label: "Exporting", icon: Send, x: 89, y: 39, desc: "Auto-post to eBay and prep Facebook and OfferUp. One scan reaches every channel, with more on the way." },
   { label: "Messaging", icon: MessageSquare, x: 89, y: 61, desc: "Buyer questions land in one inbox. Reply, negotiate, and close without leaving Ahlam." },
   { label: "Orders", icon: ShoppingBag, x: 74, y: 80, desc: "Track every sale from first inquiry to paid, with the status of each order in one place." },
   { label: "Revenue", icon: DollarSign, x: 50, y: 87, desc: "See what sold and what is owed, broken down by part, vehicle, and marketplace." },
@@ -628,11 +689,13 @@ function PriceVisual() {
 
 // Step 4 — posted everywhere
 function PostVisual() {
-  const channels = [
-    <LogoImg key="e" src="/logos/ebay.svg" alt="eBay" h={24} />,
-    <LogoImg key="f" src="/logos/facebook.svg" alt="Facebook Marketplace" h={22} />,
-    <LogoImg key="o" src="/logos/offerup.svg" alt="OfferUp" h={18} />,
-    <LogoImg key="c" src="/logos/craigslist.svg" alt="Craigslist" h={16} />,
+  const channels: { logo: React.ReactNode; soon?: boolean }[] = [
+    { logo: <LogoImg key="e" src="/logos/ebay.svg" alt="eBay" h={24} /> },
+    { logo: <LogoImg key="f" src="/logos/facebook.svg" alt="Facebook Marketplace" h={22} /> },
+    { logo: <LogoImg key="o" src="/logos/offerup.svg" alt="OfferUp" h={18} /> },
+    { logo: <LogoImg key="c" src="/logos/craigslist.svg" alt="Craigslist" h={16} />, soon: true },
+    { logo: <span key="cp" style={{ background: "#fff", borderRadius: 6, padding: "3px 7px", display: "inline-flex", alignItems: "center" }}><LogoImg src="/logos/carpart.jpg" alt="Car-Part.com" h={14} /></span>, soon: true },
+    { logo: <LogoImg key="d" src="/logos/doordash.svg" alt="DoorDash" h={13} />, soon: true },
   ];
   return (
     <div className="cs-panel" style={{ padding: 20 }}>
@@ -647,8 +710,10 @@ function PostVisual() {
             transition={{ delay: 0.1 + i * 0.1, duration: 0.35, ease: EASE }}
             className="cs-well" style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between", padding: "12px 14px" }}
           >
-            <span style={{ display: "inline-flex", alignItems: "center", color: "var(--foreground)" }}>{c}</span>
-            <Check size={15} color="var(--success)" />
+            <span style={{ display: "inline-flex", alignItems: "center", color: "var(--foreground)", opacity: c.soon ? 0.55 : 1, filter: c.soon ? "grayscale(1)" : undefined }}>{c.logo}</span>
+            {c.soon
+              ? <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent)", whiteSpace: "nowrap" }}>Soon</span>
+              : <Check size={15} color="var(--success)" />}
           </motion.div>
         ))}
       </div>
@@ -660,7 +725,7 @@ const STEPS = [
   { eyebrow: "Capture", title: "Snap a few photos", body: "Use your phone or upload from the lot: the exterior, the parts, the engine bay, the dashboard, and the VIN plate on the windshield. Up to 15 shots per vehicle. More angles mean more parts found and a truer price.", visual: () => <ScanVisual /> },
   { eyebrow: "Identify", title: "AI catalogs every part", body: "The AI reads each photo, names every sellable part, and grades its condition on a consistent A, B, and C rubric. It even reads the VIN and odometer when they show.", visual: () => <PartsVisual /> },
   { eyebrow: "Price", title: "Priced from real sales", body: "We check what the same part actually sells for across eBay, Facebook, and OfferUp, then suggest the median of those real sales. Using the median (not the average) keeps a few stolen or knock-off listings from dragging your price down. Edit any number freely.", visual: () => <PriceVisual /> },
-  { eyebrow: "Publish", title: "Post everywhere at once", body: "Auto-post to eBay and copy clean, ready-to-paste listings for Facebook, OfferUp, and Craigslist, plus your own Ahlam storefront. One scan, every channel.", visual: () => <PostVisual /> },
+  { eyebrow: "Publish", title: "Post everywhere at once", body: "Auto-post to eBay and copy clean, ready-to-paste listings for Facebook and OfferUp, plus your own Ahlam storefront. Craigslist, Car-Part.com, and DoorDash delivery are coming soon.", visual: () => <PostVisual /> },
 ] as const;
 
 // FAQ accordion

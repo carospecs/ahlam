@@ -22,7 +22,6 @@ export function PublicHeader() {
         <nav className="cs-pill-links" style={{ display: "flex", alignItems: "center", gap: 2 }}>
           <Link href="/guidance" style={navLink}>How it works</Link>
           <Link href="/guides" style={navLink}>Guides</Link>
-          <Link href="/blog" style={navLink}>Blog</Link>
           <Link href="/waitlist" style={{ ...navLink, color: "var(--accent)", background: "var(--accent-tint)", fontWeight: 700 }}>Waitlist</Link>
         </nav>
         <span style={navDivider} />

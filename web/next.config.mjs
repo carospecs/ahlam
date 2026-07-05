@@ -9,6 +9,12 @@ const nextConfig = {
   // deterministic regardless of install/cache state.
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
+  // The old /compare page now lives in the guides library.
+  async redirects() {
+    return [
+      { source: "/compare", destination: "/guides/ahlam-vs-car-part-ebay-hollander-spreadsheets", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

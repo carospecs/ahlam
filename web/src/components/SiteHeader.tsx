@@ -21,9 +21,7 @@ type Lang = "en" | "es";
 const PRIMARY: { label: string; href: string }[] = [
   { label: "How it works", href: "/#how" },
   { label: "Marketplace", href: "/#marketplace" },
-  { label: "Compare", href: "/compare" },
   { label: "Guides", href: "/guides" },
-  { label: "Blog", href: "/blog" },
 ];
 
 export function SiteHeader({
@@ -119,9 +117,7 @@ export function SiteHeader({
             )}
           </div>
 
-          <Link href="/compare" style={navLink}>Compare</Link>
           <Link href="/guides" style={navLink}>Guides</Link>
-          <Link href="/blog" style={navLink}>Blog</Link>
         </nav>
 
         <span style={navDivider} className="cs-pill-links" />

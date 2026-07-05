@@ -18,8 +18,9 @@ function LinkedinGlyph({ size = 16 }: { size?: number }) {
 // site footer never drifts. Server-component safe (plain links + mailto, no
 // client handlers) so it drops into both server and client pages.
 
-const CONTACT = "mohammadabbas@ahlam.io";
-const RECIPIENTS = "mohammadabbas@ahlam.io,andygarcia@ahlam.io";
+const CONTACT_ANDY = "andygarcia@ahlam.io";
+const CONTACT_MO = "mohammadabbas@ahlam.io";
+const RECIPIENTS = `${CONTACT_ANDY},${CONTACT_MO}`;
 const CAL_DEMO_URL = "https://cal.com/team/ahlam-team";
 const LINKEDIN_URL = "https://www.linkedin.com/company/ahlam-inc/";
 
@@ -29,7 +30,7 @@ const COLS: Col[] = [
   { h: "Product", links: [
     { label: "How it works", href: "/#how" },
     { label: "Marketplace", href: "/#marketplace" },
-    { label: "Compare", href: "/compare" },
+    { label: "Compare", href: "/guides/ahlam-vs-car-part-ebay-hollander-spreadsheets" },
   ] },
   { h: "Audiences", links: [
     { label: "Overview", href: "/audiences" },
@@ -37,14 +38,13 @@ const COLS: Col[] = [
   ] },
   { h: "Resources", links: [
     { label: "Guides", href: "/guides" },
-    { label: "Blog", href: "/blog" },
     { label: "FAQ", href: "/#faq" },
     { label: "Waitlist", href: "/waitlist" },
   ] },
   { h: "Company", links: [
     { label: "Book a demo", href: CAL_DEMO_URL, external: true },
     { label: "Contact us", href: `mailto:${RECIPIENTS}`, external: true },
-    { label: "Feedback", href: `mailto:${RECIPIENTS}?subject=Ahlam%20feedback`, external: true },
+    { label: "Feedback", href: "/feedback" },
   ] },
 ];
 
@@ -55,14 +55,17 @@ export function SiteFooter() {
         <div style={{ maxWidth: 280 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}><BrandChip size={28} /><span style={{ fontSize: 16, fontWeight: 700 }}>Ahlam</span></div>
           <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6, margin: "14px 0 0" }}>
-            Photograph a car. List every part everywhere: eBay, Facebook, OfferUp, Craigslist, and your own storefront.
+            Photograph a car. List every part everywhere: eBay, Facebook, OfferUp, and your own storefront. Craigslist, Car-Part.com, and DoorDash coming soon.
           </p>
           {/* Contact section */}
           <div style={{ marginTop: 18 }}>
             <div className="cs-kicker" style={{ fontSize: 11, marginBottom: 10 }}>Contact</div>
             <div style={{ display: "grid", gap: 7 }}>
-              <a href={`mailto:${RECIPIENTS}`} style={{ ...footLink, display: "inline-flex", alignItems: "center", gap: 8, opacity: 1 }}>
-                <Mail size={14} color="var(--accent)" /> {CONTACT}
+              <a href={`mailto:${CONTACT_ANDY}`} style={{ ...footLink, display: "inline-flex", alignItems: "center", gap: 8, opacity: 1 }}>
+                <Mail size={14} color="var(--accent)" /> {CONTACT_ANDY}
+              </a>
+              <a href={`mailto:${CONTACT_MO}`} style={{ ...footLink, display: "inline-flex", alignItems: "center", gap: 8, opacity: 1 }}>
+                <Mail size={14} color="var(--accent)" /> {CONTACT_MO}
               </a>
               <a href={CAL_DEMO_URL} target="_blank" rel="noopener noreferrer" style={{ ...footLink, display: "inline-flex", alignItems: "center", gap: 8, opacity: 1 }}>
                 <CalendarCheck size={14} color="var(--accent)" /> Book a 15-min demo
@@ -93,9 +96,7 @@ export function SiteFooter() {
       <div style={{ borderTop: "1px solid var(--line)" }}>
         <div style={{ maxWidth: 1080, margin: "0 auto", padding: "18px 24px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12.5, color: "var(--muted)" }}>© {new Date().getFullYear()} Ahlam. All rights reserved.</span>
-          <a href={`mailto:${RECIPIENTS}`} style={{ ...footLink, marginLeft: "auto" }}>andygarcia@ahlam.io</a>
-          <a href={`mailto:${RECIPIENTS}`} style={footLink}>{CONTACT}</a>
-          <Link href="/waitlist" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Join the waitlist</Link>
+          <Link href="/waitlist" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Join the waitlist</Link>
         </div>
       </div>
     </footer>

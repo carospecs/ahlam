@@ -43,7 +43,7 @@ export const PLANS: Plan[] = [
     features: [
       "Single user",
       "AI scan: 3 cars per month (photo-to-listing)",
-      "Cross-post with the Ahlam browser extension (Facebook, OfferUp, Craigslist)",
+      "Cross-post with the Ahlam browser extension (Facebook, OfferUp)",
       "Post up to 1 car a day",
       "Export up to 20 cars / 100 parts a month",
       "List on the Ahlam marketplace",
@@ -79,7 +79,7 @@ export const PLANS: Plan[] = [
       "AI Interchange Assistant (parts fitment across vehicles)",
       "AI Auto-Repricing (market watch, updates prices automatically)",
       "Full inventory analytics & profit tracking",
-      "Cross-platform export (eBay, Facebook, OfferUp, Craigslist)",
+      "Cross-platform export (eBay, Facebook, OfferUp)",
     ],
   },
   {
@@ -95,7 +95,7 @@ export const PLANS: Plan[] = [
       "AI Interchange Assistant (parts fitment across vehicles)",
       "AI Auto-Repricing (market watch, updates prices automatically)",
       "Full inventory analytics & profit tracking",
-      "Cross-platform export (eBay, Facebook, OfferUp, Craigslist)",
+      "Cross-platform export (eBay, Facebook, OfferUp)",
       "Custom business website, built for you",
       "Managed domain registration & hosting · priority support",
     ],

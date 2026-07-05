@@ -50,6 +50,12 @@ export const LANDING_ES: Record<string, string> = {
 
   // Partners strip
   "Posts to the places buyers already shop": "Publica en los lugares donde ya compran los compradores",
+  "Coming soon": "Próximamente",
+  "Ahlam · 60-second demo": "Ahlam · demo de 60 segundos",
+  "No audio · captions on screen": "Sin audio · subtítulos en pantalla",
+  "Watch a whole car go from photos to posted listings, in about a minute.": "Mira cómo un auto completo pasa de fotos a anuncios publicados, en aproximadamente un minuto.",
+  "DoorDash delivery": "Entrega con DoorDash",
+  "Soon": "Pronto",
 
   // How it works
   "From a photo to posted, in four steps": "De una foto a publicado, en cuatro pasos",
@@ -72,7 +78,7 @@ export const LANDING_ES: Record<string, string> = {
   "We suggest the median of real sales, so lowball or knock-off listings can't drag it down.": "Sugerimos la mediana de las ventas reales, para que los anuncios baratos o de imitación no la bajen.",
   "Publish": "Publica",
   "Post everywhere at once": "Publica en todas partes a la vez",
-  "Auto-post to eBay and copy clean, ready-to-paste listings for Facebook, OfferUp, and Craigslist, plus your own Ahlam storefront. One scan, every channel.": "Publica automáticamente en eBay y copia anuncios limpios y listos para pegar en Facebook, OfferUp y Craigslist, además de tu propia tienda Ahlam. Un escaneo, todos los canales.",
+  "Auto-post to eBay and copy clean, ready-to-paste listings for Facebook and OfferUp, plus your own Ahlam storefront. Craigslist, Car-Part.com, and DoorDash delivery are coming soon.": "Publica automáticamente en eBay y copia anuncios limpios y listos para pegar en Facebook y OfferUp, además de tu propia tienda Ahlam. Craigslist, Car-Part.com y la entrega con DoorDash llegarán pronto.",
   "Posted to": "Publicado en",
 
   // Built for sellers
@@ -81,7 +87,7 @@ export const LANDING_ES: Record<string, string> = {
   "AI grading": "Calificación con IA",
   "A, B, and C condition grades with notes you can edit.": "Calificaciones de estado A, B y C con notas que puedes editar.",
   "Cross-post everywhere": "Publica en todos lados",
-  "Auto-post to eBay and one-tap prep for Facebook, OfferUp, and Craigslist.": "Publica automáticamente en eBay y prepara con un toque para Facebook, OfferUp y Craigslist.",
+  "Auto-post to eBay and prep Facebook and OfferUp. One scan reaches every channel, with more on the way.": "Publica automáticamente en eBay y prepara Facebook y OfferUp. Un escaneo llega a todos los canales, y pronto habrá más.",
   "Smart pricing": "Precios inteligentes",
   "Each price is the median of what the same part actually sells for across eBay, Facebook, and OfferUp.": "Cada precio es la mediana de lo que realmente se vende la misma pieza en eBay, Facebook y OfferUp.",
   "Private by default": "Privado por defecto",
@@ -129,7 +135,7 @@ export const LANDING_ES: Record<string, string> = {
   "50 car listings per month": "50 anuncios de autos por mes",
   "Team access: Owner & Unlimited Editors": "Acceso de equipo: Propietario y Editores ilimitados",
   "Full inventory analytics & profit tracking": "Analíticas completas de inventario y seguimiento de ganancias",
-  "Cross-platform export (eBay, Facebook, OfferUp, Craigslist)": "Exportación a varias plataformas (eBay, Facebook, OfferUp, Craigslist)",
+  "Cross-platform export (eBay, Facebook, OfferUp)": "Exportación a varias plataformas (eBay, Facebook, OfferUp)",
   "Choose Max": "Elegir Max",
   "Everything in Max, plus we build and host a professional website for your business with your own custom domain, fully managed by Ahlam.": "Todo lo de Max, además construimos y alojamos un sitio web profesional para tu negocio con tu propio dominio personalizado, totalmente administrado por Ahlam.",
   "Unlimited car listings per month": "Anuncios de autos ilimitados por mes",
@@ -170,7 +176,7 @@ export const LANDING_ES: Record<string, string> = {
   "How accurate is the pricing?": "¿Qué tan precisos son los precios?",
   "We look up what the same part actually sells for across eBay, Facebook, and OfferUp, then suggest the median of those real sales. We use the median, not the average, so a few suspiciously cheap listings (often stolen or knock-off parts) can't drag your price down. Every number is editable, and you can see how confident the AI is on each one.": "Revisamos a cuánto se vende realmente la misma pieza en eBay, Facebook y OfferUp, y luego sugerimos la mediana de esas ventas reales. Usamos la mediana, no el promedio, para que unos pocos anuncios sospechosamente baratos (a menudo piezas robadas o de imitación) no bajen tu precio. Cada número es editable y puedes ver qué tan segura está la IA de cada uno.",
   "Which marketplaces can I post to?": "¿En qué mercados puedo publicar?",
-  "Auto-post to eBay, and one-tap copy clean listings for Facebook Marketplace, OfferUp, Craigslist, and Car-Part.com, plus your own Ahlam storefront.": "Publica automáticamente en eBay, y copia con un toque anuncios limpios para Facebook Marketplace, OfferUp, Craigslist y Car-Part.com, además de tu propia tienda Ahlam.",
+  "Auto-post to eBay, and one-tap copy clean listings for Facebook Marketplace and OfferUp, plus your own Ahlam storefront. Craigslist, Car-Part.com, and DoorDash local delivery are in development and coming soon.": "Publica automáticamente en eBay, y copia con un toque anuncios limpios para Facebook Marketplace y OfferUp, además de tu propia tienda Ahlam. Craigslist, Car-Part.com y la entrega local con DoorDash están en desarrollo y llegarán pronto.",
   "Can I list a part or car manually?": "¿Puedo publicar una pieza o un auto manualmente?",
   "Yes. AI scanning is the fast path, but you can type in a vehicle or a single part by hand any time, with the AI helping write and price it.": "Sí. El escaneo con IA es la vía rápida, pero puedes capturar un vehículo o una sola pieza a mano en cualquier momento, con la IA ayudándote a redactarla y ponerle precio.",
   "Is my VIN and mileage private?": "¿Mi VIN y kilometraje son privados?",
@@ -189,7 +195,7 @@ export const LANDING_ES: Record<string, string> = {
   "Tell us what you think": "Dinos qué opinas",
 
   // Footer
-  "Snap a photo. List every part everywhere: eBay, Facebook, OfferUp, Craigslist, and your own storefront.": "Toma una foto. Publica cada pieza en todas partes: eBay, Facebook, OfferUp, Craigslist y tu propia tienda.",
+  "Photograph a car. List every part everywhere: eBay, Facebook, OfferUp, and your own storefront. Craigslist, Car-Part.com, and DoorDash coming soon.": "Fotografía un auto. Publica cada pieza en todas partes: eBay, Facebook, OfferUp y tu propia tienda. Craigslist, Car-Part.com y DoorDash llegarán pronto.",
   "Product": "Producto",
   "The brain": "El cerebro",
   "Resources": "Recursos",

@@ -165,6 +165,87 @@ export const GUIDES: Guide[] = [
       { q: "Do I need to replace my existing system?", a: "Not necessarily. Many yards layer an AI listing tool on top of their current workflow to speed up the identify-and-price step that software has historically left to staff expertise." },
     ],
   },
+  {
+    slug: "ahlam-vs-car-part-ebay-hollander-spreadsheets",
+    title: "Ahlam vs Car-Part.com, eBay, Hollander, and Spreadsheets: A Fair Comparison",
+    description:
+      "How Ahlam compares to Car-Part.com, listing on eBay by hand, Hollander and Checkmate yard systems, and spreadsheets. Ahlam identifies, grades, and prices every part from a photo, then writes and posts the listing.",
+    category: "Software",
+    readMinutes: 8,
+    updated: "2026-07-04",
+    image: "/img/compare.webp",
+    intro:
+      "Most tools start after the hard part is done. They store a part you already identified, or list a price you already set. Ahlam starts at the photo: it identifies every sellable part, grades its condition, prices it from real market comps, then writes the listing and posts it. Here is how that compares to the tools small yards actually weigh, honestly, including where each alternative genuinely fits.",
+    sections: [
+      {
+        heading: "The seven jobs, side by side",
+        paragraphs: [
+          "Compare any of these options on the same seven jobs: identifying the part from a photo, grading condition on a consistent A, B, C rubric, pricing from real market comps, writing the listing, posting to eBay and more in one tap, working for a two-person yard, and starting free.",
+          "Most tools handle the storing and the listing. Ahlam is the only one that does the identifying, grading, and pricing first. Car-Part.com, eBay, and yard systems offer partial pricing help (you can search what others ask), and eBay and yard systems can partially automate posting. None of them looks at a photo and tells you what the part is, what shape it is in, and what it should sell for.",
+        ],
+      },
+      {
+        heading: "Ahlam vs Car-Part.com",
+        paragraphs: [
+          "Car-Part.com is the largest used-parts locator in the trade, the place buyers and yards have searched for decades to find a specific part sitting in stock somewhere.",
+          "But it shows what you have already typed up and priced. You bring the part name, the fitment, the grade, and the number, then it lists and locates it.",
+          "Ahlam works a step earlier. It reads a photo, identifies the part, grades its condition, and prices it from real comps, then hands you a finished listing ready for everywhere you sell, with a direct Car-Part.com feed coming soon.",
+        ],
+        bullets: [
+          "Where Car-Part.com fits: decades of buyer trust, deep interchange and fitment data, and the go-to network when a buyer needs one specific part.",
+          "Where Ahlam wins: identifies and grades the part for you straight from a photo, prices from live market comps instead of your own guess, and posts to eBay, Facebook, OfferUp, and your own storefront too.",
+        ],
+      },
+      {
+        heading: "Ahlam vs listing on eBay by hand",
+        paragraphs: [
+          "eBay is where a huge share of used-parts buyers already shop, and its sold-listing history is a genuine pricing signal.",
+          "The catch is the work. Listing by hand means you already know what the part is, which cars it fits, what condition to call it, and what to charge, then you type all of it in, one part at a time.",
+          "Ahlam does the knowing for you. It names the part, grades it, prices it from the median of real sales, writes the listing, and posts it to eBay in a tap, with Facebook and OfferUp next.",
+        ],
+        bullets: [
+          "Where eBay fits: an enormous buyer base actively searching for parts, sold-listing history as a real pricing reference, and built-in payments, shipping, and buyer protection.",
+          "Where Ahlam wins: no parts expertise needed (the AI identifies and grades), median-of-comps pricing instead of a manual lookup per part, and one scan becomes listings across every channel.",
+        ],
+      },
+      {
+        heading: "Ahlam vs Hollander and Checkmate",
+        paragraphs: [
+          "Hollander and Checkmate are the backbone of large, established dismantlers: serious inventory databases with interchange numbers, tear-down tracking, and multi-yard reporting.",
+          "That power comes with a price tag, a learning curve, and a workflow built around a full back office. It is a lot of system for a yard run by one or two people.",
+          "Ahlam is not trying to replace that for a 40-person operation. It is the photo-to-listing tool a small yard can open today, scan a car, and have priced, posted listings by lunch, with no implementation project.",
+        ],
+        bullets: [
+          "Where Hollander and Checkmate fit: mature inventory control for high-volume yards, industry-standard interchange and tear-down tracking, and multi-location reporting with established integrations.",
+          "Where Ahlam wins: live in minutes with no setup or training project, the AI does the identifying, grading, and pricing, and it is priced for a two-person yard, free to start.",
+        ],
+      },
+      {
+        heading: "Ahlam vs spreadsheets and notebooks",
+        paragraphs: [
+          "A spreadsheet is free, familiar, and completely under your control, which is exactly why most small yards still run on one.",
+          "But a spreadsheet only records a part after you have done the hard parts: figuring out what it is, what shape it is in, and what it should sell for.",
+          "Ahlam does that work and keeps the record itself, so your inventory, grades, prices, and live listings all live in one place that also posts them for sale.",
+        ],
+        bullets: [
+          "Where spreadsheets fit: free, flexible, nothing new to learn, total control over your own columns and notes, and fine for a handful of parts a week.",
+          "Where Ahlam wins: identifies, grades, and prices so you just review, inventory and live listings in one system instead of two, and scales to a whole car in minutes, not an afternoon.",
+        ],
+      },
+      {
+        heading: "The fastest way to compare is to scan one car",
+        paragraphs: [
+          "Every option here earns its place for someone. The question is whether it does the part that actually slows you down: knowing what a part is, what it is worth, and getting it listed.",
+          "Join the waitlist for your free first month, or book a 15-minute walkthrough and we will scan one of your vehicles live and price every part on the spot.",
+        ],
+      },
+    ],
+    faqs: [
+      { q: "Does Ahlam replace Car-Part.com?", a: "No. Car-Part.com handles distribution to trade buyers. Ahlam handles the step before it: identifying, grading, pricing, and writing the listing. A direct Car-Part.com feed is coming soon, so the two will work together." },
+      { q: "Can Ahlam post to eBay today?", a: "Yes. eBay auto-posting is live now, with one-tap prep for Facebook Marketplace and OfferUp. Craigslist, Car-Part.com, and DoorDash delivery are in development." },
+      { q: "Is Ahlam a yard management system?", a: "No. Hollander and Checkmate are ERP-grade inventory systems for high-volume dismantlers. Ahlam is a photo-to-listing tool built so a one or two person yard can price and post a whole car in minutes." },
+    ],
+  },
 ];
 
 export function getGuide(slug: string): Guide | undefined {
