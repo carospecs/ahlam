@@ -276,6 +276,25 @@ const VIEWS: Record<string, React.ComponentType<any>> = {
 let toastFn: (msg: string) => void = () => {};
 export function csToast(msg: string) { toastFn(msg); }
 
+// ---------------------------------------------------------------------------
+// Thread targeting: the bell (or a notification) asks Messages to open one
+// specific conversation. Works whether or not the view is mounted yet — the
+// target is stored, then any mounted listener is pinged; the matching side
+// consumes it on mount otherwise.
+export type ThreadTarget = { side: "selling" | "buying"; conversationId: string };
+let _pendingThread: ThreadTarget | null = null;
+export function csOpenThread(t: ThreadTarget) {
+  _pendingThread = t;
+  try { window.dispatchEvent(new CustomEvent("cs:open-thread")); } catch {}
+}
+export function csPendingThread(): ThreadTarget | null { return _pendingThread; }
+export function csConsumePendingThread(side: "selling" | "buying"): string | null {
+  if (_pendingThread?.side !== side) return null;
+  const id = _pendingThread.conversationId;
+  _pendingThread = null;
+  return id;
+}
+
 function ToastHost() {
   const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([]);
   const seq = useRef(0);
@@ -377,23 +396,98 @@ function MessageNotifier() {
   return null;
 }
 
-// A topbar bell that shows the unread badge and jumps to Messages.
+// Compact relative time for the bell dropdown ("now", "4m", "2h", "3d").
+function agoLabel(at: number) {
+  const s = Math.floor((Date.now() - (at || 0)) / 1000);
+  if (s < 60) return "now";
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+// The topbar bell: unread badge + a dropdown of the latest message per
+// conversation. Clicking an item jumps straight to that thread in Messages.
 function NotificationBell({ onNav }: { onNav?: (id: string) => void }) {
   const unread = useUnreadCount();
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<any[] | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setItems(null);
+    fetch("/api/messages/recent", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setItems(Array.isArray(d.items) ? d.items : []))
+      .catch(() => setItems([]));
+  }, [open]);
+
+  function openItem(it: any) {
+    setOpen(false);
+    csOpenThread({ side: it.side, conversationId: it.conversationId });
+    onNav?.("messages");
+  }
+
   return (
-    <button
-      title="Messages"
-      aria-label={unread > 0 ? `${unread} unread messages` : "Messages"}
-      onClick={() => onNav?.("messages")}
-      style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", cursor: "pointer" }}
-    >
-      <Bell size={17} />
-      {unread > 0 && (
-        <span style={{ position: "absolute", top: -5, right: -5, minWidth: 17, height: 17, padding: "0 4px", borderRadius: 999, background: "var(--danger)", color: "#fff", fontSize: 10.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--background)" }}>
-          {unread > 9 ? "9+" : unread}
-        </span>
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        title="Notifications"
+        aria-label={unread > 0 ? `${unread} unread messages` : "Notifications"}
+        onClick={() => setOpen((o) => !o)}
+        style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: open ? "var(--surface)" : "var(--surface2)", color: "var(--foreground)", cursor: "pointer" }}
+      >
+        <Bell size={17} />
+        {unread > 0 && (
+          <span style={{ position: "absolute", top: -5, right: -5, minWidth: 17, height: 17, padding: "0 4px", borderRadius: 999, background: "var(--danger)", color: "#fff", fontSize: 10.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--background)" }}>
+            {unread > 9 ? "9+" : unread}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="fade-up" style={{ position: "absolute", right: 0, top: 42, width: 350, maxHeight: 430, overflowY: "auto", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, boxShadow: "0 14px 40px rgba(0,0,0,0.28)", zIndex: 70, padding: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px 6px" }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>Notifications</span>
+            {unread > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", background: "var(--accent-tint)", borderRadius: 999, padding: "2px 9px" }}>{unread} new</span>}
+          </div>
+          {items === null && <div style={{ padding: "18px 12px", fontSize: 12.5, color: "var(--muted)", textAlign: "center" }}>Loading…</div>}
+          {items?.length === 0 && <div style={{ padding: "18px 12px", fontSize: 12.5, color: "var(--muted)", textAlign: "center" }}>No messages yet. When buyers or sellers write to you, it shows up here.</div>}
+          {items?.map((it) => (
+            <button key={`${it.side}-${it.conversationId}`} className="cs-nav-item" onClick={() => openItem(it)}
+              style={{ display: "flex", gap: 10, width: "100%", padding: "10px 12px", border: "none", borderRadius: 10, background: "transparent", cursor: "pointer", textAlign: "left", alignItems: "flex-start" }}>
+              <span style={{ width: 34, height: 34, borderRadius: 999, flexShrink: 0, display: "grid", placeItems: "center", background: "var(--accent-tint)", border: "1px solid var(--line)" }}>
+                {it.side === "selling"
+                  ? <MessageSquare size={15} color="var(--accent)" />
+                  : <Store size={15} color="var(--accent)" />}
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", border: "1px solid var(--line)", borderRadius: 999, padding: "1px 7px", flexShrink: 0 }}>{it.side === "selling" ? "Buyer" : "Seller"}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>{agoLabel(it.at)}</span>
+                </span>
+                {it.part && <span style={{ display: "block", fontSize: 11.5, color: "var(--accent)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.part}</span>}
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.preview}</span>
+                  {it.unread > 0 && <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--danger)", flexShrink: 0 }} />}
+                </span>
+              </span>
+            </button>
+          ))}
+          <div style={{ borderTop: "1px solid var(--line)", marginTop: 4, paddingTop: 4 }}>
+            <button className="cs-nav-item" onClick={() => { setOpen(false); onNav?.("messages"); }}
+              style={{ display: "flex", justifyContent: "center", width: "100%", padding: "9px 12px", border: "none", borderRadius: 10, background: "transparent", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "var(--accent)" }}>
+              Open Messages
+            </button>
+          </div>
+        </div>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -844,6 +938,19 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   useEffect(() => { reload(); }, []);
   // Let views (e.g. Add vehicle) trigger a data refresh after they save.
   useEffect(() => { (window as any).csReloadData = reload; }, []);
+
+  // Reopen the view the user was on after a full page load — e.g. hitting Back
+  // from a public profile returns them to Messages, not Overview. Declared
+  // before the Stripe-return effect so an explicit ?order/?billing marker wins.
+  useEffect(() => {
+    try {
+      const v = sessionStorage.getItem("cs-view");
+      if (v && VIEWS[v]) setActive(v);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try { sessionStorage.setItem("cs-view", active); } catch {}
+  }, [active]);
 
   // Handle returns from Stripe (checkout + Connect payout onboarding): toast the
   // result, land the user on the right view, and strip the marker from the URL.

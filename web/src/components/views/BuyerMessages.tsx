@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Inbox, Send, Store, MessageCircle, Search, X, Trash2 } from "lucide-react";
-import { csToast } from "../Dashboard";
+import { csToast, csConsumePendingThread } from "../Dashboard";
 
 interface BMsg { from: string; text: string; time: string }
 interface BThread {
@@ -61,6 +61,21 @@ export function BuyerMessages() {
       if (first) setActiveId(first.id);
     }
   }, [threads, activeId, isHidden]);
+
+  // The bell (or a notification) can target one specific conversation: open it
+  // and un-hide it if it was locally deleted. Declared after the auto-select
+  // effect so the target wins the first-mount race.
+  React.useEffect(() => {
+    function applyTarget() {
+      const id = csConsumePendingThread("buying");
+      if (!id) return;
+      setActiveId(id);
+      setDeleted((prev) => { if (prev[id] == null) return prev; const n = { ...prev }; delete n[id]; saveDeleted(n); return n; });
+    }
+    applyTarget();
+    window.addEventListener("cs:open-thread", applyTarget);
+    return () => window.removeEventListener("cs:open-thread", applyTarget);
+  }, []);
 
   const ql = query.trim().toLowerCase();
   const notDeleted = threads.filter((th) => !isHidden(th));
@@ -178,7 +193,7 @@ export function BuyerMessages() {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700 }}>
-                {t.shopId ? <a href={`/shop/${t.shopId}`} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "none" }}>{t.shopName}</a> : t.shopName}
+                {t.shopId ? <a href={`/shop/${t.shopId}`} style={{ color: "inherit", textDecoration: "none" }}>{t.shopName}</a> : t.shopName}
               </div>
               <div style={{ fontSize: 12, color: "var(--muted)" }}>{t.part}</div>
             </div>

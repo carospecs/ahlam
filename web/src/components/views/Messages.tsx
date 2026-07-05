@@ -12,7 +12,7 @@ const STATUS_META = {
 } as const;
 type ConvStatus = keyof typeof STATUS_META;
 import { MarketChip } from "../UI";
-import { useData, csToast } from "../Dashboard";
+import { useData, csToast, csPendingThread, csConsumePendingThread } from "../Dashboard";
 import { BuyerMessages } from "./BuyerMessages";
 
 const DELETED_KEY = "ahlam_deleted_chats";
@@ -130,6 +130,19 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
   }
 
   React.useEffect(() => { if (!activeId && threads.length) setActiveId(threads[0].id); }, [threads, activeId]);
+  // The bell (or a notification) can target one specific conversation: open it
+  // and un-hide it if it was soft-deleted, so the thread actually shows.
+  React.useEffect(() => {
+    function applyTarget() {
+      const id = csConsumePendingThread("selling");
+      if (!id) return;
+      setActiveId(id);
+      setDeleted((p) => { if (!p.has(id)) return p; const n = new Map(p); n.delete(id); return n; });
+    }
+    applyTarget();
+    window.addEventListener("cs:open-thread", applyTarget);
+    return () => window.removeEventListener("cs:open-thread", applyTarget);
+  }, []);
   // Auto-clean deleted conversations older than 30 days.
   React.useEffect(() => {
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -264,7 +277,7 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
                         <span style={{ fontSize: 13.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                           {(() => { const st = statusOf(th); const M = STATUS_META[st]; return <M.Icon size={12} color={M.color} style={{ flexShrink: 0 }} />; })()}
                           {th.buyerId ? (
-                            <a href={`/profile/${th.buyerId}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "inherit", textDecoration: "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.name}</a>
+                            <a href={`/profile/${th.buyerId}`} onClick={(e) => e.stopPropagation()} style={{ color: "inherit", textDecoration: "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.name}</a>
                           ) : (
                             <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.name}</span>
                           )}
@@ -302,7 +315,7 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
               {t.buyerId ? (
-                <a href={`/profile/${t.buyerId}`} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "none" }}>{t.name}</a>
+                <a href={`/profile/${t.buyerId}`} style={{ color: "inherit", textDecoration: "none" }}>{t.name}</a>
               ) : (
                 t.name
               )}
@@ -410,7 +423,15 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
 // toggle lets one inbox cover both without a separate nav item.
 export function MessagesHub(props: { go: (id: string) => void; onVehicle?: (v: any) => void; showDeleted?: boolean }) {
   const { threads } = useData();
-  const [tab, setTab] = React.useState<"selling" | "buying">("selling");
+  // A pending thread target (from the bell) decides the opening tab; while
+  // mounted, a new target switches tabs live. Peek only — the matching side's
+  // view consumes the target itself.
+  const [tab, setTab] = React.useState<"selling" | "buying">(() => csPendingThread()?.side ?? "selling");
+  React.useEffect(() => {
+    function onTarget() { const p = csPendingThread(); if (p) setTab(p.side); }
+    window.addEventListener("cs:open-thread", onTarget);
+    return () => window.removeEventListener("cs:open-thread", onTarget);
+  }, []);
   const sellingCount = threads.length;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0 }}>
