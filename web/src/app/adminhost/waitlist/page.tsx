@@ -195,7 +195,7 @@ function LaunchEmailCard() {
         </div>
       </div>
       <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 10, lineHeight: 1.55 }}>
-        Tells waitlist members we launched, that their founding month is free (top-tier features, 5 AI car scans), and links the Auto-Poster extension. Safe to rerun: members already notified are skipped.
+        Tells waitlist members we launched, that their founding month is a free Growth month (10 AI car scans, eBay and Facebook posting, unlimited manual listings), and links the Auto-Poster extension. Safe to rerun: members already notified are skipped.
       </div>
       {preview && (
         <button onClick={() => setShowBody((v) => !v)} style={{ marginTop: 10, background: "none", border: "none", color: "var(--accent)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>

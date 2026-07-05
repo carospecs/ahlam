@@ -2,10 +2,11 @@
 // usage_events table. A "scan" is one whole car scanned with AI (all photos of
 // one analyze run count once — see the scan-batch logic in lib/usage.ts).
 //
-// Launch pricing (Jul 2026): Growth $100 = 5 AI scans/mo and eBay-only
-// cross-posting; Max $200 = 20 AI scans/mo; Ultimate $350 = unlimited. Waitlist
-// members get the "founder" month: top-tier features with 5 AI scans, unlimited
-// manual posting. The legacy "Pro" default (pre-launch shops) stays unlimited.
+// Launch pricing (Jul 2026): Growth $100 = 10 AI scans/mo with eBay + Facebook;
+// Max $200 = 25 scans/mo, every channel; Ultimate $350 = unlimited. The free
+// first month (starter) and the waitlist founding month (founder) are a free
+// month of Growth: 10 scans, eBay + Facebook, unlimited manual posting. The
+// legacy "Pro" default (pre-launch shops) stays unlimited.
 
 export type UsageKind = "scan" | "car_post" | "export_car" | "export_part";
 
@@ -23,13 +24,13 @@ const UNLIMITED: PlanLimits = {
 };
 
 export const PLAN_LIMITS: Record<string, PlanLimits> = {
-  // Free-trial month for regular signups ("Up to 2 cars" on the pricing page).
-  starter: { ...UNLIMITED, scanPerMonth: 2 },
-  solo: { scanPerMonth: 3, carPostPerDay: 1, exportCarsPerMonth: 20, exportPartsPerMonth: 100, prepareChannels: null },
-  growth: { ...UNLIMITED, scanPerMonth: 5, prepareChannels: ["ebay"] },
-  max: { ...UNLIMITED, scanPerMonth: 20 },
-  // Waitlist founding month: everything unlocked, 5 AI scans, unlimited manual posting.
-  founder: { ...UNLIMITED, scanPerMonth: 5 },
+  // Free first month for regular signups: a Growth month on the house.
+  starter: { ...UNLIMITED, scanPerMonth: 10, prepareChannels: ["ebay", "facebook"] },
+  solo: { scanPerMonth: 3, carPostPerDay: 1, exportCarsPerMonth: 20, exportPartsPerMonth: 100, prepareChannels: ["facebook"] },
+  growth: { ...UNLIMITED, scanPerMonth: 10, prepareChannels: ["ebay", "facebook"] },
+  max: { ...UNLIMITED, scanPerMonth: 25 },
+  // Waitlist founding month: same free Growth month, unlimited manual posting.
+  founder: { ...UNLIMITED, scanPerMonth: 10, prepareChannels: ["ebay", "facebook"] },
   // Expired free month or a canceled subscription (the Stripe webhook writes
   // plan "Free" on cancel): no AI scans, no new posts, no exports.
   free: { scanPerMonth: 0, carPostPerDay: 0, exportCarsPerMonth: 0, exportPartsPerMonth: 0, prepareChannels: [] },
@@ -73,6 +74,13 @@ export function effectivePlan(
 /** Extension cross-post channels this plan may use (null = all). */
 export function prepareChannelsFor(plan?: string | null): string[] | null {
   return limitsFor(plan).prepareChannels;
+}
+
+/** Whether the plan includes eBay auto-posting (Growth and up; Solo is
+ * Facebook-only, an expired free month has no channels at all). */
+export function ebayAllowed(plan?: string | null): boolean {
+  const channels = prepareChannelsFor(plan);
+  return channels == null || channels.includes("ebay");
 }
 
 /** Human label for a stored plan id ("founder" → "Founding member"). */

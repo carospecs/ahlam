@@ -27,10 +27,9 @@ function launchBody(): string {
     "account with this email address and the free month applies " +
     "automatically:\n\n" +
     `${APP_URL}/?signup=1\n\n` +
-    "Your founding month includes every feature of our top plan: unlimited " +
-    "manual listings, cross-posting to every channel we support, team " +
-    `access, and ${founderScans} AI car scans for the month (the Growth ` +
-    "plan's AI allowance, normally $100).\n\n" +
+    "Your founding month is a full month of our Growth plan, free: " +
+    `${founderScans} AI car scans, auto-posting to eBay, Facebook ` +
+    "cross-posting, and unlimited manual listings (normally $100).\n\n" +
     "One more thing: install the Ahlam Auto-Poster Chrome extension. It " +
     "opens Facebook Marketplace and OfferUp with your listing already " +
     "filled in, so you just review and hit publish:\n\n" +

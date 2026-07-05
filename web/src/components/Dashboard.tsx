@@ -734,7 +734,7 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
         <div className="grain login-panel" style={{ padding: 34, display: "flex", flexDirection: "column", gap: 22, justifyContent: "space-between", borderRight: "1px solid var(--line)", minHeight: 500 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 10 }}><BrandChip size={34} /><span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span></span>
           <div>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, borderRadius: 999, border: "1px solid color-mix(in srgb, var(--accent) 22%, transparent)", background: "var(--accent-tint)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--accent)" }}><span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--accent)" }} /> Pilot shops · early access</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, borderRadius: 999, border: "1px solid color-mix(in srgb, var(--accent) 22%, transparent)", background: "var(--accent-tint)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--accent)" }}><span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--accent)" }} /> Now live · first month free</span>
             <h1 style={{ margin: "16px 0 0", fontSize: 31, fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.02em" }}>You&apos;re one step<br /><span style={{ color: "var(--accent)" }}>from your first listing.</span></h1>
             <p style={{ margin: "12px 0 0", color: "var(--muted)", fontSize: 14, lineHeight: 1.55 }}>Set up your {isIndiv ? "account" : "shop"} and your AI-graded inventory starts building itself.</p>
           </div>

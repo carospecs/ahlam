@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { ebayConfigured, getConnection, getShopPolicies, publishPartListing, publishVehicleListing, type ShopPolicies } from "@/lib/ebay";
 import { suggestLeafCategory } from "@/lib/pricing";
 import { effectiveShopPlan, limitMessage } from "@/lib/usage";
+import { ebayAllowed } from "@/lib/plan-limits";
 
 // eBay Motors parts must list under a leaf category. When we can't infer one from
 // live comps, fall back to 9886 "Other Car & Truck Parts & Accessories".
@@ -56,9 +57,16 @@ export async function POST(req: Request) {
   const shopId = profile?.shop_id;
   if (!shopId) return NextResponse.json({ error: "No workspace" }, { status: 400 });
 
-  // An expired free month (effective plan "free") can't publish to eBay.
-  if ((await effectiveShopPlan(db, shopId)) === "free") {
-    return NextResponse.json({ error: limitMessage("car_post", 0), code: "quota" }, { status: 402 });
+  // eBay auto-posting is a Growth-and-up feature: Solo is Facebook-only and an
+  // expired free month has no channels.
+  const plan = await effectiveShopPlan(db, shopId);
+  if (!ebayAllowed(plan)) {
+    return NextResponse.json({
+      error: plan === "free"
+        ? limitMessage("car_post", 0)
+        : "eBay auto-posting isn't included in your plan. Upgrade to Growth under Settings > Billing.",
+      code: "quota",
+    }, { status: 402 });
   }
 
   const conn = await getConnection(shopId).catch(() => null);
