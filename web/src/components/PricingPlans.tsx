@@ -37,10 +37,10 @@ export const PLANS: Plan[] = [
     name: "Growth",
     price: "$100",
     per: "/mo",
-    desc: "For dismantlers selling on eBay, Facebook, and OfferUp who want AI scanning and automation.",
+    desc: "For dismantlers selling on eBay and Facebook who want AI scanning and automation.",
     features: [
       "AI scan: 10 cars per month (photo-to-listing)",
-      "Cross-post to eBay, Facebook & OfferUp",
+      "Cross-post to eBay & Facebook",
       "Unlimited manual listings",
       "Team access: Owner & Editor",
       "AI Interchange Assistant (parts fitment across vehicles)",
