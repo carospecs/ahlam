@@ -20,6 +20,7 @@ import { useData, csToast } from "../Dashboard";
 import { WARRANTY_DAYS, effectiveWarranty, warrantyLabel } from "@/lib/warranty";
 import { fileToJpegDataUrl } from "@/lib/image";
 import { prepareChannelsFor } from "@/lib/plan-limits";
+import { EXTENSION_URL } from "@/lib/extension";
 
 // Platforms with no listing API — we prepare the text + photos and open the
 // posting page so the seller just pastes and hits post. Channels flagged `soon`
@@ -32,9 +33,9 @@ const PREPARE_CHANNELS: PrepareChannel[] = [
 ];
 const LIVE_CHANNELS = PREPARE_CHANNELS.filter((c) => !c.soon);
 
-// Chrome Web Store listing for the Ahlam Auto-Poster extension. It opens each
-// selected marketplace and fills the form; the seller reviews and publishes.
-const EXTENSION_URL = "https://chromewebstore.google.com/detail/ahlam-auto-poster/fpiebljechdcjfjhfbmbnkjjmoinobkj";
+// One shared message for every plan-locked cross-post surface. Generic on
+// purpose: it covers both Growth (eBay-only) and an expired free month.
+const LOCKED_CHANNEL_MSG = "This channel isn't included in your current plan. Upgrade under Settings > Billing.";
 
 // Detect the Ahlam Auto-Poster browser extension (it sets this attribute on
 // ahlam.io). Polls briefly because the content script can land after mount.
@@ -63,7 +64,7 @@ function ExtensionPromo({ compact }: { compact?: boolean }) {
     <div style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: compact ? 12 : 12.5, color: "var(--muted)", lineHeight: 1.5, background: "var(--accent-tint)", border: "1px solid color-mix(in srgb, var(--accent) 26%, transparent)", borderRadius: 10, padding: compact ? "9px 12px" : "11px 14px" }}>
       <Info size={15} color="var(--accent)" style={{ flexShrink: 0, marginTop: 1 }} />
       <span>
-        <strong style={{ color: "var(--foreground)" }}>Install the Ahlam Auto-Poster extension</strong> and we open Facebook Marketplace and OfferUp with the form already filled — you just review and hit Publish.{" "}
+        <strong style={{ color: "var(--foreground)" }}>Install the Ahlam Auto-Poster extension</strong> and we open Facebook Marketplace and OfferUp with the form already filled. You just review and hit Publish.{" "}
         <a href={EXTENSION_URL} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 700, textDecoration: "none" }}>Get it from the Chrome Web Store</a>
       </span>
     </div>
@@ -331,10 +332,10 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
                 <div style={{ fontSize: 13.5, fontWeight: 700 }}>
                   {c.name}
                   {c.soon && <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 45%, transparent)", borderRadius: 999, padding: "1.5px 7px", verticalAlign: "middle" }}>Coming soon</span>}
-                  {locked && <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 45%, transparent)", borderRadius: 999, padding: "1.5px 7px", verticalAlign: "middle" }}>Max plan</span>}
+                  {locked && <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 45%, transparent)", borderRadius: 999, padding: "1.5px 7px", verticalAlign: "middle" }}>Upgrade</span>}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>
-                  {locked ? "Your plan cross-posts to eBay only. Upgrade to Max under Settings > Billing to post here too." : c.note}
+                  {locked ? LOCKED_CHANNEL_MSG : c.note}
                 </div>
               </div>
             </Card>
@@ -538,7 +539,7 @@ function PrepareMenu({ channels, onPick }: { channels: typeof PREPARE_CHANNELS; 
   return (
     <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
       <button
-        onClick={() => { if (empty) { csToast("Your plan cross-posts to eBay only. Upgrade to Max under Settings > Billing."); return; } setOpen((o) => !o); }}
+        onClick={() => { if (empty) { csToast(LOCKED_CHANNEL_MSG); return; } setOpen((o) => !o); }}
         style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: empty ? 0.55 : 1 }}
       >
         <Send size={13} /> Post elsewhere <ChevronDown size={13} />
@@ -673,7 +674,7 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
     () => new Set(lockedChannel(planId, (data.channel as any).key) ? [] : [(data.channel as any).key]),
   );
   const toggleSel = (k: string) => {
-    if (lockedChannel(planId, k)) { csToast("Your plan cross-posts to eBay only. Upgrade to Max under Settings > Billing."); return; }
+    if (lockedChannel(planId, k)) { csToast(LOCKED_CHANNEL_MSG); return; }
     setSelected((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
   };
 
@@ -720,9 +721,9 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
     // confirmAndOpenSelected instead — opens every chosen marketplace and fills
     // each. This path is the no-extension fallback: share / copy-and-open.)
 
-    // 1) Plan gate: Growth cross-posts to eBay only.
+    // 1) Plan gate: the plan may not include this channel (Growth is eBay-only).
     if (lockedChannel(planId, (channel as any).key)) {
-      csToast("Your plan cross-posts to eBay only. Upgrade to Max under Settings > Billing.");
+      csToast(LOCKED_CHANNEL_MSG);
       return;
     }
 
@@ -881,8 +882,8 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
                   const on = selected.has(c.key);
                   const locked = lockedChannel(planId, c.key);
                   return (
-                    <button key={c.key} onClick={() => toggleSel(c.key)} title={locked ? "Upgrade to Max for this channel" : undefined} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 12px", borderRadius: 999, border: `1.5px solid ${on ? c.color : "var(--line)"}`, background: on ? `color-mix(in srgb, ${c.color} 14%, transparent)` : "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: locked ? 0.45 : 1 }}>
-                      <c.icon size={14} color={c.color} /> {c.name.replace(" Marketplace", "")} {on ? "✓" : locked ? "· Max" : ""}
+                    <button key={c.key} onClick={() => toggleSel(c.key)} title={locked ? LOCKED_CHANNEL_MSG : undefined} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 12px", borderRadius: 999, border: `1.5px solid ${on ? c.color : "var(--line)"}`, background: on ? `color-mix(in srgb, ${c.color} 14%, transparent)` : "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: locked ? 0.45 : 1 }}>
+                      <c.icon size={14} color={c.color} /> {c.name.replace(" Marketplace", "")} {on ? "✓" : locked ? "· locked" : ""}
                     </button>
                   );
                 })}

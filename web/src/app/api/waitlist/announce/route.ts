@@ -1,20 +1,25 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin";
+import { EXTENSION_URL } from "@/lib/extension";
+import { PLAN_LIMITS } from "@/lib/plan-limits";
 import nodemailer from "nodemailer";
 
 // SMTP runs on Node APIs (net/tls), not the Edge runtime. Sequential sends to a
 // whole waitlist can take a while, so give the function real headroom.
 export const runtime = "nodejs";
 export const maxDuration = 300;
+// Stop sending before the platform kills the function so the response (with
+// the remaining count) always reaches the admin; the endpoint is idempotent,
+// rerunning picks up where it left off.
+const SEND_BUDGET_MS = 240_000;
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://ahlam.io";
-const EXTENSION_URL =
-  "https://chromewebstore.google.com/detail/ahlam-auto-poster/fpiebljechdcjfjhfbmbnkjjmoinobkj";
 
 const SUBJECT = "Ahlam is live. Your first month is free";
 
 function launchBody(): string {
+  const founderScans = PLAN_LIMITS.founder.scanPerMonth ?? 5;
   return (
     "Hi,\n\n" +
     `Ahlam is live today at ${APP_URL}.\n\n` +
@@ -24,8 +29,8 @@ function launchBody(): string {
     `${APP_URL}/?signup=1\n\n` +
     "Your founding month includes every feature of our top plan: unlimited " +
     "manual listings, cross-posting to every channel we support, team " +
-    "access, and 5 AI car scans for the month (the Growth plan's AI " +
-    "allowance, normally $100).\n\n" +
+    `access, and ${founderScans} AI car scans for the month (the Growth ` +
+    "plan's AI allowance, normally $100).\n\n" +
     "One more thing: install the Ahlam Auto-Poster Chrome extension. It " +
     "opens Facebook Marketplace and OfferUp with your listing already " +
     "filled in, so you just review and hit publish:\n\n" +
@@ -99,7 +104,11 @@ export async function POST(req: Request) {
   }
   const from = process.env.WAITLIST_FROM_EMAIL || "Ahlam <mohammadabbas@ahlam.io>";
   const replyTo = process.env.WAITLIST_REPLY_TO || "mohammadabbas@ahlam.io";
+  // Pooled: reuse one TLS+AUTH connection across the whole run instead of a
+  // fresh Gmail handshake per recipient.
   const transport = nodemailer.createTransport({
+    pool: true,
+    maxConnections: 2,
     host: "smtp.gmail.com",
     port: 465,
     secure: true,
@@ -113,7 +122,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, mode, sent: 1, to: admin });
     } catch (e) {
       console.error("announce test send failed", e);
-      return NextResponse.json({ error: "Test send failed — check the email credentials." }, { status: 502 });
+      return NextResponse.json({ error: "Test send failed. Check the email credentials." }, { status: 502 });
     }
   }
 
@@ -121,35 +130,42 @@ export async function POST(req: Request) {
     const db = supabaseAdmin();
     const { rows, notifySupported } = await loadRows(db);
     const pending = rows.filter((r) => !r.notified_at);
+    const deadline = Date.now() + SEND_BUDGET_MS;
 
     let sent = 0;
+    let remaining = 0;
     const failed: string[] = [];
-    for (const r of pending) {
+    for (let i = 0; i < pending.length; i++) {
+      if (Date.now() > deadline) { remaining = pending.length - i; break; }
+      const r = pending[i];
       try {
         await transport.sendMail({ from, to: r.email, replyTo, subject: SUBJECT, text });
         sent++;
         if (notifySupported) {
           await db.from("waitlist").update({ notified_at: new Date().toISOString() }).eq("email", r.email);
         }
+        // Gentle pacing for Gmail, only between successful sends.
+        if (i < pending.length - 1) await new Promise((res) => setTimeout(res, 200));
       } catch (e) {
         console.error("announce send failed for", r.email, e);
         failed.push(r.email);
       }
-      // Gentle pacing for Gmail SMTP.
-      await new Promise((res) => setTimeout(res, 300));
     }
+    transport.close();
 
     return NextResponse.json({
       ok: true,
       mode,
       sent,
       failed,
+      remaining,
       skipped: rows.length - pending.length,
       notifySupported,
-      ...(notifySupported ? {} : { warning: "waitlist.notified_at is not migrated (0038) — reruns would email everyone again." }),
+      ...(remaining ? { warning: `Stopped at the time budget with ${remaining} to go. Run it again to send the rest.` } : {}),
+      ...(notifySupported ? {} : { warning: "waitlist.notified_at is not migrated (0038). Rerunning would email everyone again." }),
     });
   } catch (e) {
     console.error("announce send failed", e);
-    return NextResponse.json({ error: "Send failed partway — safe to rerun; already-notified members are skipped." }, { status: 500 });
+    return NextResponse.json({ error: "Send failed partway. Safe to rerun; already-notified members are skipped." }, { status: 500 });
   }
 }

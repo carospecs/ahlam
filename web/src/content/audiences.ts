@@ -103,7 +103,7 @@ export const AUDIENCE_CONTENT: Record<string, AudienceContent> = {
       },
       {
         q: "What does it cost to start?",
-        a: "Nothing. The first 50 yards get a full month free with every feature unlocked, no card required. After that, plans run Free, Growth $100, Max $200, and Ultimate $350.",
+        a: "Nothing. Your first month is free with every feature unlocked, no card required. After that, plans run Solo $19, Growth $100, Max $200, and Ultimate $350.",
       },
     ],
   },
@@ -171,7 +171,7 @@ export const AUDIENCE_CONTENT: Record<string, AudienceContent> = {
       },
       {
         q: "What does it cost to try?",
-        a: "The first 50 businesses get a full month free, no card. After that, plans run Free, Growth $100, Max $200, and Ultimate $350.",
+        a: "Your first month is free with no card. After that, plans run Solo $19, Growth $100, Max $200, and Ultimate $350.",
       },
     ],
   },
@@ -239,7 +239,7 @@ export const AUDIENCE_CONTENT: Record<string, AudienceContent> = {
       },
       {
         q: "What does it cost?",
-        a: "The first 50 shops get a month free with no card. After that, plans run Free, Growth $100, Max $200, and Ultimate $350.",
+        a: "Your first month is free with no card. After that, plans run Solo $19, Growth $100, Max $200, and Ultimate $350.",
       },
     ],
   },
@@ -307,7 +307,7 @@ export const AUDIENCE_CONTENT: Record<string, AudienceContent> = {
       },
       {
         q: "What does it cost?",
-        a: "The first 50 businesses get a free month, no card. After that, plans run Free, Growth $100, Max $200, and Ultimate $350.",
+        a: "Your first month is free, no card. After that, plans run Solo $19, Growth $100, Max $200, and Ultimate $350.",
       },
     ],
   },
@@ -375,7 +375,7 @@ export const AUDIENCE_CONTENT: Record<string, AudienceContent> = {
       },
       {
         q: "Is it really free to start?",
-        a: "Yes. The first 50 sign-ups get a full month free with no card. After that there is a Free plan, plus Growth $100, Max $200, and Ultimate $350 as you grow.",
+        a: "Yes. Your first month is free with no card. After that, plans run Solo $19, Growth $100, Max $200, and Ultimate $350 as you grow.",
       },
     ],
   },

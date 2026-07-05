@@ -237,6 +237,19 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ ok: false, error: "Sign in to use interchange." }, { status: 401 });
 
+  // An expired free month can't run the AI interchange assistant.
+  try {
+    const { resolveShopPlan } = await import("@/lib/usage");
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    const { plan } = await resolveShopPlan(supabaseAdmin(), user.id);
+    if (plan === "free") {
+      return NextResponse.json(
+        { ok: false, error: "Your free month has ended. Pick a plan under Settings > Billing to keep using interchange." },
+        { status: 402 },
+      );
+    }
+  } catch { /* fail-open */ }
+
   let body: { part?: string; make?: string; model?: string; year?: string | number; variant?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: "Bad request" }, { status: 400 }); }
 

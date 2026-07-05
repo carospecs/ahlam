@@ -61,23 +61,32 @@ export async function POST(req: NextRequest) {
   // 5 AI car scans, unlimited manual posting (enforced in lib/plan-limits.ts).
   let plan = "starter";
   if (user.email) {
+    // Exact match (waitlist emails are stored lowercased). NOT ilike — the
+    // pattern would treat _ and % in a signup email as wildcards.
     const { data: wl } = await db
-      .from("waitlist").select("email").ilike("email", user.email).limit(1).maybeSingle();
+      .from("waitlist").select("email").eq("email", user.email.toLowerCase()).limit(1).maybeSingle();
     if (wl) plan = "founder";
   }
   const trialEndsAt = new Date(Date.now() + 30 * 86400000).toISOString();
 
-  // Try to persist account_type; if the column doesn't exist yet, fall back gracefully.
+  // Try to persist account_type; if a column doesn't exist yet, fall back
+  // gracefully. Only a column-shaped error drops a field, and plan +
+  // trial_ends_at travel as a pair (a trial plan without an end date would
+  // read as already expired).
   const shopRow: Record<string, unknown> = {
     name: name.trim(), location: shopLocation, business_phone: phone || null,
     lat, lng, zip_code: zip, address_line: address || null,
     account_type: type, plan, trial_ends_at: trialEndsAt,
   };
+  const columnError = (msg: string, col: string) =>
+    msg.includes(col) && /column|schema cache|does not exist/i.test(msg);
   let { data: shop, error: shopErr } = await db.from("shops").insert(shopRow).select().single();
   for (let attempt = 0; shopErr && attempt < 3; attempt++) {
     let dropped = false;
-    for (const col of ["account_type", "plan", "trial_ends_at"]) {
-      if (col in shopRow && new RegExp(col, "i").test(shopErr.message || "")) { delete shopRow[col]; dropped = true; }
+    const msg = shopErr.message || "";
+    if ("account_type" in shopRow && columnError(msg, "account_type")) { delete shopRow.account_type; dropped = true; }
+    if (("plan" in shopRow && columnError(msg, "plan")) || ("trial_ends_at" in shopRow && columnError(msg, "trial_ends_at"))) {
+      delete shopRow.plan; delete shopRow.trial_ends_at; dropped = true;
     }
     if (!dropped) break;
     ({ data: shop, error: shopErr } = await db.from("shops").insert(shopRow).select().single());

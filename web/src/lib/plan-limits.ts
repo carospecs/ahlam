@@ -54,11 +54,20 @@ export function limitForKind(plan: string | null | undefined, kind: UsageKind): 
 // the Stripe webhook and never expire app-side.
 const TRIAL_PLANS = new Set(["starter", "founder"]);
 
-export function effectivePlan(plan?: string | null, trialEndsAt?: string | Date | null): string {
+export function effectivePlan(
+  plan?: string | null,
+  trialEndsAt?: string | Date | null,
+  subscriptionStatus?: string | null,
+): string {
   const p = (plan || "pro").toLowerCase();
   if (!TRIAL_PLANS.has(p)) return p;
-  const ends = trialEndsAt ? new Date(trialEndsAt).getTime() : 0;
-  return ends > Date.now() ? p : "free";
+  // A live Stripe subscription outranks the trial clock (e.g. a shop whose
+  // plan column still says a trial id but who is actively paying).
+  if (subscriptionStatus === "active") return p;
+  // Fail-open: a trial plan with no recorded end date stays on the trial
+  // (never silently brick a fresh account over a missing column).
+  if (!trialEndsAt) return p;
+  return new Date(trialEndsAt).getTime() > Date.now() ? p : "free";
 }
 
 /** Extension cross-post channels this plan may use (null = all). */

@@ -467,7 +467,9 @@ export function Billing(_: ViewProps) {
       <Card>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Plans</div>
         <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 18 }}>Pick a plan or upgrade. Checkout is handled securely by Stripe.</div>
-        <PricingPlans onChoose={(planId) => go("checkout", planId)} ctaLabel="Subscribe" />
+        {/* The $0 trial card is hidden here: "subscribing" to it would stamp a
+            trial plan over a paying shop via the Stripe webhook. */}
+        <PricingPlans onChoose={(planId) => go("checkout", planId)} ctaLabel="Subscribe" exclude={["starter"]} />
       </Card>
 
       <PayoutCard canManage={user?.role === "owner"} />

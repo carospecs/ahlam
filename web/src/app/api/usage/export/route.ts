@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
-import { effectivePlan } from "@/lib/plan-limits";
+import { checkUsage, recordUsage, effectiveShopPlan, limitMessage } from "@/lib/usage";
 
 export const runtime = "nodejs";
 
@@ -27,8 +26,7 @@ export async function POST(req: Request) {
     const { data: prof } = await db.from("profiles").select("shop_id").eq("id", user.id).single();
     const shopId = (prof?.shop_id as string) || null;
     if (!shopId) return NextResponse.json({ allowed: true });
-    const { data: shopRow } = await db.from("shops").select("plan, trial_ends_at").eq("id", shopId).single();
-    const plan = effectivePlan(shopRow?.plan as string, shopRow?.trial_ends_at as string);
+    const plan = await effectiveShopPlan(db, shopId);
 
     if (cars) {
       const u = await checkUsage(db, shopId, plan, "export_car", cars);

@@ -70,6 +70,18 @@ export async function POST(req: Request) {
   }
   if (!user) return NextResponse.json({ ok: false, error: "no auth" }, { status: 401, headers: CORS });
 
+  // An expired free month can't run AI repricing (fail-open on lookup errors).
+  try {
+    const { resolveShopPlan } = await import("@/lib/usage");
+    const { plan } = await resolveShopPlan(supabaseAdmin(), user.id);
+    if (plan === "free") {
+      return NextResponse.json(
+        { ok: false, error: "Your free month has ended. Pick a plan under Settings > Billing to keep using AI repricing." },
+        { status: 402, headers: CORS },
+      );
+    }
+  } catch { /* fail-open */ }
+
   let body: {
     vin?: string;
     vehicle?: { year?: number | null; make?: string | null; model?: string | null; trim?: string | null; engine?: string | null; drivetrain?: string | null };

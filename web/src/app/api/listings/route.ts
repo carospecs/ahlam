@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { floorPrice } from "@/lib/price-bands";
-import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
-import { effectivePlan } from "@/lib/plan-limits";
+import { checkUsage, recordUsage, effectiveShopPlan, limitMessage } from "@/lib/usage";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -59,8 +58,7 @@ export async function POST(req: Request) {
   // free. Fail-open if usage isn't migrated / lookup errors.
   if (status === "active") {
     try {
-      const { data: shopRow } = await db.from("shops").select("plan, trial_ends_at").eq("id", shopId).single();
-      const plan = effectivePlan(shopRow?.plan as string, shopRow?.trial_ends_at as string);
+      const plan = await effectiveShopPlan(db, shopId);
       const usage = await checkUsage(db, shopId, plan, "car_post");
       if (!usage.allowed) {
         return NextResponse.json({ error: limitMessage("car_post", usage.limit ?? 0, plan), code: "quota" }, { status: 402 });

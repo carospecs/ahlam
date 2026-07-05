@@ -82,7 +82,7 @@ export default function Home() {
     // auth screen pops the pushed entry (no ?signin/?signup) → close → homepage.
     const onPop = () => {
       const p = new URLSearchParams(window.location.search);
-      if (p.has("signup")) setLoginMode("signup");
+      setLoginMode(p.has("signup") ? "signup" : "signin");
       setShowLogin(p.has("signin") || p.has("signup"));
     };
     window.addEventListener("popstate", onPop);

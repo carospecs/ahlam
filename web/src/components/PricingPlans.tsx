@@ -106,13 +106,16 @@ export const PLANS: Plan[] = [
 export function PricingPlans({
   onChoose,
   ctaLabel,
+  exclude,
 }: {
   onChoose?: (planId: string) => void;
   ctaLabel?: string;
+  exclude?: string[]; // plan ids to hide (e.g. "starter" in the billing view)
 }) {
+  const plans = exclude?.length ? PLANS.filter((p) => !exclude.includes(p.id)) : PLANS;
   return (
     <div className="cs-plan-row" style={{ display: "flex", gap: 14, alignItems: "stretch", justifyContent: "center", flexWrap: "wrap" }}>
-      {PLANS.map((p) => (
+      {plans.map((p) => (
         <div
           key={p.id}
           className="cs-glass"

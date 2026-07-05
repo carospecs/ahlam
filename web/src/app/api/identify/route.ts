@@ -5,8 +5,7 @@ import { gradeAdjustUsed } from "@/lib/used-pricing";
 import { classifyPowertrain, isImpossiblePart, powertrainPromptLine, type PowertrainType } from "@/lib/powertrain";
 import { geminiGenerate } from "@/lib/gemini";
 import { decodeVin, normalizeVin, engineLabel, type VinInfo, type VinDecode } from "@/lib/vin";
-import { checkScanUsage, recordScanUsage, limitMessage } from "@/lib/usage";
-import { effectivePlan } from "@/lib/plan-limits";
+import { checkScanUsage, recordScanUsage, resolveShopPlan, limitMessage } from "@/lib/usage";
 import { applyVinEngine, stripSide } from "@/lib/part-enrich";
 import { markInferredParts } from "@/lib/inferred-parts";
 import { propagateImpactDamage } from "@/lib/damage-zones";
@@ -437,11 +436,18 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
   let scanShopId: string | null = null;
   try {
     const udb = supabaseAdmin();
-    const { data: prof } = await udb.from("profiles").select("shop_id").eq("id", user.id).single();
-    scanShopId = (prof?.shop_id as string) || null;
+    const { shopId, plan, failed } = await resolveShopPlan(udb, user.id);
+    scanShopId = shopId;
+    if (!scanShopId && !failed) {
+      // Signups are open: without a workspace there is nothing to meter, so a
+      // shop-less account would get unmetered scans. Make them onboard first.
+      // (A failed lookup stays fail-open, matching the rest of usage metering.)
+      return NextResponse.json(
+        { ok: false, userMessage: "Finish creating your workspace, then scan away.", internalError: "no shop for scan metering" },
+        { status: 403 },
+      );
+    }
     if (scanShopId) {
-      const { data: shopRow } = await udb.from("shops").select("plan, trial_ends_at").eq("id", scanShopId).single();
-      const plan = effectivePlan(shopRow?.plan as string, shopRow?.trial_ends_at as string);
       const usage = await checkScanUsage(udb, scanShopId, plan, scanBatch);
       if (!usage.allowed) {
         return NextResponse.json(

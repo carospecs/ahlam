@@ -5,6 +5,7 @@ import { motion, AnimatePresence, MotionConfig, type Variants } from "framer-mot
 import { ScanLine, Send, ArrowRight, Tag, Check, ChevronDown, CalendarCheck, Mail, MessageSquare, Compass, Wrench, DollarSign, ShoppingBag, BarChart3, Download, Users, Building2, X, Camera, Boxes, VolumeOff } from "lucide-react";
 import { BrandMark } from "./BrandMark";
 import { useI18n } from "@/lib/i18n";
+import { EXTENSION_URL } from "@/lib/extension";
 import { CONDITION_COLOR } from "./data";
 import { PricingPlans } from "./PricingPlans";
 import { SiteHeader } from "./SiteHeader";
@@ -20,10 +21,6 @@ const EASE = [0.22, 0.8, 0.26, 1] as const;
 // Pricing is public since launch (Jul 2026). Flip to false to hide the Pricing
 // section again; the PricingPlans component and plan data stay either way.
 const SHOW_PRICING = true;
-
-// Chrome Web Store listing for the Ahlam Auto-Poster extension (fills the
-// Facebook / OfferUp forms; the seller reviews and publishes).
-const EXTENSION_URL = "https://chromewebstore.google.com/detail/ahlam-auto-poster/fpiebljechdcjfjhfbmbnkjjmoinobkj";
 
 const RECIPIENTS = "mohammadabbas@ahlam.io,andygarcia@ahlam.io";
 const GMAIL_COMPOSE = (to: string, subject: string) =>

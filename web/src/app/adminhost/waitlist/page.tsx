@@ -160,10 +160,10 @@ function LaunchEmailCard() {
       const d = await r.json().catch(() => ({}));
       if (!r.ok) setResult(d.error || `Send failed (${r.status})`);
       else if (mode === "test") setResult(`Test sent to ${d.to}. Check your inbox.`);
-      else setResult(`Sent ${d.sent}, skipped ${d.skipped} already notified${d.failed?.length ? `, FAILED: ${d.failed.join(", ")}` : ""}.${d.warning ? ` Warning: ${d.warning}` : ""}`);
+      else setResult(`Sent ${d.sent}, skipped ${d.skipped} already notified${d.remaining ? `, ${d.remaining} remaining` : ""}${d.failed?.length ? `, FAILED: ${d.failed.join(", ")}` : ""}.${d.warning ? ` Warning: ${d.warning}` : ""}`);
       if (mode === "all") loadPreview();
     } catch {
-      setResult("Network error — nothing may have been sent. Reload and check the pending count.");
+      setResult("Network error. Nothing may have been sent; reload and check the pending count.");
     }
     setBusy(null);
     setConfirming(false);

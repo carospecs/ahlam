@@ -9,7 +9,6 @@ export const LANDING_ES: Record<string, string> = {
   "How it works": "Cómo funciona",
   "Pricing": "Precios",
   "Guides": "Guías",
-  "Waitlist": "Lista de espera",
   "Sign in": "Iniciar sesión",
   "Get started": "Comenzar",
 
