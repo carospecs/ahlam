@@ -131,7 +131,7 @@ export function BuyerMessages() {
   const waHref = waNumber ? `https://wa.me/${waNumber}` : null;
 
   return (
-    <div ref={gridRef} style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "min(620px, calc(100dvh - 240px))", minHeight: 430, border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)", maxWidth: 1180 }} className="cs-chat">
+    <div ref={gridRef} style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "100%", minHeight: 380, border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)", maxWidth: 1180 }} className="cs-chat">
       <div style={{ display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0 }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "grid", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>

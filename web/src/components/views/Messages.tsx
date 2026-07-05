@@ -219,7 +219,7 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "min(620px, calc(100dvh - 240px))", minHeight: 430, border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)", maxWidth: 1180 }} className="cs-chat">
+    <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "100%", minHeight: 380, border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)", maxWidth: 1180 }} className="cs-chat">
       <div style={{ display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0 }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "grid", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -413,8 +413,8 @@ export function MessagesHub(props: { go: (id: string) => void; onVehicle?: (v: a
   const [tab, setTab] = React.useState<"selling" | "buying">("selling");
   const sellingCount = threads.length;
   return (
-    <div style={{ display: "grid", gap: 14 }}>
-      <div style={{ display: "inline-flex", gap: 4, padding: 3, borderRadius: 10, background: "var(--surface2)", border: "1px solid var(--line)", width: "fit-content" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0 }}>
+      <div style={{ display: "inline-flex", gap: 4, padding: 3, borderRadius: 10, background: "var(--surface2)", border: "1px solid var(--line)", width: "fit-content", flexShrink: 0 }}>
         {([["selling", "Selling"], ["buying", "Buying"]] as const).map(([id, label]) => {
           const on = tab === id;
           return (
@@ -426,7 +426,9 @@ export function MessagesHub(props: { go: (id: string) => void; onVehicle?: (v: a
           );
         })}
       </div>
-      {tab === "selling" ? <Messages {...props} /> : <BuyerMessages />}
+      <div style={{ flex: 1, minHeight: 0 }}>
+        {tab === "selling" ? <Messages {...props} /> : <BuyerMessages />}
+      </div>
     </div>
   );
 }

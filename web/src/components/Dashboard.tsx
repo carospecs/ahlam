@@ -954,7 +954,7 @@ const sx: Record<string, React.CSSProperties> = {
   search: { display: "flex", alignItems: "center", gap: 9, padding: "0 12px", width: 280, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 10 },
   searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 13.5, padding: "9px 0" },
   addBtn: { display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600 },
-  content: { flex: 1, overflowY: "auto", padding: 28 },
+  content: { flex: 1, overflowY: "auto", padding: "28px 28px 56px" },
 };
 
 const mx: Record<string, React.CSSProperties> = {
