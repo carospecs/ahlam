@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import { PublicHeader } from "@/components/PublicHeader";
@@ -75,6 +76,7 @@ export default async function ProfilePage({ params }: Params) {
       fitment: fmtFit(c.fitment),
       category: c.partCategory || c.part_category || "",
       shopName: l.shops?.name || "Independent seller",
+      photo: l.photo_url || (Array.isArray(l.photo_urls) ? l.photo_urls[0] : null) || null,
     };
   });
 
@@ -122,15 +124,21 @@ export default async function ProfilePage({ params }: Params) {
             <h2 style={sectionH}>Listings ({parts.length})</h2>
             <div style={grid}>
               {parts.map((p) => (
-                <div key={p.id} style={card}>
-                  <div className="photo-cell" style={{ height: 140, borderRadius: 0 }} />
+                <Link key={p.id} href={`/p/${p.id}`} style={{ ...card, textDecoration: "none", color: "var(--foreground)", display: "block" }} className="cs-card-btn">
+                  {p.photo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.photo} alt={p.part} style={{ width: "100%", height: 140, objectFit: "cover", display: "block" }} />
+                  ) : (
+                    <div className="photo-cell" style={{ height: 140, borderRadius: 0 }} />
+                  )}
                   <div style={{ padding: 14 }}>
                     <div style={{ fontSize: 18, fontWeight: 800, color: "var(--success)" }}>${p.price}</div>
                     <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2 }}>{p.part}</div>
                     {p.fitment && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Fits {p.fitment}</div>}
                     {p.shopName && <div style={{ fontSize: 11.5, color: "var(--accent)", marginTop: 2 }}>{p.shopName}</div>}
+                    <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: "var(--accent)" }}>View & message →</div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </>

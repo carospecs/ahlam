@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MessageSeller } from "@/components/MessageSeller";
 import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import { PublicHeader } from "@/components/PublicHeader";
@@ -184,12 +185,13 @@ export default async function ListingPage({ params }: Params) {
                 {l.verified && <span style={{ fontSize: 11.5, color: "var(--accent)", fontWeight: 700 }}>✔ Verified</span>}
               </div>
               {l.phone && <div style={{ marginTop: 4, fontSize: 13, color: "var(--muted)" }}>☎ {l.phone}</div>}
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                <Link href={`/shop/${l.shopId}`} style={{ flex: 1, minWidth: 150, textAlign: "center", padding: "11px 18px", borderRadius: 11, background: "var(--accent)", color: "#fff", textDecoration: "none", fontSize: 14, fontWeight: 700 }}>
+              <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+                <MessageSeller listingId={l.id} sellerName={l.shopName} fullWidth />
+                <Link href={`/shop/${l.shopId}`} style={{ textAlign: "center", padding: "11px 18px", borderRadius: 11, background: "var(--surface2)", border: "1px solid var(--line)", color: "var(--foreground)", textDecoration: "none", fontSize: 14, fontWeight: 700 }}>
                   See this seller&apos;s yard
                 </Link>
               </div>
-              <div style={{ marginTop: 10, fontSize: 12, color: "var(--muted)" }}>Open Ahlam to message the seller or make an offer.</div>
+              <div style={{ marginTop: 10, fontSize: 12, color: "var(--muted)" }}>Replies show up in your Ahlam messages.</div>
             </div>
           </div>
         </div>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import { PublicHeader } from "@/components/PublicHeader";
+import { MessageSeller } from "@/components/MessageSeller";
 import { ReportBusiness } from "@/components/ReportBusiness";
 import { normalizeGrade } from "@/lib/grade";
 
@@ -75,11 +76,13 @@ export default async function ShopStorefront({ params }: Params) {
       price: l.price_usd ?? c.suggestedPriceUsd ?? 0,
       fitment: fmtFit(c.fitment),
       category: c.partCategory || c.part_category || "",
+      photo: l.photo_url || (Array.isArray(l.photo_urls) ? l.photo_urls[0] : null) || null,
     };
   });
   const vehicles = vehicleRows.map((v: any) => ({
     id: v.id, year: v.year, make: v.make, model: v.model, trim: v.trim || "",
     body: v.body || "", color: v.color || "", sellMode: v.sell_mode || "whole", askingPrice: v.asking_price,
+    photo: v.photo_url || (Array.isArray(v.photo_urls) ? v.photo_urls[0] : null) || null,
   }));
 
   const initials = (shop.name || "S").split(" ").map((s: string) => s[0]).join("").toUpperCase().slice(0, 2);
@@ -115,6 +118,9 @@ export default async function ShopStorefront({ params }: Params) {
             </div>
           </div>
           {shop.description && <p style={{ margin: "18px 0 0", maxWidth: 720, color: "var(--foreground)", fontSize: 14.5, lineHeight: 1.6, opacity: 0.9 }}>{shop.description}</p>}
+          <div style={{ marginTop: 16 }}>
+            <MessageSeller shopId={id} subject="your inventory" sellerName={shop.name} />
+          </div>
           {(shop.business_phone || shop.email || shop.hours) && (
             <div style={{ display: "flex", gap: 22, marginTop: 16, flexWrap: "wrap", fontSize: 13, color: "var(--muted)" }}>
               {shop.business_phone && <span>☎ {shop.business_phone}</span>}
@@ -138,11 +144,19 @@ export default async function ShopStorefront({ params }: Params) {
             <div style={grid}>
               {vehicles.map((v) => (
                 <div key={v.id} style={card}>
-                  <div className="photo-cell" style={{ height: 150, borderRadius: 0 }} />
+                  {v.photo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={v.photo} alt={`${v.year} ${v.make} ${v.model}`} style={{ width: "100%", height: 150, objectFit: "cover", display: "block" }} />
+                  ) : (
+                    <div className="photo-cell" style={{ height: 150, borderRadius: 0 }} />
+                  )}
                   <div style={{ padding: 14 }}>
                     {v.askingPrice ? <div style={{ fontSize: 19, fontWeight: 800 }}>${Number(v.askingPrice).toLocaleString()}</div> : <div style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>Parting out</div>}
                     <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{v.year} {v.make} {v.model} {v.trim}</div>
                     <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>{[v.body, v.color].filter(Boolean).join(" · ")}</div>
+                    <div style={{ marginTop: 10 }}>
+                      <MessageSeller shopId={id} subject={`${v.year} ${v.make} ${v.model}`.trim()} sellerName={shop.name} compact fullWidth />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -155,15 +169,21 @@ export default async function ShopStorefront({ params }: Params) {
             <h2 style={sectionH}>Parts ({parts.length})</h2>
             <div style={grid}>
               {parts.map((p) => (
-                <div key={p.id} style={card}>
-                  <div className="photo-cell" style={{ height: 140, borderRadius: 0 }} />
+                <Link key={p.id} href={`/p/${p.id}`} style={{ ...card, textDecoration: "none", color: "var(--foreground)", display: "block" }} className="cs-card-btn">
+                  {p.photo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.photo} alt={p.part} style={{ width: "100%", height: 140, objectFit: "cover", display: "block" }} />
+                  ) : (
+                    <div className="photo-cell" style={{ height: 140, borderRadius: 0 }} />
+                  )}
                   <div style={{ padding: 14 }}>
                     <div style={{ fontSize: 18, fontWeight: 800, color: "var(--success)" }}>${p.price}</div>
                     <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2 }}>{p.part}</div>
                     {p.fitment && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Fits {p.fitment}</div>}
                     {p.category && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{p.category}</div>}
+                    <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: "var(--accent)" }}>View & message →</div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </>

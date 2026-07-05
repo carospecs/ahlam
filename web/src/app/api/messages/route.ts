@@ -37,8 +37,16 @@ export async function POST(req: Request) {
   const { error } = await ctx.db.from("messages").insert({ conversation_id: conversationId, sender: "me", body: body.trim(), time });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Replying means the seller has seen the thread — clear unread and bump the time.
-  await ctx.db.from("conversations").update({ unread: 0, last_time: time }).eq("id", conversationId);
+  // Replying means the seller has seen the thread — clear unread and bump the
+  // time. Also bump the BUYER's unread counter so their in-app notifier fires
+  // (graceful before migration 0040: retry without buyer_unread).
+  const { data: convRow } = await ctx.db.from("conversations").select("buyer_unread").eq("id", conversationId).maybeSingle();
+  const { error: bumpErr } = await ctx.db.from("conversations")
+    .update({ unread: 0, last_time: time, buyer_unread: ((convRow as { buyer_unread?: number } | null)?.buyer_unread ?? 0) + 1 })
+    .eq("id", conversationId);
+  if (bumpErr) {
+    await ctx.db.from("conversations").update({ unread: 0, last_time: time }).eq("id", conversationId);
+  }
 
   // Ping the customer by email that they have a new message (fire-and-forget so a
   // mail hiccup never fails the reply, and the seller isn't kept waiting on SMTP).

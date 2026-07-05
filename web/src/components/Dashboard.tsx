@@ -343,29 +343,33 @@ function MessageNotifier() {
     requestNotifyPermission();
     let seeded = false;
     let stopped = false;
+    let lastTotal = 0;
 
     async function poll() {
       try {
         const r = await fetch("/api/messages/unread", { cache: "no-store" });
         if (!r.ok) return;
         const d = await r.json();
-        setUnread(d.total || 0);
-        if (!seeded) { seeded = true; _latestId = d.latestId || null; return; }
-        if (d.latestId && d.latestId !== _latestId) {
-          _latestId = d.latestId;
+        const total = d.total || 0;
+        setUnread(total);
+        if (!seeded) { seeded = true; _latestId = d.latestId || null; lastTotal = total; return; }
+        // Alert on a brand-new message: the newest-message id changed, or (belt
+        // and braces) the unread total grew without an id change.
+        const newMessage = (d.latestId && d.latestId !== _latestId) || total > lastTotal;
+        _latestId = d.latestId || _latestId;
+        lastTotal = total;
+        if (newMessage) {
           const name = d.latest?.name || "A buyer";
           const preview = d.latest?.preview || "sent you a new message";
           playMessageChime();
           csToast(`New message from ${name}`);
           fireBrowserNotification(`New message from ${name}`, preview);
-        } else {
-          _latestId = d.latestId || _latestId;
         }
       } catch {}
     }
 
     poll();
-    const iv = setInterval(() => { if (!stopped) poll(); }, 20_000);
+    const iv = setInterval(() => { if (!stopped) poll(); }, 15_000);
     const onFocus = () => { if (!stopped) poll(); };
     window.addEventListener("focus", onFocus);
     return () => { stopped = true; clearInterval(iv); window.removeEventListener("focus", onFocus); };

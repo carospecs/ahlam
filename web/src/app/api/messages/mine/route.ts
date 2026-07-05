@@ -42,10 +42,17 @@ export async function GET() {
       part: c.part_name || "Listing",
       market: c.market || "Ahlam",
       time: c.last_time || "",
+      unread: c.buyer_unread || 0,
       messages: msgs,
       lastText: msgs.length ? msgs[msgs.length - 1].text : "",
     };
   });
+
+  // Opening the buying inbox reads the replies — clear the buyer's counters so
+  // the red dot goes away (graceful before migration 0040).
+  try {
+    await db.from("conversations").update({ buyer_unread: 0 }).eq("buyer_id", user.id).gt("buyer_unread", 0);
+  } catch { /* column not migrated yet */ }
 
   return NextResponse.json({ threads });
 }
