@@ -17,10 +17,14 @@ export type JudgedPrice = {
   note: string;
 };
 
-// Fast tier for high-volume judgment-over-data; the strong model is reserved for
-// the zero-comp grounded fallback (lib/market-pricing).
+// Judgment tier. Sonnet, not Haiku, on purpose: live testing showed Haiku
+// anchoring a Model X battery pack to $800 module listings while its own note
+// said complete packs run $5,645-6,001 — the completeness/configuration read
+// off messy titles is exactly where the brief says to spend on a stronger judge
+// instead of re-adding code rules. (~1-3¢ per scan; the strong PRICING_MODEL is
+// still reserved for the zero-comp grounded fallback in lib/market-pricing.)
 export function judgeModel(): string {
-  return process.env.PRICING_JUDGE_MODEL || "claude-haiku-4-5";
+  return process.env.PRICING_JUDGE_MODEL || "claude-sonnet-5";
 }
 
 // The dismantler lives here — everything below is for the judge to WEIGH in one
