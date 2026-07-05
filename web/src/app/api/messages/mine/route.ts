@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { uploadMessageImages, insertMessage } from "@/lib/message-storage";
 
 // Buyer-side inbox. The seller inbox (api/data) keys conversations on shop_id;
 // this keys on buyer_id so a buyer can see the messages they sent AND read the
@@ -32,7 +33,7 @@ export async function GET() {
     const msgs = (c.messages || [])
       .slice()
       .sort((a: any, b: any) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
-      .map((m: any) => ({ from: m.sender === "them" ? "me" : "seller", text: m.body, time: m.time || "" }));
+      .map((m: any) => ({ from: m.sender === "them" ? "me" : "seller", text: m.body, time: m.time || "", at: m.created_at || null, attachments: Array.isArray(m.attachments) ? m.attachments : [] }));
     const sh = shopInfo.get(c.shop_id);
     return {
       id: c.id,
@@ -43,6 +44,7 @@ export async function GET() {
       market: c.market || "Ahlam",
       time: c.last_time || "",
       unread: c.buyer_unread || 0,
+      lastAt: msgs.length ? (c.messages || []).slice().sort((a: any, b: any) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()).slice(-1)[0]?.created_at || null : null,
       messages: msgs,
       lastText: msgs.length ? msgs[msgs.length - 1].text : "",
     };
@@ -64,8 +66,10 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const { conversationId, body } = await req.json().catch(() => ({}));
-  if (!conversationId || !body?.trim()) return NextResponse.json({ error: "Message required" }, { status: 400 });
+  const { conversationId, body, images } = await req.json().catch(() => ({}));
+  const text = typeof body === "string" ? body.trim() : "";
+  const hasImages = Array.isArray(images) && images.length > 0;
+  if (!conversationId || (!text && !hasImages)) return NextResponse.json({ error: "Message required" }, { status: 400 });
 
   const db = supabaseAdmin();
   const { data: conv } = await db.from("conversations").select("id, buyer_id, shop_id, unread, part_name").eq("id", conversationId).single();
@@ -73,8 +77,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not your conversation" }, { status: 403 });
   }
 
+  const attachments = hasImages ? await uploadMessageImages(db, conversationId, images) : [];
+  if (!text && !attachments.length) return NextResponse.json({ error: "Those images couldn't be uploaded" }, { status: 400 });
+
   const t = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  const { error: mErr } = await db.from("messages").insert({ conversation_id: conversationId, sender: "them", body: body.trim(), time: t });
+  const { error: mErr } = await insertMessage(db, { conversation_id: conversationId, sender: "them", body: text, time: t }, attachments);
   if (mErr) return NextResponse.json({ error: mErr.message }, { status: 400 });
 
   // Bump the seller's unread + recency so the follow-up surfaces in their inbox.

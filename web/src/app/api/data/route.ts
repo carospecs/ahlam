@@ -105,10 +105,19 @@ export async function GET() {
         part: c.part_name === "CaroSpecs" ? "Ahlam" : (c.part_name || ""), unread: c.unread || 0,
         buyerId: c.buyer_id || null,
         time: c.last_time || "", avatar: c.contact_avatar || c.contact_name?.slice(0, 2).toUpperCase(),
-        messages: (c.messages || []).map((m: any) => ({
-          from: m.sender === "me" ? "me" : "them", text: m.body, time: m.time || "",
-        })),
+        // Sort by real timestamp and carry it (plus attachments) to the client,
+        // which formats times in the VIEWER's timezone — the legacy `time` label
+        // was rendered from the server clock and is only a fallback now.
+        messages: (c.messages || [])
+          .slice()
+          .sort((a: any, b: any) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+          .map((m: any) => ({
+            from: m.sender === "me" ? "me" : "them", text: m.body, time: m.time || "",
+            at: m.created_at || null,
+            attachments: Array.isArray(m.attachments) ? m.attachments : [],
+          })),
       }));
+      threads.forEach((t: any) => { const last = t.messages[t.messages.length - 1]; t.lastAt = last?.at || null; });
 
       // Attach online status for each unique buyer.
       const buyerIds = [...new Set(threads.map((t: any) => t.buyerId).filter(Boolean))];

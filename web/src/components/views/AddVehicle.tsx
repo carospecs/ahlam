@@ -8,7 +8,7 @@ import { csToast } from "../Dashboard";
 import { looksLikeScannable, isPdf, normalizeImageFile, fileToJpegDataUrl, fileToAIDataUrl } from "@/lib/image";
 import { playSonarPing } from "@/lib/sound";
 import { ManualListing } from "./ManualListing";
-import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, type ScanSession } from "@/lib/scanSession";
+import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, addScanSlot, removeScanSlot, finishScanSlot, useScanSlots, useScanPhases, PRIMARY_SLOT, type ScanSession } from "@/lib/scanSession";
 import type { VinInfo } from "@/lib/vin";
 import { applyVinEngine, reconcilePairPrices, dropGenericWhenSided, dropGenericWhenPositioned } from "@/lib/part-enrich";
 import { instanceScore, type PhotoFront } from "@/lib/photo-select";
@@ -245,16 +245,79 @@ function pairedPriceMismatches(parts: AIPart[]): { base: string }[] {
   return out;
 }
 
+// The Add-vehicle view: mode gate + the scanner queue. Slot "0" is the primary
+// scanner; "Scan another car" stacks more CarScanner instances below it, each
+// with its own independent session/run in lib/scanSession, so a high-volume
+// yard can upload car #2 while car #1 is still analyzing.
 export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
+  const primary = useScanSession(PRIMARY_SLOT);
+  const slots = useScanSlots();
+  const anyBusy = slots.length > 1 || primary.phase !== "upload" || primary.photos.length > 0;
+
+  if (primary.mode === "manualCar") return <ManualListing kind="car" onBack={() => setScanSession({ mode: null })} go={go} />;
+  if (primary.mode === "manualPart") return <ManualListing kind="part" onBack={() => setScanSession({ mode: null })} go={go} />;
+  if (!primary.mode) return <ModePicker onPick={(m) => setScanSession({ mode: m })} />;
+
+  return (
+    <div style={{ display: "grid", gap: 34 }}>
+      <ScanCredits />
+      {slots.map((k, i) => <CarScanner key={k} slot={k} isPrimary={i === 0} go={go} />)}
+      {/* Queue another car — a fresh, independent scanner right below this one */}
+      {anyBusy && (
+        <button
+          onClick={() => addScanSlot()}
+          className="cs-raise"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, maxWidth: 880, width: "100%", margin: "0 auto", padding: "18px 20px", borderRadius: "var(--radius-md)", border: "1.5px dashed var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 14.5, fontWeight: 600, cursor: "pointer" }}
+        >
+          <Plus size={17} color="var(--accent)" /> Scan another car — queue it while this one runs
+        </button>
+      )}
+    </div>
+  );
+}
+
+// "X car scans left this month" — live quota ticker for capped plans. Refetches
+// whenever any scan starts/finishes (a finished scan was just metered). Hidden
+// on unlimited plans and while the endpoint is unavailable.
+function ScanCredits() {
+  const phases = useScanPhases();
+  const [q, setQ] = React.useState<{ used: number; limit: number | null; remaining: number | null; planLabel?: string } | null>(null);
+  React.useEffect(() => {
+    let dead = false;
+    fetch("/api/usage/scan")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!dead && d && typeof d.used === "number") setQ(d); })
+      .catch(() => {});
+    return () => { dead = true; };
+  }, [phases]);
+  if (!q || q.limit == null) return null;
+  const out = (q.remaining ?? 0) <= 0;
+  const low = !out && (q.remaining ?? 0) <= 2;
+  const tone = out ? "var(--danger)" : low ? "var(--signal)" : "var(--accent)";
+  return (
+    <div style={{ maxWidth: 880, width: "100%", margin: "0 auto", display: "flex", justifyContent: "flex-end" }}>
+      <span title={`${q.used} of ${q.limit} AI car scans used this month`}
+        style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700, color: tone, background: `color-mix(in srgb, ${tone} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${tone} 35%, transparent)`, borderRadius: 999, padding: "6px 13px" }}>
+        <Sparkles size={13} />
+        {out
+          ? `0 of ${q.limit} car scans left this month — upgrade in Settings › Billing`
+          : `${q.remaining} of ${q.limit} car scan${q.remaining === 1 ? "" : "s"} left this month`}
+        {q.planLabel ? <span style={{ fontWeight: 500, color: "var(--muted)" }}>· {q.planLabel}</span> : null}
+      </span>
+    </div>
+  );
+}
+
+function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: string; isPrimary: boolean }) {
   // Session state lives in a module store (lib/scanSession) so an in-progress scan
   // and its results survive switching sections and coming back. Each field below
   // reads from the store and writes through a useState-compatible setter, so all
   // the handler code stays unchanged.
-  const s = useScanSession();
+  const s = useScanSession(slot);
   function up<K extends keyof ScanSession>(key: K) {
     return (v: ScanSession[K] | ((prev: ScanSession[K]) => ScanSession[K])) =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setScanSession({ [key]: typeof v === "function" ? (v as any)(getScanSession()[key]) : v } as Partial<ScanSession>);
+      setScanSession({ [key]: typeof v === "function" ? (v as any)(getScanSession(slot)[key]) : v } as Partial<ScanSession>, slot);
   }
   type Dispatch<T> = (v: T | ((prev: T) => T)) => void;
 
@@ -341,7 +404,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   // the scan keeps running and lands its results even if the user navigates away
   // mid-scan. The run token lets a cancel (resetScanSession) discard a stale run.
   async function runAnalysis() {
-    const myToken = beginScanRun();
+    const myToken = beginScanRun(slot);
     setPhase("analyzing"); setError(null); setScanStage("scanning");
     setQaAgent({ running: false, resolutions: [] });
     // VIN-FIRST: resolve the VIN BEFORE cataloging, so every photo is classified AND
@@ -354,7 +417,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
     try {
       // Encode each photo once; reused by the VIN-read pass and the catalog pass.
       const dataUrls = await Promise.all(photos.map((p) => fileToAIDataUrl(p.file)));
-      if (!isScanRun(myToken)) return;
+      if (!isScanRun(myToken, slot)) return;
 
       if (!resolvedVin) {
         try {
@@ -364,7 +427,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             body: JSON.stringify({ images: dataUrls }),
           });
           const j = await r.json();
-          if (!isScanRun(myToken)) return;
+          if (!isScanRun(myToken, slot)) return;
           if (j?.ok && j.vin) { resolvedVin = j.vin as string; setVin(resolvedVin); setVinStatus("confirmed"); }
         } catch { /* VIN read failed — proceed; the catalog reads VINs per-photo too */ }
       }
@@ -391,7 +454,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         })
       );
 
-      if (!isScanRun(myToken)) return; // cancelled / superseded while scanning
+      if (!isScanRun(myToken, slot)) return; // cancelled / superseded while scanning
 
       // PII (Stage 0): mask the license plate + windshield VIN before any image is shown
       // or saved. Redact the DISPLAY copies now; stash the regions on each photo so the
@@ -405,7 +468,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
           if (red !== photo.url) redactedDisplay.set(photo.url, red);
         }
       }));
-      if (!isScanRun(myToken)) return;
+      if (!isScanRun(myToken, slot)) return;
       setPhotos([...photos]); // persist photo.piiRegions into the store for the save path
       const display = (u: string) => redactedDisplay.get(u) ?? u;
 
@@ -529,7 +592,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             { year: agg.year, make: agg.make, model: agg.model, trim: agg.trim, engine: agg.engine },
           )
         : null;
-      if (!isScanRun(myToken)) return; // cancelled / superseded while pricing
+      if (!isScanRun(myToken, slot)) return; // cancelled / superseded while pricing
       const shownParts = priced ?? finalParts;
       setParts(shownParts);
       setPhase("results");
@@ -541,11 +604,11 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       if (hasWarnCases(shownParts, distinctColors)) {
         setQaAgent({ running: true, resolutions: [] });
         void runQaAgent(shownParts, photos.map((p) => display(p.url)), distinctColors)
-          .then((resolutions) => { if (isScanRun(myToken)) setQaAgent({ running: false, resolutions }); });
+          .then((resolutions) => { if (isScanRun(myToken, slot)) setQaAgent({ running: false, resolutions }); });
       }
 
     } catch (e) {
-      if (!isScanRun(myToken)) return; // cancelled / superseded
+      if (!isScanRun(myToken, slot)) return; // cancelled / superseded
       setError("We couldn't reach the analysis server. Check your connection and try again.");
       setPhase("error");
     }
@@ -574,7 +637,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         body: JSON.stringify({ vin: vin || undefined, vehicle: vehicleId, parts: current.map((p) => ({ name: p.partName, grade: p.condition, inferred: p.inferred || undefined })) }),
       });
       const j = await res.json();
-      if (!isScanRun(token)) return null; // a newer scan superseded this one
+      if (!isScanRun(token, slot)) return null; // a newer scan superseded this one
       if (!j?.ok || !Array.isArray(j.parts)) return null;
       const pricedBy: "claude-market" | "claude" | "gemini" | undefined =
         j.pricedBy === "claude-market" || j.pricedBy === "claude" || j.pricedBy === "gemini" ? j.pricedBy : undefined;
@@ -752,7 +815,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         ? "Saved as draft, not posted yet"
         : sellMode === "whole" ? "Vehicle saved and posted to the market" : `Saved. ${d.listings} part${d.listings === 1 ? "" : "s"} posted`);
       (window as any).csReloadData?.();
-      resetScanSession(); // posted/saved — clear the session so it doesn't linger
+      finishScanSlot(slot); // posted/saved — queue slots leave; primary resets
       go(dest);
     } catch {
       csToast("Couldn't save. Check your connection");
@@ -812,7 +875,14 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
 
   return (
     <div style={{ maxWidth: 880, margin: "0 auto", display: "grid", gap: 20 }}>
-      <button onClick={() => resetScanSession()} style={{ ...navBtn, justifySelf: "start" }}><ArrowLeft size={15} /> Back to options</button>
+      {isPrimary ? (
+        <button onClick={() => resetScanSession()} style={{ ...navBtn, justifySelf: "start" }}><ArrowLeft size={15} /> Back to options</button>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <span className="cs-kicker" style={{ fontSize: 11 }}>Queued car</span>
+          <button onClick={() => removeScanSlot(slot)} style={{ ...navBtn }}><X size={14} /> Remove from queue</button>
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <Step n={1} label="Photos" on={phase === "upload"} done={phase !== "upload"} />
         <span style={{ flex: 1, height: 2, background: "var(--line)", borderRadius: 2, maxWidth: 80 }} />

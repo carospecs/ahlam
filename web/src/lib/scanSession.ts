@@ -1,11 +1,16 @@
 "use client";
 
-// Persistent scan session — a module-level store so an in-progress AI scan (and
-// its results) survive navigating away from "Add vehicle" and back. The AddVehicle
+// Persistent scan sessions — a module-level store so in-progress AI scans (and
+// their results) survive navigating away from "Add vehicle" and back. The AddVehicle
 // view unmounts when you switch sections, which used to kill the scan and lose the
-// results; keeping the session here (outside the React tree) means the scan keeps
-// running in the background and the results are still there when you return. The
-// session is cleared explicitly on post / save-draft / cancel.
+// results; keeping the sessions here (outside the React tree) means scans keep
+// running in the background and the results are still there when you return.
+//
+// MULTI-SLOT (scan queue): the store keys sessions by a slot id so high-volume
+// yards can stack scanners — upload car #2 while car #1 is still analyzing. Slot
+// "0" is the permanent primary scanner (it also owns the AI/manual mode gate);
+// queue slots ("q1", "q2", …) are added and removed as cars enter and leave the
+// queue. Every legacy call site keeps working: the slot argument defaults to "0".
 
 import { useSyncExternalStore } from "react";
 
@@ -49,28 +54,78 @@ function makeDefaults(): ScanSession {
   };
 }
 
-let session: ScanSession = makeDefaults();
+export const PRIMARY_SLOT = "0";
+
+type SlotState = { session: ScanSession; runToken: number };
+
+const slots = new Map<string, SlotState>([[PRIMARY_SLOT, { session: makeDefaults(), runToken: 0 }]]);
+let slotOrder: string[] = [PRIMARY_SLOT];
+let slotSeq = 0;
+
 const listeners = new Set<() => void>();
 function emit() { for (const l of listeners) l(); }
 
-// Run token: invalidates an in-flight scan when the session is reset (cancelled)
-// or a new scan starts, so a stale background scan can't resurrect a cleared
-// session by writing its results in late.
-let runToken = 0;
-export function beginScanRun(): number { return ++runToken; }
-export function isScanRun(token: number): boolean { return token === runToken; }
+function slotState(slot: string): SlotState {
+  let st = slots.get(slot);
+  if (!st) { st = { session: makeDefaults(), runToken: 0 }; slots.set(slot, st); }
+  return st;
+}
 
-export function getScanSession(): ScanSession { return session; }
+// Run tokens: invalidate an in-flight scan when its slot is reset (cancelled),
+// removed, or a new scan starts in it, so a stale background scan can't
+// resurrect a cleared session by writing its results in late.
+export function beginScanRun(slot: string = PRIMARY_SLOT): number { return ++slotState(slot).runToken; }
+export function isScanRun(token: number, slot: string = PRIMARY_SLOT): boolean { return token === slotState(slot).runToken; }
 
-export function setScanSession(patch: Partial<ScanSession>): void {
-  session = { ...session, ...patch };
+export function getScanSession(slot: string = PRIMARY_SLOT): ScanSession { return slotState(slot).session; }
+
+export function setScanSession(patch: Partial<ScanSession>, slot: string = PRIMARY_SLOT): void {
+  const st = slotState(slot);
+  st.session = { ...st.session, ...patch };
   emit();
 }
 
+/** Full reset: cancel every in-flight scan, drop the queue, fresh primary slot. */
 export function resetScanSession(): void {
-  runToken++;                 // invalidate any in-flight scan
-  session = makeDefaults();
+  for (const st of slots.values()) st.runToken++; // invalidate all in-flight scans
+  slots.clear();
+  slots.set(PRIMARY_SLOT, { session: makeDefaults(), runToken: 0 });
+  slotOrder = [PRIMARY_SLOT];
   emit();
+}
+
+/** Add a scanner to the queue (already in AI mode, ready for photos). */
+export function addScanSlot(): string {
+  const key = `q${++slotSeq}`;
+  slots.set(key, { session: { ...makeDefaults(), mode: "ai" }, runToken: 0 });
+  slotOrder = [...slotOrder, key];
+  emit();
+  return key;
+}
+
+/** Remove a queue slot (cancels its in-flight scan). The primary slot can't be
+ * removed — it resets to a fresh AI scanner instead. */
+export function removeScanSlot(slot: string): void {
+  if (slot === PRIMARY_SLOT) {
+    const st = slotState(slot);
+    st.runToken++;
+    st.session = { ...makeDefaults(), mode: "ai" };
+  } else {
+    const st = slots.get(slot);
+    if (st) st.runToken++;
+    slots.delete(slot);
+    slotOrder = slotOrder.filter((k) => k !== slot);
+  }
+  emit();
+}
+
+/** A slot's car was saved/posted: queue slots leave the queue; the primary slot
+ * resets (staying in AI mode if a queue is still running, else back to the
+ * mode picker). */
+export function finishScanSlot(slot: string): void {
+  if (slot !== PRIMARY_SLOT) { removeScanSlot(slot); return; }
+  if (slotOrder.length > 1) removeScanSlot(PRIMARY_SLOT); // fresh AI scanner, queue stays
+  else resetScanSession();
 }
 
 function subscribe(l: () => void): () => void {
@@ -78,6 +133,23 @@ function subscribe(l: () => void): () => void {
   return () => { listeners.delete(l); };
 }
 
-export function useScanSession(): ScanSession {
-  return useSyncExternalStore(subscribe, getScanSession, getScanSession);
+// Stable fallback so a just-removed slot's final render doesn't loop.
+const EMPTY_SESSION: ScanSession = makeDefaults();
+
+export function useScanSession(slot: string = PRIMARY_SLOT): ScanSession {
+  const get = () => slots.get(slot)?.session ?? EMPTY_SESSION;
+  return useSyncExternalStore(subscribe, get, get);
+}
+
+/** The ordered list of scanner slots (primary first, then the queue). */
+export function useScanSlots(): string[] {
+  const get = () => slotOrder;
+  return useSyncExternalStore(subscribe, get, get);
+}
+
+/** Every slot's phase as one string — a cheap value-stable snapshot for effects
+ * that should fire when any scan starts/finishes (e.g. the credits ticker). */
+export function useScanPhases(): string {
+  const get = () => slotOrder.map((k) => `${k}:${slots.get(k)?.session.phase ?? ""}`).join("|");
+  return useSyncExternalStore(subscribe, get, get);
 }

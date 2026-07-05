@@ -13,6 +13,8 @@ const STATUS_META = {
 type ConvStatus = keyof typeof STATUS_META;
 import { MarketChip } from "../UI";
 import { useData, csToast, csPendingThread, csConsumePendingThread } from "../Dashboard";
+import { fileToJpegDataUrl } from "@/lib/image";
+import { fmtMsgTime } from "@/lib/message-utils";
 import { BuyerMessages } from "./BuyerMessages";
 
 const DELETED_KEY = "ahlam_deleted_chats";
@@ -40,8 +42,8 @@ function savePermaDeleted(s: Set<string>) {
 
 function reloadData(): Promise<any> { return (window as any).csReloadData?.() ?? Promise.resolve(); }
 
-interface Attachment { name: string; mileage?: boolean }
-interface LocalMsg { from: string; text: string; time: string; attachments?: Attachment[] }
+interface Attachment { name: string; mileage?: boolean; file?: File; url?: string }
+interface LocalMsg { from: string; text: string; time: string; at?: string | null; attachments?: Attachment[] }
 
 // A buyer is asking about the whole car (so mileage is relevant) when their
 // messages mention the car / mileage rather than a specific part.
@@ -155,9 +157,10 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
   // Reset the composer + any unsaved status pick when switching conversations.
   React.useEffect(() => { setDraft(""); setAttachments([]); setPendingStatus(null); }, [activeId]);
 
-  // Near-real-time: refresh inbox while this view is open (no WebSocket infra yet).
+  // Near-real-time: refresh while this view is open (no WebSocket infra yet).
+  // 8s keeps an active back-and-forth — text AND photos — feeling live.
   React.useEffect(() => {
-    const iv = setInterval(() => { reloadData(); }, 20000);
+    const iv = setInterval(() => { reloadData(); }, 8000);
     return () => clearInterval(iv);
   }, []);
 
@@ -198,9 +201,9 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
   const replies = t && awaitingReply && !draft.trim() ? quickReplies(t.part, msgs) : [];
 
   function addFiles(list: FileList | null) {
-    const files = list ? Array.from(list) : [];
+    const files = (list ? Array.from(list) : []).filter((f) => f.type.startsWith("image/"));
     if (!files.length) return;
-    setAttachments((prev) => [...prev, ...files.map((f) => ({ name: f.name }))]);
+    setAttachments((prev) => [...prev, ...files.map((f) => ({ name: f.name, file: f, url: URL.createObjectURL(f) }))]);
   }
   function attachMileage() {
     // Attach the private dashboard/mileage photo to the draft — does NOT send it.
@@ -213,13 +216,18 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
     const conv = t.id;
     const text = draft.trim();
     const atts = attachments;
-    // Optimistic: show it instantly, then persist.
-    setLocalMsgs((prev) => ({ ...prev, [conv]: [...(prev[conv] || []), { from: "me", text, time: "Now", attachments: atts }] }));
+    const imageFiles = atts.filter((a) => a.file);
+    // Optimistic: show it instantly (object-URL previews render immediately),
+    // then persist — the poll replaces it with the stored copy + public URLs.
+    setLocalMsgs((prev) => ({ ...prev, [conv]: [...(prev[conv] || []), { from: "me", text, time: "Now", at: new Date().toISOString(), attachments: atts }] }));
     setDraft(""); setAttachments([]);
-    if (!text) return; // attachment-only (e.g. mileage photo) isn't persisted server-side yet
+    if (!text && !imageFiles.length) return; // mileage-chip-only drafts stay local (private photo)
     setSending(true);
     try {
-      const r = await fetch("/api/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversationId: conv, body: text }) });
+      // Re-encode photos to JPEG data URLs (same pipeline as listing photos);
+      // the server uploads them to storage and stores public URLs on the message.
+      const images = await Promise.all(imageFiles.map((a) => fileToJpegDataUrl(a.file!)));
+      const r = await fetch("/api/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversationId: conv, body: text, ...(images.length ? { images } : {}) }) });
       if (!r.ok) { csToast("Couldn't send — kept locally"); setSending(false); return; }
       // Reload brings the persisted message; drop the optimistic copy to avoid a dupe.
       await reloadData();
@@ -283,11 +291,11 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
                           )}
                           {th.isOnline && <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--success)", display: "inline-block", flexShrink: 0 }} />}
                       </span>
-                      <span style={{ fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>{th.time}</span>
+                      <span style={{ fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>{fmtMsgTime(th.lastAt, th.time)}</span>
                     </div>
                     <div style={{ fontSize: 11.5, color: "var(--accent)", fontWeight: 600, margin: "1px 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.part}</div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 6, alignItems: "center" }}>
-                      <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{last.from === "me" ? "You: " : ""}{last.text}</span>
+                      <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{last.from === "me" ? "You: " : ""}{last.text || (last.attachments?.length ? "📷 Photo" : "")}</span>
                       {th.unread > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#fff", background: "var(--accent)", borderRadius: 999, minWidth: 17, height: 17, display: "grid", placeItems: "center", padding: "0 5px", flexShrink: 0 }}>{th.unread}</span>}
                     </div>
                   </div>
@@ -357,14 +365,19 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
             <div key={i} style={{ display: "flex", justifyContent: m.from === "me" ? "flex-end" : "flex-start" }}>
               <div style={{ maxWidth: "70%", padding: "10px 14px", borderRadius: 14, fontSize: 13.5, lineHeight: 1.45, background: m.from === "me" ? "var(--accent)" : "var(--surface2)", color: m.from === "me" ? "#fff" : "var(--foreground)", borderBottomRightRadius: m.from === "me" ? 4 : 14, borderBottomLeftRadius: m.from === "me" ? 14 : 4 }}>
                 {m.text}
-                {m.attachments?.map((a, ai) => (
+                {m.attachments?.map((a, ai) => a.url ? (
+                  <a key={ai} href={a.url} target="_blank" rel="noopener noreferrer" style={{ display: "block", marginTop: m.text || ai > 0 ? 8 : 0 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={a.url} alt={a.name || "Photo"} style={{ display: "block", maxWidth: 240, maxHeight: 240, width: "100%", borderRadius: 10, objectFit: "cover" }} />
+                  </a>
+                ) : (
                   <div key={ai} style={{ display: "flex", alignItems: "center", gap: 7, marginTop: m.text ? 8 : 0, padding: "7px 10px", borderRadius: 9, background: "rgba(255,255,255,0.16)", fontSize: 12.5, fontWeight: 600 }}>
                     {a.mileage ? <Gauge size={14} /> : <Paperclip size={14} />} {a.name}
                   </div>
                 ))}
                 <div style={{ fontSize: 10.5, opacity: 0.7, marginTop: 4, textAlign: "right", display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
                   {m.from === "me" && <Check size={11} color="var(--success)" />}
-                  {m.time}
+                  {fmtMsgTime(m.at, m.time)}
                 </div>
               </div>
             </div>
@@ -386,7 +399,10 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "10px 14px 0" }}>
             {attachments.map((a, i) => (
               <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 9px", borderRadius: 8, background: "var(--surface2)", border: "1px solid var(--line)", fontSize: 12, fontWeight: 600 }}>
-                {a.mileage ? <Gauge size={13} color="var(--signal)" /> : <Paperclip size={13} color="var(--muted)" />} {a.name}
+                {a.url
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  ? <img src={a.url} alt={a.name} style={{ width: 26, height: 26, borderRadius: 6, objectFit: "cover" }} />
+                  : a.mileage ? <Gauge size={13} color="var(--signal)" /> : <Paperclip size={13} color="var(--muted)" />} {a.name}
                 <button onClick={() => removeAttachment(i)} style={{ border: "none", background: "transparent", display: "grid", placeItems: "center", cursor: "pointer", padding: 0 }}><X size={13} color="var(--muted)" /></button>
               </span>
             ))}
@@ -407,7 +423,7 @@ export function Messages({ go, onVehicle, showDeleted }: { go: (id: string) => v
         )}
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, borderTop: "1px solid var(--line)" }}>
-          <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
           <button onClick={() => fileRef.current?.click()} title="Attach files" style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", flexShrink: 0 }}><Paperclip size={17} color="var(--muted)" /></button>
           <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Write a reply…" style={{ flex: 1, border: "1px solid var(--line)", background: "var(--surface2)", borderRadius: 10, padding: "10px 14px", color: "var(--foreground)", fontSize: 13.5, outline: "none" }} onKeyDown={(e) => { if (e.key === "Enter") send(); }} />
           <button disabled={sending} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 600, opacity: sending ? 0.7 : 1 }} onClick={send}><Send size={15} /> Send</button>

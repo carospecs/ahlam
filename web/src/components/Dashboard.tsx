@@ -135,15 +135,6 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
         })}
       </nav>
       <div style={{ marginTop: "auto", display: "grid", gap: 12 }}>
-        {shop.name && (
-          <div style={sx.shopCard}>
-            <div style={sx.shopIcon}><Store size={16} color="var(--accent)" /></div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{shop.name}</div>
-              <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{t("Owner")} · {shop.members?.length || 0} {t("members")}</div>
-            </div>
-          </div>
-        )}
         <button style={sx.signout} onClick={onSignOut}><LogOut size={16} /> {t("Sign out")}</button>
         <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ display: "block", textAlign: "center", marginTop: 8, fontSize: 11.5, color: "var(--muted)", textDecoration: "none" }}>{t("Privacy Policy")}</a>
       </div>
@@ -215,9 +206,9 @@ function ProfileMenu({ onSignOut, onNav }: { onSignOut: () => void; onNav?: (id:
     <div ref={ref} style={{ position: "relative" }}>
       <button style={mx.profileBtn} onClick={() => setOpen(!open)}>
         <span style={mx.avatar}>{initials}</span>
-        <span className="cs-profile-text" style={{ textAlign: "left", lineHeight: 1.2 }}>
-          <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>{user.displayName || "User"}</span>
-          <span style={{ display: "block", fontSize: 11.5, color: "var(--muted)" }}>{user.email || ""}</span>
+        <span className="cs-profile-text" style={{ textAlign: "left", lineHeight: 1.2, minWidth: 0, maxWidth: 190 }}>
+          <span style={{ display: "block", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.displayName || "User"}</span>
+          <span style={{ display: "block", fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email || ""}</span>
         </span>
         <ChevronDown size={15} color="var(--muted)" />
       </button>
