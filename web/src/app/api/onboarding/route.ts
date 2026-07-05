@@ -59,14 +59,9 @@ export async function POST(req: NextRequest) {
   // Launch grants: everyone starts with a free month (plan "starter"). Waitlist
   // members get the founding month instead — every top-tier feature unlocked,
   // 5 AI car scans, unlimited manual posting (enforced in lib/plan-limits.ts).
-  let plan = "starter";
-  if (user.email) {
-    // Exact match (waitlist emails are stored lowercased). NOT ilike — the
-    // pattern would treat _ and % in a signup email as wildcards.
-    const { data: wl } = await db
-      .from("waitlist").select("email").eq("email", user.email.toLowerCase()).limit(1).maybeSingle();
-    if (wl) plan = "founder";
-  }
+  // Every new shop starts on the free month (a Growth month). "founder" is the
+  // founders' own full-access plan, assigned by hand from the founder console.
+  const plan = "starter";
   const trialEndsAt = new Date(Date.now() + 30 * 86400000).toISOString();
 
   // Try to persist account_type; if a column doesn't exist yet, fall back

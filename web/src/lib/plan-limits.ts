@@ -24,15 +24,17 @@ const UNLIMITED: PlanLimits = {
 };
 
 export const PLAN_LIMITS: Record<string, PlanLimits> = {
-  // Free first month for regular signups: a Growth month on the house.
+  // Free first month for every signup (waitlist included): a Growth month on
+  // the house.
   starter: { ...UNLIMITED, scanPerMonth: 10, prepareChannels: ["ebay", "facebook"] },
   solo: { scanPerMonth: 3, carPostPerDay: 1, exportCarsPerMonth: 20, exportPartsPerMonth: 100, prepareChannels: ["facebook"] },
   growth: { ...UNLIMITED, scanPerMonth: 10, prepareChannels: ["ebay", "facebook"] },
   max: { ...UNLIMITED, scanPerMonth: 25 },
-  // Waitlist founding month: same free Growth month, unlimited manual posting.
-  founder: { ...UNLIMITED, scanPerMonth: 10, prepareChannels: ["ebay", "facebook"] },
+  // Founders (Mohammad & Andy): everything, forever, no clock. Assigned by
+  // hand from the founder console, never sold.
+  founder: { ...UNLIMITED },
   // Expired free month or a canceled subscription (the Stripe webhook writes
-  // plan "Free" on cancel): no AI scans, no new posts, no exports.
+  // plan "free" on cancel): no AI scans, no new posts, no exports.
   free: { scanPerMonth: 0, carPostPerDay: 0, exportCarsPerMonth: 0, exportPartsPerMonth: 0, prepareChannels: [] },
   // ultimate / legacy "pro" → unlimited (fall through to UNLIMITED)
 };
@@ -52,8 +54,9 @@ export function limitForKind(plan: string | null | undefined, kind: UsageKind): 
 
 // Plans granted as an app-side free month (no Stripe subscription behind them).
 // They downgrade to "free" once trial_ends_at passes; paid plans are written by
-// the Stripe webhook and never expire app-side.
-const TRIAL_PLANS = new Set(["starter", "founder"]);
+// the Stripe webhook and never expire app-side. "founder" is deliberately NOT
+// here — the founders' own plan has no clock.
+const TRIAL_PLANS = new Set(["starter"]);
 
 export function effectivePlan(
   plan?: string | null,
@@ -88,7 +91,7 @@ export function planLabel(plan?: string | null): string {
   const p = (plan || "Pro").toLowerCase();
   const labels: Record<string, string> = {
     starter: "Free trial", solo: "Solo", growth: "Growth", max: "Max",
-    ultimate: "Ultimate", founder: "Founding member", free: "Free", pro: "Pro",
+    ultimate: "Ultimate", founder: "Founder (full access)", free: "Free", pro: "Pro",
   };
   return labels[p] ?? (plan as string);
 }

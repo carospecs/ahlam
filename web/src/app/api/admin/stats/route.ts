@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { requireAdmin } from "@/lib/admin";
+import { requireAdminOrViewer } from "@/lib/admin";
 import { effectivePlan, planLabel } from "@/lib/plan-limits";
 
 export const runtime = "nodejs";
@@ -11,8 +11,8 @@ export const runtime = "nodejs";
  * service-role reads.
  */
 export async function GET() {
-  const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  const caller = await requireAdminOrViewer();
+  if (!caller) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
 
   const db = supabaseAdmin();
   try {
@@ -102,6 +102,7 @@ export async function GET() {
     const waitlist = waitlistR.data ?? [];
     return NextResponse.json({
       ok: true,
+      role: caller.role,
       totals: {
         users: users.length,
         newUsers7d: users.filter((u) => u.created_at && new Date(u.created_at).getTime() > weekAgo).length,

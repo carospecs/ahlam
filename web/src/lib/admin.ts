@@ -16,6 +16,13 @@ export function isAdminEmail(email: string | null | undefined): boolean {
   return !!e && ADMIN_EMAILS.length > 0 && ADMIN_EMAILS.includes(e);
 }
 
+// Read-only console access (interns): they can load the founder console's
+// data but every mutating endpoint stays admin-only. Same fail-closed rule.
+const VIEWER_EMAILS = (process.env.ADMIN_VIEWER_EMAILS || "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
 /**
  * Returns the caller's email if they are a signed-in allowlisted admin, else
  * null. Reads the session via the anon SSR client (cookies), never trusts a
@@ -27,6 +34,24 @@ export async function requireAdmin(): Promise<string | null> {
     const { data: { user } } = await sb.auth.getUser();
     const email = user?.email?.toLowerCase();
     return isAdminEmail(email) ? email! : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Admins get { role: "admin" }; ADMIN_VIEWER_EMAILS (interns) get
+ * { role: "viewer" } — read-only console access. Everyone else: null.
+ */
+export async function requireAdminOrViewer(): Promise<{ email: string; role: "admin" | "viewer" } | null> {
+  try {
+    const sb = await supabaseServer();
+    const { data: { user } } = await sb.auth.getUser();
+    const email = user?.email?.toLowerCase();
+    if (!email) return null;
+    if (isAdminEmail(email)) return { email, role: "admin" };
+    if (VIEWER_EMAILS.includes(email)) return { email, role: "viewer" };
+    return null;
   } catch {
     return null;
   }

@@ -31,6 +31,7 @@ type Row = {
   listings: number; activeListings: number; vehicles: number;
 };
 type Stats = {
+  role: "admin" | "viewer";
   totals: {
     users: number; newUsers7d: number; shops: number;
     waitlist: number; waitlistEmailed: number;
@@ -41,10 +42,14 @@ type Stats = {
   rows: Row[];
 };
 
+// Display order everywhere; the dropdown offers only ASSIGNABLE plans (the
+// billing tiers, the free month, and the founders' plan) — legacy values still
+// render for shops that carry them.
 const PLAN_ORDER = ["founder", "starter", "growth", "max", "ultimate", "solo", "pro", "free"];
+const ASSIGNABLE_PLANS = ["starter", "growth", "max", "ultimate", "founder"];
 const PLAN_LABELS: Record<string, string> = {
-  founder: "Founding member", starter: "Free trial", growth: "Growth", max: "Max",
-  ultimate: "Ultimate", solo: "Solo", pro: "Pro (legacy)", free: "Free (expired)",
+  founder: "Founder (full access)", starter: "Free trial", growth: "Growth", max: "Max",
+  ultimate: "Ultimate", solo: "Solo (legacy)", pro: "Pro (legacy)", free: "Free (expired)",
 };
 
 export default function AdminHost() {
@@ -178,7 +183,8 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
         {state.kind === "error" && <Note>Could not load stats: {state.message}</Note>}
 
         {state.kind === "ready" && (() => {
-          const { totals, planCounts, rows } = state.stats;
+          const { totals, planCounts, rows, role } = state.stats;
+          const canEdit = role === "admin";
           const tiles = [
             { label: "Users", value: totals.users, sub: `+${totals.newUsers7d} this week` },
             { label: "Paying (autopay)", value: totals.paying, sub: "live Stripe subscriptions" },
@@ -243,26 +249,35 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                           <td style={td}>{r.shopName ? `${r.shopName}${r.accountType === "individual" ? " · individual" : ""}` : "no shop yet"}</td>
                           <td style={td}>
                             {r.shopId && r.planRaw ? (
-                              <select
-                                value={r.planRaw.toLowerCase()}
-                                disabled={savingShop === r.shopId}
-                                onChange={(e) => changePlan(r.shopId!, r.shopName || r.email, e.target.value)}
-                                style={{ background: "var(--surface2)", color: "var(--foreground)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 8px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: savingShop === r.shopId ? 0.5 : 1 }}
-                              >
-                                {PLAN_ORDER.map((p) => (
-                                  <option key={p} value={p}>{PLAN_LABELS[p] ?? p}</option>
-                                ))}
-                              </select>
+                              canEdit ? (
+                                <select
+                                  value={r.planRaw.toLowerCase()}
+                                  disabled={savingShop === r.shopId}
+                                  onChange={(e) => changePlan(r.shopId!, r.shopName || r.email, e.target.value)}
+                                  style={{ background: "var(--surface2)", color: "var(--foreground)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 8px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: savingShop === r.shopId ? 0.5 : 1 }}
+                                >
+                                  {(ASSIGNABLE_PLANS.includes(r.planRaw.toLowerCase())
+                                    ? ASSIGNABLE_PLANS
+                                    : [r.planRaw.toLowerCase(), ...ASSIGNABLE_PLANS]
+                                  ).map((p) => (
+                                    <option key={p} value={p}>{PLAN_LABELS[p] ?? p}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span style={{ fontWeight: 700, color: "var(--foreground)" }}>{r.plan}</span>
+                              )
                             ) : "—"}
                           </td>
                           <td style={{ ...td, whiteSpace: "nowrap" }}>
-                            {r.planId === "starter" || r.planId === "founder"
+                            {r.planId === "starter"
                               ? <span style={{ color: "var(--foreground)" }}>{fmtDate(r.trialEndsAt)} <span style={{ color: "var(--muted)" }}>({r.trialDaysLeft}d)</span></span>
                               : r.planId === "free"
                                 ? <span style={{ color: "var(--danger)", fontWeight: 600 }}>expired</span>
                                 : r.subscriptionStatus === "active"
                                   ? "auto-renews"
-                                  : "—"}
+                                  : r.planId === "founder"
+                                    ? "never"
+                                    : "—"}
                           </td>
                           <td style={{ ...td, whiteSpace: "nowrap" }}>
                             {r.subscriptionStatus === "active"
@@ -278,7 +293,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                           <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtDate(r.joined)}</td>
                           <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtDate(r.lastSignIn)}</td>
                           <td style={{ ...td, whiteSpace: "nowrap", textAlign: "right" }}>
-                            {confirmDelete === r.userId ? (
+                            {!canEdit ? null : confirmDelete === r.userId ? (
                               <span style={{ display: "inline-flex", gap: 6 }}>
                                 <button
                                   onClick={() => deleteUser(r.userId, r.email)}
@@ -312,7 +327,9 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
                 </div>
                 <div style={{ padding: "10px 14px", fontSize: 11.5, color: "var(--muted)", borderTop: "1px solid var(--line)" }}>
                   <Users size={12} style={{ verticalAlign: "-2px", marginRight: 5 }} />
-                  Changing the plan applies instantly. Picking Free trial or Founding member starts a fresh 30-day clock. Listings shows live/total. Autopay comes from Stripe; if a customer later buys a plan at checkout, Stripe overwrites whatever is set here. Deleting a user also removes their shop and its listings when they were its only member.
+                  {canEdit
+                    ? "Changing the plan applies instantly. Free trial starts a fresh 30-day clock; Founder (full access) is for Mohammad and Andy only and never expires. Autopay comes from Stripe; a customer buying at checkout overwrites what's set here. Deleting a user also removes their shop and its listings when they were its only member."
+                    : "Read-only view. Ask a founder to change plans or remove accounts."}
                 </div>
               </div>
             </>
