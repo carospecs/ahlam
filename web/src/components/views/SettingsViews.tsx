@@ -96,16 +96,21 @@ export function ShopProfile(_: ViewProps) {
   const { user } = useData();
   const canEdit = user?.role === "owner" || user?.role === "editor";
   const [form, setForm] = React.useState<any>(null);
+  const [shopMeta, setShopMeta] = React.useState<{ id: string | null; verified: boolean }>({ id: null, verified: false });
   const [busy, setBusy] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
   const [logoUrl, setLogoUrl] = React.useState<string | null>(null);
-  const [uploading, setUploading] = React.useState(false);
+  const [coverUrl, setCoverUrl] = React.useState<string | null>(null);
+  const [uploading, setUploading] = React.useState<"logo" | "cover" | null>(null);
   const logoRef = React.useRef<HTMLInputElement>(null);
+  const coverRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     fetch("/api/shop").then((r) => r.json()).then((d) => {
       const s = d.shop || {};
       setLogoUrl(s.logo_url || null);
+      setCoverUrl(s.cover_url || null);
+      setShopMeta({ id: s.id || null, verified: !!s.verified });
       setForm({
         name: s.name || "", location: s.location || "", business_phone: s.business_phone || "",
         zip_code: s.zip_code || "",
@@ -118,23 +123,24 @@ export function ShopProfile(_: ViewProps) {
 
   function set(k: string, v: string) { setForm((f: any) => ({ ...f, [k]: v })); }
 
-  async function uploadLogo(fileIn: File | undefined) {
+  async function uploadImage(kind: "logo" | "cover", fileIn: File | undefined) {
     if (!fileIn) return;
-    setUploading(true);
+    setUploading(kind);
     // Convert iPhone HEIC/HEIF to JPEG so the picker's HEIC files aren't rejected
     // by the server (which only accepts PNG/JPG/WebP). Other formats pass through.
     const file = await normalizeImageFile(fileIn);
     const fd = new FormData();
     fd.append("file", file);
+    fd.append("kind", kind);
     try {
       const r = await fetch("/api/shop/logo", { method: "POST", body: fd });
       const d = await r.json();
-      if (!r.ok) { csToast(d.error || "Upload failed"); setUploading(false); return; }
-      setLogoUrl(d.logoUrl);
-      csToast("Logo updated");
+      if (!r.ok) { csToast(d.error || "Upload failed"); setUploading(null); return; }
+      if (kind === "logo") setLogoUrl(d.url); else setCoverUrl(d.url);
+      csToast(kind === "logo" ? "Logo updated" : "Cover photo updated");
       reloadData();
     } catch { csToast("Upload failed — check your connection"); }
-    setUploading(false);
+    setUploading(null);
   }
 
   const initials = (form?.name || "S").split(" ").map((s: string) => s[0]).join("").toUpperCase().slice(0, 2);
@@ -152,70 +158,127 @@ export function ShopProfile(_: ViewProps) {
 
   if (!form) return <Loading />;
 
-  return (
-    <div style={{ maxWidth: 620 }}>
-      <p style={{ margin: "0 0 18px", fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5 }}>
-        This is your public storefront — it appears on every listing buyers see in the marketplace.
-      </p>
-      <div style={{ marginBottom: 18 }}><VerificationCard canManage={user?.role === "owner"} /></div>
-      <form onSubmit={save} style={{ display: "grid", gap: 16 }}>
-        <Field label="Shop logo">
-          <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp,.heic,.heif" hidden onChange={(e) => { uploadLogo(e.target.files?.[0]); e.target.value = ""; }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoUrl} alt="Shop logo" style={{ width: 64, height: 64, borderRadius: 14, objectFit: "cover", border: "1px solid var(--line)" }} />
-            ) : (
-              <div style={{ width: 64, height: 64, borderRadius: 14, background: "var(--accent)", color: "#fff", display: "grid", placeItems: "center", fontSize: 22, fontWeight: 800 }}>{initials}</div>
-            )}
-            {canEdit && (
-              <div style={{ display: "grid", gap: 6 }}>
-                <button type="button" onClick={() => logoRef.current?.click()} disabled={uploading} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 13.5, fontWeight: 600, opacity: uploading ? 0.6 : 1, width: "fit-content" }}>
-                  {uploading ? <LoaderCircle size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : <ImagePlus size={15} />} {logoUrl ? "Replace logo" : "Upload logo"}
-                </button>
-                <span style={{ fontSize: 11.5, color: "var(--muted)" }}>PNG, JPG, or WebP · up to 4 MB · shown on listings & your storefront</span>
-              </div>
-            )}
-          </div>
-        </Field>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label="Shop name"><input value={form.name} onChange={(e) => set("name", e.target.value)} style={inp} disabled={!canEdit} /></Field>
-          <Field label="Location"><AddressAutocomplete value={form.location} onChange={(v) => set("location", v)} onSelect={(p) => { if (p.zip) set("zip_code", p.zip); }} placeholder="Start typing your city…" style={inp} disabled={!canEdit} /></Field>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label="ZIP code"><ZipField value={form.zip_code} onChange={(v) => set("zip_code", v)} onResolve={(r) => { set("zip_code", r.zip); if (!form.location?.trim()) set("location", r.location); }} placeholder="12345" style={inp} disabled={!canEdit} /><span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4, display: "block" }}>Used to show buyers your area and sort listings by nearest.</span></Field>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label="Contact phone"><input value={form.business_phone} onChange={(e) => set("business_phone", e.target.value)} placeholder="(555) 123-4567" style={inp} disabled={!canEdit} /></Field>
-          <Field label="Public email"><input value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="sales@yourshop.com" style={inp} disabled={!canEdit} /></Field>
-        </div>
-        <Field label="Website"><input value={form.website} onChange={(e) => set("website", e.target.value)} placeholder="yourshop.com" style={inp} disabled={!canEdit} /></Field>
-        <Field label="Business hours">
-          <HoursEditor value={form.hours} onChange={(v) => set("hours", v)} disabled={!canEdit} />
-        </Field>
-        <Field label="About your shop">
-          <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} placeholder="Family-owned salvage yard. Quality used OEM parts with a 30-day guarantee." style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} disabled={!canEdit} />
-        </Field>
+  // Profile completeness — complete storefronts convert browsers into buyers.
+  const checklist: [string, boolean][] = [
+    ["Logo", !!logoUrl],
+    ["Cover photo", !!coverUrl],
+    ["Shop name", !!form.name?.trim()],
+    ["About", !!form.description?.trim()],
+    ["Phone", !!form.business_phone?.trim()],
+    ["Email or website", !!(form.email?.trim() || form.website?.trim())],
+    ["Location", !!(form.location?.trim() || form.zip_code?.trim())],
+    ["Hours", !!form.hours?.trim()],
+    ["Returns policy", !!form.returns_policy?.trim()],
+  ];
+  const done = checklist.filter(([, ok]) => ok).length;
+  const missing = checklist.filter(([, ok]) => !ok).map(([label]) => label);
 
-        {/* Store policies (WAR-2 / TRU-2) — defaults that auto-apply to every listing. */}
-        <div style={{ borderTop: "1px solid var(--line)", paddingTop: 16, display: "grid", gap: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>Store policies</div>
-          <Field label="Default warranty">
-            <div style={{ display: "flex", gap: 8 }}>
-              {WARRANTY_DAYS.map((d) => {
-                const on = Number(form.default_warranty_days) === d;
-                return (
-                  <button key={d} type="button" disabled={!canEdit} onClick={() => set("default_warranty_days", d as any)} style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`, background: on ? "var(--accent-tint)" : "transparent", color: on ? "var(--accent)" : "var(--muted)", fontSize: 13.5, fontWeight: 700, cursor: canEdit ? "pointer" : "default" }}>{d === 0 ? "None" : `${d} days`}</button>
-                );
-              })}
+  const section = (title: string, hint: string, children: React.ReactNode) => (
+    <Card>
+      <div style={{ fontSize: 14, fontWeight: 700 }}>{title}</div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "3px 0 14px" }}>{hint}</div>
+      <div style={{ display: "grid", gap: 14 }}>{children}</div>
+    </Card>
+  );
+
+  return (
+    <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap", maxWidth: 1080 }}>
+      {/* ------------------------------ Editor ------------------------------ */}
+      <form onSubmit={save} style={{ flex: "1 1 520px", minWidth: 0, display: "grid", gap: 16 }}>
+        {section("Storefront images", "The first thing buyers see on your page and your listings.", (
+          <>
+            <input ref={coverRef} type="file" accept="image/png,image/jpeg,image/webp,.heic,.heif" hidden onChange={(e) => { uploadImage("cover", e.target.files?.[0]); e.target.value = ""; }} />
+            <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp,.heic,.heif" hidden onChange={(e) => { uploadImage("logo", e.target.files?.[0]); e.target.value = ""; }} />
+            <div style={{ position: "relative", marginBottom: 26 }}>
+              <button
+                type="button"
+                onClick={() => canEdit && coverRef.current?.click()}
+                disabled={uploading === "cover" || !canEdit}
+                title={canEdit ? "Change the cover photo" : undefined}
+                style={{ display: "block", width: "100%", height: 150, padding: 0, borderRadius: 14, border: "1px dashed var(--line)", overflow: "hidden", cursor: canEdit ? "pointer" : "default", background: coverUrl ? "transparent" : "linear-gradient(120deg, color-mix(in srgb, var(--accent) 18%, var(--surface2)), var(--surface2))", position: "relative" }}
+              >
+                {coverUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={coverUrl} alt="Cover" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                ) : (
+                  <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "var(--muted)", fontSize: 13, fontWeight: 600 }}>
+                    {canEdit ? (uploading === "cover" ? "Uploading…" : "+ Add a cover photo (your yard, storefront, or best inventory)") : "No cover photo yet"}
+                  </span>
+                )}
+                {coverUrl && canEdit && (
+                  <span style={{ position: "absolute", right: 10, bottom: 10, fontSize: 11.5, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.55)", borderRadius: 8, padding: "4px 10px" }}>
+                    {uploading === "cover" ? "Uploading…" : "Change cover"}
+                  </span>
+                )}
+              </button>
+              <div style={{ position: "absolute", left: 18, bottom: -24, display: "flex", alignItems: "flex-end", gap: 10 }}>
+                {logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="Shop logo" style={{ width: 72, height: 72, borderRadius: 16, objectFit: "cover", border: "3px solid var(--surface)", boxShadow: "0 8px 20px -10px rgba(0,0,0,0.6)" }} />
+                ) : (
+                  <div style={{ width: 72, height: 72, borderRadius: 16, background: "var(--accent)", color: "#fff", display: "grid", placeItems: "center", fontSize: 24, fontWeight: 800, border: "3px solid var(--surface)" }}>{initials}</div>
+                )}
+                {canEdit && (
+                  <button type="button" onClick={() => logoRef.current?.click()} disabled={uploading === "logo"} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 13px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, opacity: uploading === "logo" ? 0.6 : 1, marginBottom: 6 }}>
+                    {uploading === "logo" ? <LoaderCircle size={14} style={{ animation: "spin 0.8s linear infinite" }} /> : <ImagePlus size={14} />} {logoUrl ? "Replace logo" : "Upload logo"}
+                  </button>
+                )}
+              </div>
             </div>
-            <span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6, display: "block" }}>Applies to any part that doesn&apos;t set its own warranty. Used parts standardly carry 30–90 days.</span>
-          </Field>
-          <Field label="Returns policy">
-            <textarea value={form.returns_policy} onChange={(e) => set("returns_policy", e.target.value)} rows={3} placeholder="e.g. Returns accepted within 30 days with receipt. Electrical parts must be tested on the vehicle before installation. Core charges refunded on return of the old unit." style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} disabled={!canEdit} />
-            <span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6, display: "block" }}>Shown on your storefront and on every listing so buyers know the terms before they buy.</span>
-          </Field>
-        </div>
+            <span style={{ fontSize: 11.5, color: "var(--muted)" }}>PNG, JPG, or WebP · up to 4 MB each. The logo shows beside every listing; the cover tops your storefront page.</span>
+          </>
+        ))}
+
+        {section("Basics", "Your name and story — buyers read this before they message.", (
+          <>
+            <Field label="Shop name"><input value={form.name} onChange={(e) => set("name", e.target.value)} style={inp} disabled={!canEdit} /></Field>
+            <Field label="About your shop">
+              <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} placeholder="Family-owned salvage yard since 2004. Quality used OEM parts, tested before they ship, with a 30-day guarantee." style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} disabled={!canEdit} />
+            </Field>
+          </>
+        ))}
+
+        {section("Contact", "How buyers reach you outside Ahlam messages.", (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <Field label="Contact phone"><input value={form.business_phone} onChange={(e) => set("business_phone", e.target.value)} placeholder="(555) 123-4567" style={inp} disabled={!canEdit} /></Field>
+              <Field label="Public email"><input value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="sales@yourshop.com" style={inp} disabled={!canEdit} /></Field>
+            </div>
+            <Field label="Website"><input value={form.website} onChange={(e) => set("website", e.target.value)} placeholder="yourshop.com" style={inp} disabled={!canEdit} /></Field>
+          </>
+        ))}
+
+        {section("Location", "Buyers sort the marketplace by distance — this is how they find you.", (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <Field label="City"><AddressAutocomplete value={form.location} onChange={(v) => set("location", v)} onSelect={(p) => { if (p.zip) set("zip_code", p.zip); }} placeholder="Start typing your city…" style={inp} disabled={!canEdit} /></Field>
+            <Field label="ZIP code"><ZipField value={form.zip_code} onChange={(v) => set("zip_code", v)} onResolve={(r) => { set("zip_code", r.zip); if (!form.location?.trim()) set("location", r.location); }} placeholder="12345" style={inp} disabled={!canEdit} /></Field>
+          </div>
+        ))}
+
+        {section("Business hours", "Shown on your storefront so buyers know when to call or come by.", (
+          <HoursEditor value={form.hours} onChange={(v) => set("hours", v)} disabled={!canEdit} />
+        ))}
+
+        {section("Store policies", "Defaults that apply to every listing — clear terms close more sales.", (
+          <>
+            <Field label="Default warranty">
+              <div style={{ display: "flex", gap: 8 }}>
+                {WARRANTY_DAYS.map((d) => {
+                  const on = Number(form.default_warranty_days) === d;
+                  return (
+                    <button key={d} type="button" disabled={!canEdit} onClick={() => set("default_warranty_days", d as any)} style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`, background: on ? "var(--accent-tint)" : "transparent", color: on ? "var(--accent)" : "var(--muted)", fontSize: 13.5, fontWeight: 700, cursor: canEdit ? "pointer" : "default" }}>{d === 0 ? "None" : `${d} days`}</button>
+                  );
+                })}
+              </div>
+              <span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6, display: "block" }}>Applies to any part that doesn&apos;t set its own warranty. Used parts standardly carry 30–90 days.</span>
+            </Field>
+            <Field label="Returns policy">
+              <textarea value={form.returns_policy} onChange={(e) => set("returns_policy", e.target.value)} rows={3} placeholder="e.g. Returns accepted within 30 days with receipt. Electrical parts must be tested on the vehicle before installation. Core charges refunded on return of the old unit." style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} disabled={!canEdit} />
+            </Field>
+          </>
+        ))}
+
+        <VerificationCard canManage={user?.role === "owner"} />
 
         {canEdit ? (
           <button type="submit" disabled={busy} style={{ ...saveBtn, opacity: busy ? 0.6 : 1 }}>
@@ -226,10 +289,74 @@ export function ShopProfile(_: ViewProps) {
           <div style={{ fontSize: 13, color: "var(--muted)" }}>Only owners and editors can change the shop profile.</div>
         )}
       </form>
+
+      {/* ------------------------- Storefront preview ------------------------ */}
+      <div style={{ flex: "1 1 300px", maxWidth: 380, position: "sticky", top: 12, display: "grid", gap: 14 }}>
+        <Card pad={0} style={{ overflow: "hidden" }}>
+          <div style={{ height: 110, background: coverUrl ? "transparent" : "linear-gradient(120deg, color-mix(in srgb, var(--accent) 22%, var(--surface2)), var(--surface2))" }}>
+            {coverUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={coverUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            )}
+          </div>
+          <div style={{ padding: "0 18px 18px" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 12, marginTop: -26 }}>
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt="" style={{ width: 56, height: 56, borderRadius: 13, objectFit: "cover", border: "3px solid var(--surface)" }} />
+              ) : (
+                <div style={{ width: 56, height: 56, borderRadius: 13, background: "var(--accent)", color: "#fff", display: "grid", placeItems: "center", fontSize: 19, fontWeight: 800, border: "3px solid var(--surface)" }}>{initials}</div>
+              )}
+              <div style={{ minWidth: 0, paddingBottom: 2 }}>
+                <div style={{ fontSize: 15.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{form.name || "Your shop"}</span>
+                  {shopMeta.verified && <ShieldCheck size={15} color="var(--success)" style={{ flexShrink: 0 }} />}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>{[form.location, form.zip_code].filter(Boolean).join(" · ") || "Add your location"}</div>
+              </div>
+            </div>
+            <p style={{ margin: "12px 0 0", fontSize: 12.5, color: "var(--muted)", lineHeight: 1.55, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+              {form.description || "Your about text shows here. Two or three sentences on what you stock and why buyers should trust you."}
+            </p>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
+              {Number(form.default_warranty_days) > 0 && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--success)", background: "color-mix(in srgb, var(--success) 14%, transparent)", borderRadius: 999, padding: "3px 9px" }}>{form.default_warranty_days}-day warranty</span>
+              )}
+              {form.returns_policy?.trim() && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", background: "var(--accent-tint)", borderRadius: 999, padding: "3px 9px" }}>Returns policy</span>
+              )}
+              {form.hours?.trim() && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", background: "var(--surface2)", borderRadius: 999, padding: "3px 9px" }}>Hours listed</span>
+              )}
+            </div>
+            {shopMeta.id && (
+              <a href={`/shop/${shopMeta.id}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 14, fontSize: 13, fontWeight: 700, color: "var(--accent)", textDecoration: "none" }}>
+                View your public storefront <ExternalLink size={13} />
+              </a>
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700 }}>Profile completeness</div>
+            <div className="tnum" style={{ fontSize: 13, fontWeight: 800, color: done === checklist.length ? "var(--success)" : "var(--foreground)" }}>{done}/{checklist.length}</div>
+          </div>
+          <div style={{ height: 8, borderRadius: 4, background: "var(--surface2)", overflow: "hidden", marginTop: 10 }}>
+            <div style={{ width: `${(done / checklist.length) * 100}%`, height: "100%", borderRadius: 4, background: done === checklist.length ? "var(--success)" : "var(--accent)" }} />
+          </div>
+          {missing.length > 0 ? (
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 10, lineHeight: 1.6 }}>
+              Still missing: <span style={{ color: "var(--foreground)", fontWeight: 600 }}>{missing.join(", ")}</span>. Complete storefronts get more buyer messages.
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: "var(--success)", fontWeight: 600, marginTop: 10 }}>Complete — your storefront looks professional.</div>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }
-
 // ---------------------------------------------------------------------------
 // Team & roles
 // ---------------------------------------------------------------------------
