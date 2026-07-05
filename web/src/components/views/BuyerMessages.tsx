@@ -63,11 +63,19 @@ export function BuyerMessages() {
   // focusing a child of an overflow:hidden box can scroll the box itself,
   // clipping the pane headers out of view.
   React.useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-    const g = gridRef.current;
-    if (g) { g.scrollTop = 0; g.scrollLeft = 0; }
-  }, [activeId, t?.messages.length]);
+    // Double-rAF: wait for the grid to finish constraining heights, otherwise
+    // scrollHeight equals clientHeight and the scroll is a no-op.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        const el = scrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+        const g = gridRef.current;
+        if (g) { g.scrollTop = 0; g.scrollLeft = 0; }
+      });
+    });
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
+  }, [activeId, t?.messages.length, loading]);
 
   function deleteThread(id: string) {
     setDeleted((prev) => { const n = new Set(prev); n.add(id); saveDeleted(n); return n; });
@@ -108,7 +116,7 @@ export function BuyerMessages() {
   const waHref = waNumber ? `https://wa.me/${waNumber}` : null;
 
   return (
-    <div ref={gridRef} style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "calc(100dvh - 250px)", minHeight: 430, border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)", maxWidth: 1180 }} className="cs-chat">
+    <div ref={gridRef} style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "min(620px, calc(100dvh - 240px))", minHeight: 430, border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)", maxWidth: 1180 }} className="cs-chat">
       <div style={{ display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0 }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "grid", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
