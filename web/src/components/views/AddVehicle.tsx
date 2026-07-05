@@ -369,12 +369,23 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         } catch { /* VIN read failed — proceed; the catalog reads VINs per-photo too */ }
       }
 
+      // All photos of this analyze run share one scanBatch id, so the whole car
+      // counts as a single AI scan against the plan quota (not one per photo).
+      const scanBatch =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const results = await Promise.all(
         dataUrls.map(async (dataUrl, i) => {
           const res = await fetch("/api/identify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(resolvedVin ? { imageBase64: dataUrl, vin: { vin: resolvedVin } } : { imageBase64: dataUrl }),
+            body: JSON.stringify({
+              imageBase64: dataUrl,
+              scanBatch,
+              scanFirst: i === 0,
+              ...(resolvedVin ? { vin: { vin: resolvedVin } } : {}),
+            }),
           });
           return { result: (await res.json()) as AIResult, photo: photos[i] };
         })

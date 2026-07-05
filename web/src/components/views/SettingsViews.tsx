@@ -467,7 +467,9 @@ export function Billing(_: ViewProps) {
       <Card>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Plans</div>
         <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 18 }}>Pick a plan or upgrade. Checkout is handled securely by Stripe.</div>
-        <PricingPlans onChoose={(planId) => go("checkout", planId)} ctaLabel="Subscribe" />
+        {/* The $0 trial card is hidden here: "subscribing" to it would stamp a
+            trial plan over a paying shop via the Stripe webhook. */}
+        <PricingPlans onChoose={(planId) => go("checkout", planId)} ctaLabel="Subscribe" exclude={["starter"]} />
       </Card>
 
       <PayoutCard canManage={user?.role === "owner"} />
@@ -515,7 +517,7 @@ export function Billing(_: ViewProps) {
             {busy === "checkout" ? <LoaderCircle size={15} style={{ animation: "spin 0.8s linear infinite" }} /> : null} Add card
           </button>
         </div>
-        <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 12, opacity: 0.7 }}>Payments are processed securely by Stripe. Set STRIPE_SECRET_KEY and STRIPE_PRICE_ID to enable live billing.</div>
+        <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 12, opacity: 0.7 }}>Payments are processed securely by Stripe. Set STRIPE_SECRET_KEY and the STRIPE_PRODUCT_* ids to enable live billing.</div>
       </Card>
     </div>
   );

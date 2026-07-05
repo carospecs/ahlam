@@ -3,6 +3,7 @@ import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { ebayConfigured, getConnection, getShopPolicies, publishPartListing, publishVehicleListing, type ShopPolicies } from "@/lib/ebay";
 import { suggestLeafCategory } from "@/lib/pricing";
+import { effectiveShopPlan, limitMessage } from "@/lib/usage";
 
 // eBay Motors parts must list under a leaf category. When we can't infer one from
 // live comps, fall back to 9886 "Other Car & Truck Parts & Accessories".
@@ -54,6 +55,11 @@ export async function POST(req: Request) {
   const { data: profile } = await db.from("profiles").select("shop_id").eq("id", user.id).single();
   const shopId = profile?.shop_id;
   if (!shopId) return NextResponse.json({ error: "No workspace" }, { status: 400 });
+
+  // An expired free month (effective plan "free") can't publish to eBay.
+  if ((await effectiveShopPlan(db, shopId)) === "free") {
+    return NextResponse.json({ error: limitMessage("car_post", 0), code: "quota" }, { status: 402 });
+  }
 
   const conn = await getConnection(shopId).catch(() => null);
   if (!conn) return NextResponse.json({ error: "Connect your eBay account first.", notConnected: true }, { status: 409 });

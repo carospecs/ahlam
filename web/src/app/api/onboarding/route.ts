@@ -56,18 +56,40 @@ export async function POST(req: NextRequest) {
   const type = accountType === "individual" ? "individual" : "shop";
   const shopLocation = location || address || null;
 
-  // Try to persist account_type; if the column doesn't exist yet, fall back gracefully.
-  let { data: shop, error: shopErr } = await db
-    .from("shops").insert({
-      name: name.trim(), location: shopLocation, business_phone: phone || null,
-      lat, lng, zip_code: zip, address_line: address || null,
-      account_type: type,
-    }).select().single();
-  if (shopErr && /account_type/.test(shopErr.message || "")) {
-    ({ data: shop, error: shopErr } = await db.from("shops").insert({
-      name: name.trim(), location: shopLocation, business_phone: phone || null,
-      lat, lng, zip_code: zip, address_line: address || null,
-    }).select().single());
+  // Launch grants: everyone starts with a free month (plan "starter"). Waitlist
+  // members get the founding month instead — every top-tier feature unlocked,
+  // 5 AI car scans, unlimited manual posting (enforced in lib/plan-limits.ts).
+  let plan = "starter";
+  if (user.email) {
+    // Exact match (waitlist emails are stored lowercased). NOT ilike — the
+    // pattern would treat _ and % in a signup email as wildcards.
+    const { data: wl } = await db
+      .from("waitlist").select("email").eq("email", user.email.toLowerCase()).limit(1).maybeSingle();
+    if (wl) plan = "founder";
+  }
+  const trialEndsAt = new Date(Date.now() + 30 * 86400000).toISOString();
+
+  // Try to persist account_type; if a column doesn't exist yet, fall back
+  // gracefully. Only a column-shaped error drops a field, and plan +
+  // trial_ends_at travel as a pair (a trial plan without an end date would
+  // read as already expired).
+  const shopRow: Record<string, unknown> = {
+    name: name.trim(), location: shopLocation, business_phone: phone || null,
+    lat, lng, zip_code: zip, address_line: address || null,
+    account_type: type, plan, trial_ends_at: trialEndsAt,
+  };
+  const columnError = (msg: string, col: string) =>
+    msg.includes(col) && /column|schema cache|does not exist/i.test(msg);
+  let { data: shop, error: shopErr } = await db.from("shops").insert(shopRow).select().single();
+  for (let attempt = 0; shopErr && attempt < 3; attempt++) {
+    let dropped = false;
+    const msg = shopErr.message || "";
+    if ("account_type" in shopRow && columnError(msg, "account_type")) { delete shopRow.account_type; dropped = true; }
+    if (("plan" in shopRow && columnError(msg, "plan")) || ("trial_ends_at" in shopRow && columnError(msg, "trial_ends_at"))) {
+      delete shopRow.plan; delete shopRow.trial_ends_at; dropped = true;
+    }
+    if (!dropped) break;
+    ({ data: shop, error: shopErr } = await db.from("shops").insert(shopRow).select().single());
   }
   if (shopErr || !shop) return NextResponse.json({ error: shopErr?.message || "Could not create account" }, { status: 500 });
 

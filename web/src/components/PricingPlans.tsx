@@ -25,12 +25,12 @@ export const PLANS: Plan[] = [
     name: "Free trial",
     price: "$0",
     per: "/first month",
-    desc: "The first 50 yards to join get a full month free, with every feature unlocked and no card required. Try the whole platform, not a stripped-down version.",
+    desc: "Your first month is free, with every feature unlocked and no card required. Try the whole platform, not a stripped-down version.",
     features: [
       "Free for your first month",
-      "Up to 2 cars",
+      "AI scan: 2 cars included (photo-to-listing)",
       "Every feature we've built, included",
-      "AI scan & auto-pricing (photo-to-listing)",
+      "Unlimited manual listings",
       "Access to Ahlam marketplace",
     ],
   },
@@ -54,15 +54,16 @@ export const PLANS: Plan[] = [
     name: "Growth",
     price: "$100",
     per: "/mo",
-    desc: "For growing dismantlers ready to scale listings and automate their workflow.",
+    desc: "For dismantlers selling on eBay who want AI scanning and automation without the full cross-post suite.",
     features: [
-      "10 car listings per month",
-      "AI scan & auto-pricing (photo-to-listing)",
+      "AI scan: 5 cars per month (photo-to-listing)",
+      "eBay auto-posting (eBay is this plan's marketplace channel)",
+      "Unlimited manual listings",
       "Team access: Owner & Editor",
       "AI Interchange Assistant (parts fitment across vehicles)",
       "AI Auto-Repricing (market watch, updates prices automatically)",
       "Inventory analytics",
-      "eBay listing integration",
+      "List on the Ahlam marketplace",
     ],
     highlight: true,
   },
@@ -73,13 +74,13 @@ export const PLANS: Plan[] = [
     per: "/mo",
     desc: "For high-volume yards that need full team access and cross-platform selling power.",
     features: [
-      "50 car listings per month",
-      "AI scan & auto-pricing (photo-to-listing)",
+      "AI scan: 20 cars per month (photo-to-listing)",
+      "Cross-post everywhere: eBay, Facebook, OfferUp",
+      "Unlimited manual listings",
       "Team access: Owner & Unlimited Editors",
       "AI Interchange Assistant (parts fitment across vehicles)",
       "AI Auto-Repricing (market watch, updates prices automatically)",
       "Full inventory analytics & profit tracking",
-      "Cross-platform export (eBay, Facebook, OfferUp)",
     ],
   },
   {
@@ -89,13 +90,13 @@ export const PLANS: Plan[] = [
     per: "/mo",
     desc: "Everything in Max, plus we build and host a professional website for your business with your own custom domain, fully managed by Ahlam.",
     features: [
-      "Unlimited car listings per month",
-      "AI scan & auto-pricing (photo-to-listing)",
+      "Unlimited AI car scans (photo-to-listing)",
+      "Cross-post everywhere: eBay, Facebook, OfferUp",
+      "Unlimited manual listings",
       "Team access: Owner & Unlimited Editors",
       "AI Interchange Assistant (parts fitment across vehicles)",
       "AI Auto-Repricing (market watch, updates prices automatically)",
       "Full inventory analytics & profit tracking",
-      "Cross-platform export (eBay, Facebook, OfferUp)",
       "Custom business website, built for you",
       "Managed domain registration & hosting · priority support",
     ],
@@ -105,13 +106,16 @@ export const PLANS: Plan[] = [
 export function PricingPlans({
   onChoose,
   ctaLabel,
+  exclude,
 }: {
   onChoose?: (planId: string) => void;
   ctaLabel?: string;
+  exclude?: string[]; // plan ids to hide (e.g. "starter" in the billing view)
 }) {
+  const plans = exclude?.length ? PLANS.filter((p) => !exclude.includes(p.id)) : PLANS;
   return (
     <div className="cs-plan-row" style={{ display: "flex", gap: 14, alignItems: "stretch", justifyContent: "center", flexWrap: "wrap" }}>
-      {PLANS.map((p) => (
+      {plans.map((p) => (
         <div
           key={p.id}
           className="cs-glass"

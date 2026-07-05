@@ -5,7 +5,7 @@ import { gradeAdjustUsed } from "@/lib/used-pricing";
 import { classifyPowertrain, isImpossiblePart, powertrainPromptLine, type PowertrainType } from "@/lib/powertrain";
 import { geminiGenerate } from "@/lib/gemini";
 import { decodeVin, normalizeVin, engineLabel, type VinInfo, type VinDecode } from "@/lib/vin";
-import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
+import { checkScanUsage, recordScanUsage, resolveShopPlan, limitMessage } from "@/lib/usage";
 import { applyVinEngine, stripSide } from "@/lib/part-enrich";
 import { markInferredParts } from "@/lib/inferred-parts";
 import { propagateImpactDamage } from "@/lib/damage-zones";
@@ -420,32 +420,43 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     return NextResponse.json({ ok: false, userMessage: "Sign in required", internalError: "no auth" }, { status: 401 });
   }
 
-  // Plan usage gate: the Solo plan caps AI scans per month. Resolve the shop +
-  // plan and block when over quota. Fail-open (allows the scan) if usage isn't
-  // migrated yet or the lookup errors.
-  let scanShopId: string | null = null;
-  try {
-    const udb = supabaseAdmin();
-    const { data: prof } = await udb.from("profiles").select("shop_id").eq("id", user.id).single();
-    scanShopId = (prof?.shop_id as string) || null;
-    if (scanShopId) {
-      const { data: shopRow } = await udb.from("shops").select("plan").eq("id", scanShopId).single();
-      const usage = await checkUsage(udb, scanShopId, (shopRow?.plan as string) || null, "scan");
-      if (!usage.allowed) {
-        return NextResponse.json(
-          { ok: false, userMessage: limitMessage("scan", usage.limit ?? 0), internalError: "scan quota exceeded" },
-          { status: 402 },
-        );
-      }
-    }
-  } catch { /* fail-open: never block a scan on a usage-lookup error */ }
-
-  let body: { imageBase64?: string; imageUrl?: string; photoContext?: string; vin?: { vin?: string; make?: string; model?: string; year?: number } };
+  let body: { imageBase64?: string; imageUrl?: string; photoContext?: string; scanBatch?: string; scanFirst?: boolean; vin?: { vin?: string; make?: string; model?: string; year?: number } };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json(busyResult("bad request body"), { status: 400 });
   }
+
+  // Plan usage gate: plans cap AI car scans per month (Growth 5, Max 20,
+  // Ultimate unlimited; the free trial and founding month cap too). All photos
+  // of one car share a scanBatch id and count as ONE scan. Block when over
+  // quota; fail-open (allows the scan) if usage isn't migrated or lookup errors.
+  const scanBatch = typeof body.scanBatch === "string" && body.scanBatch.length <= 64 ? body.scanBatch : null;
+  const scanFirst = body.scanFirst !== false;
+  let scanShopId: string | null = null;
+  try {
+    const udb = supabaseAdmin();
+    const { shopId, plan, failed } = await resolveShopPlan(udb, user.id);
+    scanShopId = shopId;
+    if (!scanShopId && !failed) {
+      // Signups are open: without a workspace there is nothing to meter, so a
+      // shop-less account would get unmetered scans. Make them onboard first.
+      // (A failed lookup stays fail-open, matching the rest of usage metering.)
+      return NextResponse.json(
+        { ok: false, userMessage: "Finish creating your workspace, then scan away.", internalError: "no shop for scan metering" },
+        { status: 403 },
+      );
+    }
+    if (scanShopId) {
+      const usage = await checkScanUsage(udb, scanShopId, plan, scanBatch);
+      if (!usage.allowed) {
+        return NextResponse.json(
+          { ok: false, userMessage: limitMessage("scan", usage.limit ?? 0, plan), internalError: "scan quota exceeded" },
+          { status: 402 },
+        );
+      }
+    }
+  } catch { /* fail-open: never block a scan on a usage-lookup error */ }
 
   const imageUrl =
     body.imageUrl ??
@@ -761,7 +772,8 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     }
 
     // Count this successful scan against the shop's monthly quota (best-effort).
-    void recordUsage(supabaseAdmin(), scanShopId, "scan");
+    // The batch id dedupes the per-photo calls so the whole car counts once.
+    void recordScanUsage(supabaseAdmin(), scanShopId, scanBatch, scanFirst);
     return NextResponse.json({ ok: true, data, vehicle, vehicleFront, piiRegions });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

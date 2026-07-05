@@ -39,7 +39,7 @@ const COLS: Col[] = [
   { h: "Resources", links: [
     { label: "Guides", href: "/guides" },
     { label: "FAQ", href: "/#faq" },
-    { label: "Waitlist", href: "/waitlist" },
+    { label: "Sign in", href: "/?signin=1" },
   ] },
   { h: "Company", links: [
     { label: "Book a demo", href: CAL_DEMO_URL, external: true },
@@ -96,7 +96,7 @@ export function SiteFooter() {
       <div style={{ borderTop: "1px solid var(--line)" }}>
         <div style={{ maxWidth: 1080, margin: "0 auto", padding: "18px 24px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12.5, color: "var(--muted)" }}>© {new Date().getFullYear()} Ahlam. All rights reserved.</span>
-          <Link href="/waitlist" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Join the waitlist</Link>
+          <Link href="/?signup=1" style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Start free</Link>
         </div>
       </div>
     </footer>

@@ -858,6 +858,14 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     return () => { clearInterval(iv); fetch("/api/online/heartbeat", { method: "DELETE" }).catch(() => {}); };
   }, []);
 
+  function navTo(id: string) { setVehicle(null); setActive(id); setNavOpen(false); }
+
+  // Let a browser notification click jump straight to the inbox. MUST run
+  // before the CreateShopGate early return below — a hook after a conditional
+  // return crashes React (#300, "rendered fewer hooks") the moment a shop-less
+  // account loads, which is every brand-new signup.
+  useEffect(() => { (window as any).csGoMessages = () => navTo("messages"); }, []);
+
   if (!loading && !data.user?.shopId) {
     return <CreateShopGate user={data.user} onDone={() => { setLoading(true); reload(); }} onSignOut={onSignOut} />;
   }
@@ -871,11 +879,6 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   const meta = vehicle
     ? { title: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, sub: "Vehicle profile — whole car and its parts" }
     : META[effectiveActive] || META.overview;
-
-  function navTo(id: string) { setVehicle(null); setActive(id); setNavOpen(false); }
-
-  // Let a browser notification click jump straight to the inbox.
-  useEffect(() => { (window as any).csGoMessages = () => navTo("messages"); }, []);
 
   return (
     <DataContext.Provider value={data}>
