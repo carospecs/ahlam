@@ -140,10 +140,16 @@ export interface PiiRegion { type: "license-plate" | "windshield-vin"; box: [num
 
 // Validate a model-emitted bounding box → a clean [x0,y0,x1,y1] tuple in 0–1, or undefined.
 // Guards against a stray/garbage value ever being treated as a box (and masking a whole photo).
+// The model sometimes answers on its native 0–1000 grid despite the 0–1 contract (~10% of
+// detections in photo-set testing) — normalize rather than drop: a dropped box loses the
+// part's thumbnail, and for piiRegions it would leave a license plate UNMASKED.
 function validBox(b: unknown): [number, number, number, number] | undefined {
   if (!Array.isArray(b) || b.length !== 4) return undefined;
-  const [x0, y0, x1, y1] = b.map(Number);
-  if (![x0, y0, x1, y1].every((n) => Number.isFinite(n) && n >= 0 && n <= 1)) return undefined;
+  let [x0, y0, x1, y1] = b.map(Number);
+  if (![x0, y0, x1, y1].every((n) => Number.isFinite(n) && n >= 0)) return undefined;
+  const max = Math.max(x0, y0, x1, y1);
+  if (max > 1 && max <= 1000) { x0 /= 1000; y0 /= 1000; x1 /= 1000; y1 /= 1000; }
+  if (![x0, y0, x1, y1].every((n) => n >= 0 && n <= 1)) return undefined;
   return x0 < x1 && y0 < y1 ? [x0, y0, x1, y1] : undefined;
 }
 
