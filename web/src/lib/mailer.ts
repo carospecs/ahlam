@@ -7,6 +7,8 @@ export async function sendMail(opts: {
   subject: string;
   text: string;
   replyTo?: string;
+  from?: string; // must be the authenticated account or a configured Gmail "Send As" alias
+  cc?: string;
 }): Promise<boolean> {
   const user = process.env.GMAIL_USER;
   const pass = process.env.GMAIL_APP_PASSWORD;
@@ -23,8 +25,9 @@ export async function sendMail(opts: {
       auth: { user, pass },
     });
     await transport.sendMail({
-      from: process.env.WAITLIST_FROM_EMAIL ?? user,
+      from: opts.from ?? process.env.WAITLIST_FROM_EMAIL ?? user,
       to: opts.to,
+      cc: opts.cc,
       replyTo: opts.replyTo,
       subject: opts.subject,
       text: opts.text,

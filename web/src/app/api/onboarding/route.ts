@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { geocode } from "@/lib/geocode";
+import { sendMail, FOUNDER_REVIEWERS } from "@/lib/mailer";
+import { buildWelcomeEmail, ONBOARDING_FROM, ONBOARDING_CC } from "@/lib/onboarding-email";
 
 export const runtime = "nodejs";
 
@@ -90,6 +92,27 @@ export async function POST(req: NextRequest) {
 
   await db.from("shop_members").insert({ shop_id: shop.id, user_id: user.id, role: "owner" });
   await db.from("profiles").update({ shop_id: shop.id }).eq("id", user.id);
+
+  // Onboarding on autopilot: the moment a shop exists, send the welcome email
+  // (docs/onboarding/ONBOARDING_KIT.md) from Andy with Mohammad CC'd so both
+  // founders see every new shop. Awaited (serverless would drop a floating
+  // promise after the response), but sendMail never throws: a mail hiccup
+  // logs and returns false instead of failing the signup.
+  if (user.email) {
+    const firstName = String(user.user_metadata?.full_name || "").trim().split(/\s+/)[0];
+    const { subject, text } = buildWelcomeEmail({
+      name: firstName || name.trim(),
+      appUrl: process.env.NEXT_PUBLIC_SITE_URL || "https://ahlam.io/adminhost",
+    });
+    await sendMail({
+      to: user.email,
+      from: ONBOARDING_FROM,
+      cc: ONBOARDING_CC,
+      replyTo: FOUNDER_REVIEWERS, // "hit reply" reaches both founders
+      subject,
+      text,
+    });
+  }
 
   return NextResponse.json({ ok: true, shop, geo: lat ? { lat, lng, zip } : null });
 }
