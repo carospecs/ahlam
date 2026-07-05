@@ -73,8 +73,10 @@ export async function POST(req: Request) {
       const sub = event.data.object;
       const customer = typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
       if (customer) {
-        // Subscription ended → drop the shop back to the free default plan.
-        await db.from("shops").update({ subscription_status: "canceled", plan: "Free" })
+        // Subscription ended → drop the shop back to the free plan. Lowercase:
+        // shops.plan is the plan_tier enum (migration 0039) and only accepts
+        // the canonical lowercase ids.
+        await db.from("shops").update({ subscription_status: "canceled", plan: "free" })
           .eq("stripe_customer_id", customer);
       }
     } else if (event.type === "account.updated") {
