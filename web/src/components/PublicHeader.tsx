@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BrandMark, BetaBadge } from "./BrandMark";
+import { BrandMark } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
 
 // Shared top nav for the public, no-auth pages (guides, waitlist, listing, shop,
@@ -16,7 +16,6 @@ export function PublicHeader() {
         <Link href="/" style={{ display: "inline-flex", alignItems: "center", gap: 9, textDecoration: "none", color: "var(--foreground)" }}>
           <span className="cs-brand-ring" style={{ width: 30, height: 30 }}><BrandMark size={19} /></span>
           <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span>
-          <BetaBadge />
         </Link>
         <span style={navDivider} className="cs-pill-links" />
         <nav className="cs-pill-links" style={{ display: "flex", alignItems: "center", gap: 2 }}>

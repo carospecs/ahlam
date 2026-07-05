@@ -208,7 +208,7 @@ export default async function ShopStorefront({ params }: Params) {
         )}
 
         <div style={{ marginTop: 40, padding: 20, borderRadius: 14, border: "1px solid var(--line)", background: "var(--surface)", textAlign: "center" }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>Want to message this seller or list your own inventory?</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>Sell your own parts? List your inventory on Ahlam free for a month.</div>
           <Link href="/" style={{ display: "inline-flex", marginTop: 12, padding: "10px 20px", borderRadius: 11, background: "var(--accent)", color: "#fff", textDecoration: "none", fontSize: 14, fontWeight: 600 }}>Open Ahlam</Link>
         </div>
       </div>

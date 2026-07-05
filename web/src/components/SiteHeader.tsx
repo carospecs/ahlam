@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { ChevronDown, X } from "lucide-react";
-import { BrandMark, BetaBadge } from "./BrandMark";
+import { BrandMark } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
 import { AUDIENCES } from "./site-nav";
 
@@ -87,7 +87,6 @@ export function SiteHeader({
         <Link href="/" onClick={closeMenu} style={{ display: "inline-flex", alignItems: "center", gap: 9, textDecoration: "none", color: "var(--foreground)" }}>
           <span className="cs-brand-ring" style={{ width: 30, height: 30 }}><BrandMark size={19} /></span>
           <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span>
-          <BetaBadge />
         </Link>
 
         <span style={navDivider} className="cs-pill-links" />
