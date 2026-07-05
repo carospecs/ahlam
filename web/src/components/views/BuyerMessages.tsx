@@ -1,25 +1,39 @@
 "use client";
 
 import React from "react";
-import { Inbox, Send, Store, MessageCircle, Search } from "lucide-react";
+import { Inbox, Send, Store, MessageCircle, Search, X, Trash2 } from "lucide-react";
 import { csToast } from "../Dashboard";
 
 interface BMsg { from: string; text: string; time: string }
 interface BThread {
   id: string; shopId: string; shopName: string; phone: string | null;
-  part: string; market: string; time: string; messages: BMsg[]; lastText: string;
+  part: string; market: string; time: string; unread?: number; messages: BMsg[]; lastText: string;
+}
+
+// Buyer-side deletes are per-device hides (mirrors the seller inbox pattern):
+// the seller keeps their copy of the thread.
+const DELETED_BUYING_KEY = "ahlam_deleted_buying";
+function loadDeleted(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(DELETED_BUYING_KEY) || "[]")); } catch { return new Set(); }
+}
+function saveDeleted(s: Set<string>) {
+  try { localStorage.setItem(DELETED_BUYING_KEY, JSON.stringify([...s])); } catch { /* private mode */ }
 }
 
 // The buyer's side of messaging: the conversations the signed-in user started by
-// hitting "Message seller" in Browse, plus the seller's replies. Mirrors the seller
-// inbox layout but read from /api/messages/mine (keyed on buyer_id).
+// hitting "Message seller" in Browse or on a public listing page, plus the
+// seller's replies. Mirrors the seller inbox layout but reads
+// /api/messages/mine (keyed on buyer_id).
 export function BuyerMessages() {
   const [threads, setThreads] = React.useState<BThread[]>([]);
-  const [activeId, setActiveId] = React.useState("");
+  // "" = nothing picked yet (auto-select first); null = user closed the pane.
+  const [activeId, setActiveId] = React.useState<string | null>("");
   const [draft, setDraft] = React.useState("");
   const [query, setQuery] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [sending, setSending] = React.useState(false);
+  const [deleted, setDeleted] = React.useState<Set<string>>(loadDeleted);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
 
   const load = React.useCallback(async () => {
     try {
@@ -30,13 +44,34 @@ export function BuyerMessages() {
   }, []);
 
   React.useEffect(() => { load(); const iv = setInterval(load, 20000); return () => clearInterval(iv); }, [load]);
-  React.useEffect(() => { if (!activeId && threads.length) setActiveId(threads[0].id); }, [threads, activeId]);
+  React.useEffect(() => {
+    if (activeId === "" && threads.length) {
+      const first = threads.find((th) => !deleted.has(th.id));
+      if (first) setActiveId(first.id);
+    }
+  }, [threads, activeId, deleted]);
 
   const ql = query.trim().toLowerCase();
+  const notDeleted = threads.filter((th) => !deleted.has(th.id));
   const visible = ql
-    ? threads.filter((th) => `${th.shopName} ${th.part} ${th.lastText}`.toLowerCase().includes(ql))
-    : threads;
-  const t = visible.find((x) => x.id === activeId) || visible[0] || null;
+    ? notDeleted.filter((th) => `${th.shopName} ${th.part} ${th.lastText}`.toLowerCase().includes(ql))
+    : notDeleted;
+  const t = activeId ? visible.find((x) => x.id === activeId) || null : null;
+
+  // Always land on the newest message.
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [activeId, t?.messages.length]);
+
+  function deleteThread(id: string) {
+    setDeleted((prev) => { const n = new Set(prev); n.add(id); saveDeleted(n); return n; });
+    if (activeId === id) {
+      const next = notDeleted.find((x) => x.id !== id);
+      setActiveId(next ? next.id : null);
+    }
+    csToast("Conversation deleted from your inbox");
+  }
 
   async function send() {
     if (!t || sending || !draft.trim()) return;
@@ -56,7 +91,7 @@ export function BuyerMessages() {
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>Loading…</div>;
-  if (!threads.length) {
+  if (!notDeleted.length) {
     return (
       <div style={{ padding: 44, textAlign: "center", color: "var(--muted)", fontSize: 14, border: "1px dashed var(--line)", borderRadius: 14 }}>
         You haven&apos;t messaged any sellers yet. Open <b style={{ color: "var(--foreground)" }}>Browse market</b>, find a part, and hit &ldquo;Message seller&rdquo; — your conversations show up here.
@@ -68,7 +103,7 @@ export function BuyerMessages() {
   const waHref = waNumber ? `https://wa.me/${waNumber}` : null;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "calc(100vh - 74px - 110px)", minHeight: 460, border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)", maxWidth: 1180 }} className="cs-chat">
+    <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "calc(100dvh - 250px)", minHeight: 430, border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden", background: "var(--surface)", maxWidth: 1180 }} className="cs-chat">
       <div style={{ display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0 }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "grid", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -95,7 +130,10 @@ export function BuyerMessages() {
                     <span style={{ fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>{th.time}</span>
                   </div>
                   <div style={{ fontSize: 11.5, color: "var(--accent)", fontWeight: 600, margin: "1px 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.part}</div>
-                  <div style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.lastText}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ flex: 1, fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{th.lastText}</span>
+                    {(th.unread || 0) > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#fff", background: "var(--accent)", borderRadius: 999, minWidth: 17, height: 17, display: "grid", placeItems: "center", padding: "0 5px", flexShrink: 0 }}>{th.unread}</span>}
+                  </div>
                 </div>
               </button>
             );
@@ -121,8 +159,14 @@ export function BuyerMessages() {
                 <MessageCircle size={14} /> WhatsApp
               </a>
             )}
+            <button onClick={() => deleteThread(t.id)} title="Delete conversation" style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}>
+              <Trash2 size={14} />
+            </button>
+            <button onClick={() => setActiveId(null)} title="Close conversation" style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}>
+              <X size={15} />
+            </button>
           </div>
-          <div style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 12, background: "var(--background)" }}>
+          <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 12, background: "var(--background)" }}>
             {t.messages.map((m, i) => (
               <div key={i} style={{ display: "flex", justifyContent: m.from === "me" ? "flex-end" : "flex-start" }}>
                 <div style={{ maxWidth: "70%", padding: "10px 14px", borderRadius: 14, fontSize: 13.5, lineHeight: 1.45, background: m.from === "me" ? "var(--accent)" : "var(--surface2)", color: m.from === "me" ? "#fff" : "var(--foreground)", borderBottomRightRadius: m.from === "me" ? 4 : 14, borderBottomLeftRadius: m.from === "me" ? 14 : 4 }}>
@@ -133,8 +177,15 @@ export function BuyerMessages() {
             ))}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, borderTop: "1px solid var(--line)" }}>
-            <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Write a message…" style={{ flex: 1, border: "1px solid var(--line)", background: "var(--surface2)", borderRadius: 10, padding: "10px 14px", color: "var(--foreground)", fontSize: 13.5, outline: "none" }} onKeyDown={(e) => { if (e.key === "Enter") send(); }} />
-            <button disabled={sending} onClick={send} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 600, opacity: sending ? 0.7 : 1 }}><Send size={15} /> Send</button>
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={`Message ${t.shopName}…`}
+              autoFocus
+              style={{ flex: 1, border: "1px solid var(--line)", background: "var(--surface2)", borderRadius: 10, padding: "11px 14px", color: "var(--foreground)", fontSize: 13.5, outline: "none" }}
+              onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+            />
+            <button disabled={sending || !draft.trim()} onClick={send} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer", opacity: sending || !draft.trim() ? 0.6 : 1 }}><Send size={15} /> Send</button>
           </div>
         </div>
       )}
