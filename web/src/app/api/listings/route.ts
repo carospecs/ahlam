@@ -53,6 +53,38 @@ export async function POST(req: Request) {
   // Save-as-draft keeps everything private (not surfaced in the public market).
   const status = body.draft ? "draft" : "active";
 
+  // Quality gate for ACTIVE posts: junk like part "1" priced at $1 makes the
+  // whole marketplace look fake. Drafts stay loose so nothing in progress is
+  // ever lost — the bar applies when it goes public.
+  if (status === "active") {
+    const looksLikeName = (s: unknown) => typeof s === "string" && /[a-zA-Z]{2}/.test(s) && s.trim().length >= 3;
+    const wholeCar = sellMode === "whole" || sellMode === "both";
+    if (wholeCar) {
+      const year = Number(vehicle.year);
+      if (!looksLikeName(vehicle.make) || !looksLikeName(vehicle.model)) {
+        return NextResponse.json({ error: "Add the vehicle's real make and model before posting.", code: "invalid" }, { status: 400 });
+      }
+      if (vehicle.year && (!Number.isInteger(year) || year < 1900 || year > new Date().getFullYear() + 2)) {
+        return NextResponse.json({ error: "That vehicle year doesn't look right.", code: "invalid" }, { status: 400 });
+      }
+      if (carPrice != null && (!Number.isFinite(carPrice) || carPrice < 50 || carPrice > 2_000_000)) {
+        return NextResponse.json({ error: "Set a realistic asking price for the whole car (at least $50).", code: "invalid" }, { status: 400 });
+      }
+    }
+    if (sellMode !== "whole") {
+      for (const p of parts) {
+        const nm = String(p.partName ?? "").trim();
+        if (!looksLikeName(nm)) {
+          return NextResponse.json({ error: `"${nm || "Unnamed part"}" isn't a real part name. Name every part before posting (e.g. "Alternator").`, code: "invalid" }, { status: 400 });
+        }
+        const price = p.suggestedPriceUsd;
+        if (price != null && (!Number.isFinite(Number(price)) || Number(price) < 1 || Number(price) > 100_000)) {
+          return NextResponse.json({ error: `Set a realistic price for "${nm}" (between $1 and $100,000), or leave it blank to price later.`, code: "invalid" }, { status: 400 });
+        }
+      }
+    }
+  }
+
   // Some plans cap whole-car posts per day (Solo 1/day; an expired free month
   // blocks posting). Only an actually-posted (active) car counts; drafts are
   // free. Fail-open if usage isn't migrated / lookup errors.

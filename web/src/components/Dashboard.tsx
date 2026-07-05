@@ -91,6 +91,7 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
   const { shop, role } = useData();
   const t = useT();
   const nav = NAV.filter((n: any) => !n.ownerOnly || role === "owner");
+  const unread = useUnreadCount();
 
   return (
     <aside style={sx.sidebar} className={"cs-sidebar" + (open ? " open" : "")}>
@@ -116,10 +117,19 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
           }
           const on = active === n.id;
           const IconComp = n.icon;
+          const showDot = n.id === "messages" && unread > 0;
           return (
             <button key={n.id} className="cs-nav-item" onClick={() => onNav(n.id)} style={{ ...sx.navItem, ...(on ? sx.navItemOn : {}) }}>
-              <IconComp size={18} color={on ? "var(--accent)" : "var(--muted)"} />
+              <span style={{ position: "relative", display: "inline-flex" }}>
+                <IconComp size={18} color={on ? "var(--accent)" : "var(--muted)"} />
+                {showDot && <span style={{ position: "absolute", top: -3, right: -4, width: 9, height: 9, borderRadius: 999, background: "var(--danger)", border: "2px solid var(--surface)" }} />}
+              </span>
               <span style={{ flex: 1, textAlign: "left" }}>{t(n.label!)}</span>
+              {showDot && (
+                <span style={{ minWidth: 18, height: 18, padding: "0 5px", borderRadius: 999, background: "var(--danger)", color: "#fff", fontSize: 10.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                  {unread > 9 ? "9+" : unread}
+                </span>
+              )}
             </button>
           );
         })}
@@ -843,8 +853,12 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     else if (payouts === "done") { csToast("Payout setup updated"); setActive("billing"); }
     else if (billing === "success") { csToast("Subscription active — your plan is live"); setActive("billing"); }
     else if (billing === "cancelled") { csToast("Checkout cancelled — no charge made"); }
-    if (order || payouts || billing) {
-      ["order", "id", "payouts", "billing"].forEach((k) => p.delete(k));
+    const emailUpdated = p.get("email-updated");
+    if (emailUpdated === "1") { csToast("Email updated. Use the new address next time you sign in."); setActive("settings"); }
+    else if (emailUpdated === "taken") { csToast("That email is already on another account."); setActive("settings"); }
+    else if (emailUpdated === "invalid" || emailUpdated === "failed") { csToast("That confirmation link expired. Request the email change again."); setActive("settings"); }
+    if (order || payouts || billing || emailUpdated) {
+      ["order", "id", "payouts", "billing", "email-updated"].forEach((k) => p.delete(k));
       const url = new URL(window.location.href);
       url.search = p.toString();
       window.history.replaceState({}, "", url);

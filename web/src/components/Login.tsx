@@ -81,12 +81,15 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
   // Return to the marketing landing. onClose flips the parent back to <Landing>
   // (SPA, keeps state); fall back to a hard nav to "/" if it isn't provided.
   const goHome = () => { if (onClose) onClose(); else window.location.href = "/"; };
-  const [mode, setMode] = useState<"signin" | "signup" | "forgot" | "recover">(
+  const [mode, setMode] = useState<"signin" | "signup" | "verify" | "forgot" | "resetCode" | "recover">(
     initialMode === "signup" && !signInOnly ? "signup" : "signin",
   );
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [resendIn, setResendIn] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -127,6 +130,27 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
   })();
   const pwLabels = ["Too short", "Weak", "Fair", "Good", "Strong"];
 
+  // Resend-code cooldown ticker.
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const id = setInterval(() => setResendIn((n) => (n > 0 ? n - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [resendIn]);
+
+  async function resendCode() {
+    if (resendIn > 0) return;
+    setError(""); setNotice("");
+    const r = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, resend: true }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { setError(d.error || "Couldn't resend the code."); return; }
+    setNotice("A fresh code is on its way to your inbox.");
+    setResendIn(30);
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -135,9 +159,10 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
     const sb = supabaseBrowser();
     try {
       if (mode === "signup") {
-        // Create the account through our API (rate-limited, works even with
-        // Supabase-side public signups disabled), then sign straight in — no
-        // confirmation-link detour on launch.
+        if (password.length < 8) { setError("Use at least 8 characters for your password."); setBusy(false); return; }
+        if (password !== confirmPassword) { setError("Passwords don't match."); setBusy(false); return; }
+        // Create the account through our API (rate-limited, branded emails),
+        // then verify the address with the 6-digit code we send.
         const r = await fetch("/api/auth/signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -145,16 +170,40 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
         });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { setError(d.error || "Couldn't create your account. Try again."); setBusy(false); return; }
-        const { error: signInErr } = await sb.auth.signInWithPassword({ email, password });
-        if (signInErr) { setError(signInErr.message); setBusy(false); return; }
+        setMode("verify");
+        setNotice(`We emailed a 6-digit code to ${email}.`);
+        setResendIn(30);
+        setBusy(false);
+      } else if (mode === "verify") {
+        const token = code.trim();
+        if (!/^\d{6}$/.test(token)) { setError("Enter the 6-digit code from your email."); setBusy(false); return; }
+        // Verifying the emailed code confirms the address AND signs the user in.
+        const { error: otpErr } = await sb.auth.verifyOtp({ email, token, type: "email" });
+        if (otpErr) { setError("That code didn't match. Check the email or resend a fresh one."); setBusy(false); return; }
         onLogin();
       } else if (mode === "forgot") {
-        const { error: resetErr } = await sb.auth.resetPasswordForEmail(email, {
-          redirectTo: `${location.origin}/`,
+        const r = await fetch("/api/auth/reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
         });
-        if (resetErr) { setError(resetErr.message); setBusy(false); return; }
-        setNotice("If an account exists for that email, a reset link is on its way.");
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { setError(d.error || "Couldn't start the reset. Try again."); setBusy(false); return; }
+        setMode("resetCode");
+        setPassword(""); setConfirmPassword("");
+        setNotice(`If an account exists for ${email}, a 6-digit reset code is on its way.`);
+        setResendIn(30);
         setBusy(false);
+      } else if (mode === "resetCode") {
+        const token = code.trim();
+        if (!/^\d{6}$/.test(token)) { setError("Enter the 6-digit code from your email."); setBusy(false); return; }
+        if (password.length < 8) { setError("Use at least 8 characters for your new password."); setBusy(false); return; }
+        if (password !== confirmPassword) { setError("Passwords don't match."); setBusy(false); return; }
+        const { error: otpErr } = await sb.auth.verifyOtp({ email, token, type: "recovery" });
+        if (otpErr) { setError("That code didn't match. Check the email or request a new one."); setBusy(false); return; }
+        const { error: updErr } = await sb.auth.updateUser({ password });
+        if (updErr) { setError(updErr.message); setBusy(false); return; }
+        onLogin();
       } else if (mode === "recover") {
         const { error: updErr } = await sb.auth.updateUser({ password });
         if (updErr) { setError(updErr.message); setBusy(false); return; }
@@ -203,13 +252,17 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
             <h2 style={lx.formTitle}>{
               mode === "signin" ? "Sign in to Ahlam"
               : mode === "signup" ? "Create your account"
+              : mode === "verify" ? "Check your email"
               : mode === "forgot" ? "Reset your password"
+              : mode === "resetCode" ? "Enter your reset code"
               : "Set a new password"
             }</h2>
             <p style={lx.formSub}>{
               mode === "signin" ? "Welcome back. Pick up where you left off."
               : mode === "signup" ? "Shop or individual seller — you'll choose next. Same tools either way."
-              : mode === "forgot" ? "Enter your email and we'll send you a secure reset link."
+              : mode === "verify" ? `We sent a 6-digit code to ${email}. Enter it below to activate your account.`
+              : mode === "forgot" ? "Enter your email and we'll send you a 6-digit reset code."
+              : mode === "resetCode" ? `Enter the code we emailed to ${email} and pick a new password.`
               : "Almost done — choose a strong password you'll remember."
             }</p>
             <form onSubmit={submit} style={{ display: "grid", gap: 14, marginTop: 22 }}>
@@ -218,17 +271,32 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
                   <input type="text" autoComplete="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Your name" style={lx.input} />
                 </Field>
               )}
-              {mode !== "recover" && (
+              {mode !== "recover" && mode !== "verify" && mode !== "resetCode" && (
                 <Field label="Work email" icon="Mail">
                   <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@yourshop.com" style={lx.input} />
                 </Field>
               )}
-              {mode !== "forgot" && (
-                <Field label={mode === "recover" ? "New password" : "Password"} icon="Lock" right={mode === "signin" ? <a href="#" style={lx.forgot} onClick={(e) => { e.preventDefault(); setError(""); setNotice(""); setMode("forgot"); }}>Forgot?</a> : null}>
+              {(mode === "verify" || mode === "resetCode") && (
+                <Field label="6-digit code" icon="Mail">
+                  <input
+                    type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required
+                    value={code} onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ""))}
+                    placeholder="123456"
+                    style={{ ...lx.input, letterSpacing: "0.35em", fontWeight: 700, fontSize: 18 }}
+                  />
+                </Field>
+              )}
+              {mode !== "forgot" && mode !== "verify" && (
+                <Field label={mode === "recover" || mode === "resetCode" ? "New password" : "Password"} icon="Lock" right={mode === "signin" ? <a href="#" style={lx.forgot} onClick={(e) => { e.preventDefault(); setError(""); setNotice(""); setMode("forgot"); }}>Forgot?</a> : null}>
                   <input type="password" required autoComplete={mode === "signin" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" style={lx.input} />
                 </Field>
               )}
-              {(mode === "signup" || mode === "recover") && password.length > 0 && (
+              {(mode === "signup" || mode === "resetCode") && (
+                <Field label="Confirm password" icon="Lock">
+                  <input type="password" required autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Same password again" style={lx.input} />
+                </Field>
+              )}
+              {(mode === "signup" || mode === "recover" || mode === "resetCode") && password.length > 0 && (
                 <div style={{ display: "grid", gap: 6 }}>
                   <div style={{ display: "flex", gap: 5 }}>
                     {[0, 1, 2, 3].map((i) => (
@@ -249,13 +317,26 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
                 {busy ? "Please wait…" : (
                   mode === "signin" ? "Sign in"
                   : mode === "signup" ? "Create account"
-                  : mode === "forgot" ? "Send reset link"
+                  : mode === "verify" ? "Verify & continue"
+                  : mode === "forgot" ? "Email me a reset code"
+                  : mode === "resetCode" ? "Set new password"
                   : "Save new password"
                 )}
                 {!busy && <ArrowRight size={16} />}
               </button>
             </form>
-            {mode === "signin" || mode === "signup" ? (
+            {mode === "verify" || mode === "resetCode" ? (
+              <p style={lx.switch}>
+                {"Didn't get it? Check spam or "}
+                <a href="#" style={{ color: resendIn > 0 ? "var(--muted)" : "var(--accent)", fontWeight: 600 }} onClick={(e) => { e.preventDefault(); if (mode === "verify") { resendCode(); } else if (resendIn <= 0) { setError(""); setNotice(""); setMode("forgot"); } }}>
+                  {mode === "verify" ? (resendIn > 0 ? `resend in ${resendIn}s` : "resend the code") : (resendIn > 0 ? `request again in ${resendIn}s` : "request a new code")}
+                </a>
+                {" · "}
+                <a href="#" style={{ color: "var(--accent)", fontWeight: 600 }} onClick={(e) => { e.preventDefault(); setError(""); setNotice(""); setCode(""); setMode(mode === "verify" ? "signup" : "signin"); }}>
+                  {mode === "verify" ? "wrong email?" : "back to sign in"}
+                </a>
+              </p>
+            ) : mode === "signin" || mode === "signup" ? (
               <>
                 <div style={lx.divider}><span style={lx.divLine} /> <span style={lx.or}>or</span> <span style={lx.divLine} /></div>
                 <button style={lx.google} disabled={busy} onClick={googleSignIn}><GoogleG /> Continue with Google</button>

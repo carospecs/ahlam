@@ -136,8 +136,24 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
 
   async function save(draft: boolean) {
     if (busy) return;
+    // Quality gate before anything goes public: real names and realistic
+    // prices. Drafts stay loose so in-progress work is never blocked.
+    const realName = (s: string) => /[a-zA-Z]{2}/.test(s) && s.trim().length >= 3;
     if (kind === "car" && !make && !model && !title.trim()) { csToast("Add at least the make/model or a title"); return; }
     if (kind === "part" && !partName.trim()) { csToast("Pick or type the part"); return; }
+    if (!draft) {
+      if (kind === "part" && !realName(partName)) { csToast("Give the part its real name, like \"Alternator\" or \"Front bumper\""); return; }
+      if (kind === "car" && !(realName(make) && realName(model)) && !realName(title)) { csToast("Add the real make and model before posting"); return; }
+      const priceCheck = price === "" ? null : Number(price);
+      if (priceCheck != null && (kind === "part" ? priceCheck < 1 : priceCheck < 50)) {
+        csToast(kind === "part" ? "Set a realistic price (at least $1), or leave it blank" : "Set a realistic asking price (at least $50)");
+        return;
+      }
+      if (kind === "car") {
+        const y = Number(year);
+        if (year && (!Number.isInteger(y) || y < 1900 || y > new Date().getFullYear() + 2)) { csToast("That vehicle year doesn't look right"); return; }
+      }
+    }
     setBusy("save");
     try {
       const images = photos.length ? await Promise.all(photos.map((p) => fileToJpegDataUrl(p.file))) : [];
