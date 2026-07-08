@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   if (mode === "set" && value < 0) return NextResponse.json({ error: "Price can't be negative" }, { status: 400 });
 
   // Pull the shop's listings within scope.
-  let query = db.from("listings").select("id, price_usd, ai_output, corrected, vehicle_id").eq("shop_id", shopId);
+  let query = db.from("listings").select("id, price_usd, ai_output, corrected, vehicle_id").eq("shop_id", shopId).neq("status", "removed");
   if (Array.isArray(ids) && ids.length) query = query.in("id", ids);
   if (vehicleId) query = query.eq("vehicle_id", vehicleId);
   const { data: rows, error } = await query;

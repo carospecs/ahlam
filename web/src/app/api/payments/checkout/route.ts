@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     sellerShopId = l.shop_id;
     photoUrl = l.photo_url || null;
   } else {
-    const { data: v } = await db.from("vehicles").select("*").eq("id", vehicleId).single();
+    const { data: v } = await db.from("vehicles").select("*").eq("id", vehicleId).eq("status", "active").single();
     if (!v) return NextResponse.json({ error: "This vehicle is no longer available" }, { status: 404 });
     title = `${v.year || ""} ${v.make || ""} ${v.model || ""} ${v.trim || ""}`.trim();
     amountCents = Math.round(Number(v.asking_price || 0) * 100);

@@ -21,6 +21,7 @@ export async function GET(req: Request) {
     .from("listings")
     .select("*")
     .eq("shop_id", shopId)
+    .neq("status", "removed")
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -371,4 +372,41 @@ export async function PATCH(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
+}
+
+// DELETE soft-deletes a post (status → 'removed') so it leaves the seller's
+// inventory and the public market, but the row survives for anything that
+// references it (conversations, orders, activity). Shapes, scoped to the
+// seller's own shop:
+//   { listingId }  | { listingIds }  → delete part listing(s)
+//   { vehicleId }                    → delete a vehicle post + its part listings
+export async function DELETE(req: Request) {
+  const supabase = await supabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const db = supabaseAdmin();
+  const { data: profile } = await db.from("profiles").select("shop_id").eq("id", user.id).single();
+  const shopId = profile?.shop_id;
+  if (!shopId) return NextResponse.json({ error: "No workspace" }, { status: 400 });
+
+  const body = await req.json().catch(() => ({}));
+
+  const ids: string[] = Array.isArray(body.listingIds) ? body.listingIds : body.listingId ? [body.listingId] : [];
+  if (ids.length) {
+    const { error } = await db.from("listings").update({ status: "removed" }).in("id", ids).eq("shop_id", shopId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, removed: ids.length });
+  }
+
+  if (body.vehicleId) {
+    const { error } = await db.from("vehicles").update({ status: "removed" }).eq("id", body.vehicleId).eq("shop_id", shopId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    // The car's part listings are posts from this car — they go with it.
+    const { error: pErr } = await db.from("listings").update({ status: "removed" }).eq("vehicle_id", body.vehicleId).eq("shop_id", shopId);
+    if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  return NextResponse.json({ error: "listingId, listingIds, or vehicleId required" }, { status: 400 });
 }

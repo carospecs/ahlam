@@ -495,6 +495,7 @@ function ExportModal() {
   const [price, setPrice] = useState("");
   const [desc, setDesc] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [lightbox, setLightbox] = useState<number | null>(null); // photo open in the viewer
   const [showExport, setShowExport] = useState(false);           // export overlay open
@@ -573,6 +574,20 @@ function ExportModal() {
       setSaving(false);
       close();
     } catch { csToast("Couldn't save — check your connection"); setSaving(false); }
+  }
+  // Soft-delete this post — it leaves the inventory and the public market.
+  async function deletePost() {
+    if (deleting) return;
+    if (!window.confirm(`Delete "${name || "this post"}"? It comes off the marketplace and out of your inventory.`)) return;
+    setDeleting(true);
+    try {
+      const r = await fetch("/api/listings", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: listing.id }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't delete"); setDeleting(false); return; }
+      csToast("Post deleted");
+      (window as any).csReloadData?.();
+      setDeleting(false);
+      close();
+    } catch { csToast("Couldn't delete — check your connection"); setDeleting(false); }
   }
 
   const fieldInput: React.CSSProperties = { width: "100%", border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 14, padding: "10px 12px", borderRadius: 10, boxSizing: "border-box" };
@@ -668,6 +683,9 @@ function ExportModal() {
               </button>
               <button onClick={() => setShowExport(true)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "11px 16px", borderRadius: 11, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                 <Send size={15} /> Export
+              </button>
+              <button onClick={deletePost} disabled={deleting} title="Delete this post" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 44, borderRadius: 11, border: "1px solid color-mix(in srgb, var(--signal) 45%, transparent)", background: "transparent", color: "var(--signal)", cursor: "pointer", opacity: deleting ? 0.6 : 1 }}>
+                {deleting ? <LoaderCircle size={16} style={{ animation: "spin 0.8s linear infinite" }} /> : <Trash2 size={16} />}
               </button>
             </div>
           </div>

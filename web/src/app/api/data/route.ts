@@ -32,8 +32,8 @@ export async function GET() {
   if (shopId) {
     const [shopRes, vehRes, listRes, convRes, actRes, membersRes] = await Promise.all([
       db.from("shops").select("*").eq("id", shopId).single(),
-      db.from("vehicles").select("*").eq("shop_id", shopId).order("created_at", { ascending: false }),
-      db.from("listings").select("*").eq("shop_id", shopId).order("created_at", { ascending: false }),
+      db.from("vehicles").select("*").eq("shop_id", shopId).neq("status", "removed").order("created_at", { ascending: false }),
+      db.from("listings").select("*").eq("shop_id", shopId).neq("status", "removed").order("created_at", { ascending: false }),
       db.from("conversations").select("*, messages(*)").eq("shop_id", shopId).order("created_at", { ascending: false }),
       db.from("activity_log").select("*").eq("shop_id", shopId).order("created_at", { ascending: false }),
       db.from("shop_members").select("*, profiles(display_name, avatar_url)").eq("shop_id", shopId),
@@ -194,6 +194,7 @@ function statusLabel(s: string) {
   if (s === "active") return "Posted";
   if (s === "draft") return "Draft";
   if (s === "sold") return "Sold";
+  if (s === "removed") return "Removed";
   return s;
 }
 

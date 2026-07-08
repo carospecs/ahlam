@@ -129,7 +129,7 @@ async function listLot(db: any, shopId: string, vehicleId: string, lotPrice: num
   const { data: v } = await db.from("vehicles").select("*").eq("id", vehicleId).eq("shop_id", shopId).single();
   if (!v) return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
   const { data: parts } = await db.from("listings").select("*").eq("vehicle_id", vehicleId).eq("shop_id", shopId);
-  const items = (parts || []).filter((p: any) => p.status !== "Sold" && p.status !== "sold");
+  const items = (parts || []).filter((p: any) => p.status !== "Sold" && p.status !== "sold" && p.status !== "removed");
   if (!items.length) return NextResponse.json({ error: "No parts to bundle for this vehicle." }, { status: 400 });
 
   const carName = `${v.year} ${v.make} ${v.model}`.trim();
