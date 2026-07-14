@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { vehicleAge, ageFactor } from "@/lib/age-pricing";
-import { partClass, usedPointFromBand, usedPointFallback, gradeAdjustUsed } from "@/lib/used-pricing";
+import { gradeAdjustUsed } from "@/lib/used-pricing";
 import { classifyPowertrain, isImpossiblePart, powertrainPromptLine, type PowertrainType } from "@/lib/powertrain";
 import { geminiGenerate } from "@/lib/gemini";
 import { decodeVin, normalizeVin, engineLabel, type VinInfo, type VinDecode } from "@/lib/vin";
-import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
+import { checkScanUsage, recordScanUsage, resolveShopPlan, limitMessage } from "@/lib/usage";
 import { applyVinEngine, stripSide } from "@/lib/part-enrich";
 import { markInferredParts } from "@/lib/inferred-parts";
 import { propagateImpactDamage } from "@/lib/damage-zones";
@@ -33,17 +33,21 @@ export interface PricingInsight {
   suggestedPrice: number;
   priceRange: { min: number; max: number };
   similarCount: number;
-  // How the price was produced. "formula" = the deterministic age × condition
-  // model (current). The legacy comp-ladder rungs are kept in the union so any
-  // older persisted rows still type-check.
-  source?: "formula" | "shop" | "grounded" | "ebay" | "asking" | "model";
-  // Confidence in the estimate. Mirrors the part's vision confidence; "low" when
-  // the model year was unknown (age, and therefore depreciation, is a guess).
+  // How the price was produced. "market" = the market-pricing agent (live web
+  // research, evidence-based confidence, cited comp domains); "formula" = model
+  // estimate. The legacy comp-ladder rungs are kept in the union so any older
+  // persisted rows still type-check.
+  source?: "market" | "formula" | "shop" | "grounded" | "ebay" | "asking" | "model";
+  // Confidence in the estimate. For "market" it's evidence-based (comps found);
+  // otherwise it mirrors the part's vision confidence.
   confidence?: "high" | "medium" | "low";
-  // Which pricing engine produced the number: "claude" = the blocking price pass
-  // (the authority), "gemini" = its server-side fallback, "vision" = the per-photo
-  // scan estimate that renders only when the price pass failed. Stamped client-side.
-  pricedBy?: "claude" | "gemini" | "vision";
+  // Which pricing engine produced the number: "claude-market" = the market-pricing
+  // agent (live research/cache), "claude" = the memory estimate, "gemini" = its
+  // server-side fallback, "vision" = the per-photo scan estimate that renders only
+  // when the price pass failed. Stamped client-side.
+  pricedBy?: "claude-market" | "claude" | "gemini" | "vision";
+  // Market tier only: bare domains the comps came from (e.g. ["ebay.com"]).
+  sources?: string[];
   // Transparency breakdown for the UI: the brand-new base price and the two
   // multipliers that produced suggestedPrice (newPartPrice × ageFactor × condition).
   newPartPrice?: number | null;
@@ -136,10 +140,16 @@ export interface PiiRegion { type: "license-plate" | "windshield-vin"; box: [num
 
 // Validate a model-emitted bounding box → a clean [x0,y0,x1,y1] tuple in 0–1, or undefined.
 // Guards against a stray/garbage value ever being treated as a box (and masking a whole photo).
+// The model sometimes answers on its native 0–1000 grid despite the 0–1 contract (~10% of
+// detections in photo-set testing) — normalize rather than drop: a dropped box loses the
+// part's thumbnail, and for piiRegions it would leave a license plate UNMASKED.
 function validBox(b: unknown): [number, number, number, number] | undefined {
   if (!Array.isArray(b) || b.length !== 4) return undefined;
-  const [x0, y0, x1, y1] = b.map(Number);
-  if (![x0, y0, x1, y1].every((n) => Number.isFinite(n) && n >= 0 && n <= 1)) return undefined;
+  let [x0, y0, x1, y1] = b.map(Number);
+  if (![x0, y0, x1, y1].every((n) => Number.isFinite(n) && n >= 0)) return undefined;
+  const max = Math.max(x0, y0, x1, y1);
+  if (max > 1 && max <= 1000) { x0 /= 1000; y0 /= 1000; x1 /= 1000; y1 /= 1000; }
+  if (![x0, y0, x1, y1].every((n) => n >= 0 && n <= 1)) return undefined;
   return x0 < x1 && y0 < y1 ? [x0, y0, x1, y1] : undefined;
 }
 
@@ -244,14 +254,12 @@ VEHICLE ESTIMATE ("vehicle"):
 - "newWholeCarPriceUsd": the vehicle's ORIGINAL price BRAND NEW (its MSRP / sticker price when it was first sold), in USD — NOT its current used value. Base it on the make/model/year/trim you identified. If you cannot estimate it, use null. (The system applies depreciation from the vehicle's age automatically — do not pre-depreciate it yourself.)
 - If you are unsure of any field, set it to null and lower "confidence".
 
-PRICING — report each part's USED-MARKET price. This is a USED vehicle being parted out by a dismantler:
-- "usedPartPriceUsd": the typical price this part ACTUALLY SELLS FOR as a USED/recycled part — what dismantlers and salvage yards get for it on car-part.com, eBay sold listings, and LKQ for THIS exact make/model/year/trim, in good used (Grade B) condition. NEVER the new/OEM/MSRP/aftermarket-new price — a used part sells for a FRACTION of new.
-- The system applies the condition-grade adjustment itself — report the good-used baseline and let the grade (A/B/C) you already assigned carry the wear. Do not zero a damaged part; grade it C instead.
-- BE CONSERVATIVE ON LARGE PAINTED BODY PANELS (doors, liftgate/tailgate, hood, quarter panels, fenders, bumper covers, roof): they move slowly, cost a lot to ship, and face heavy local supply — they usually sell near the LOW end of any listed range, far below what body shops charge. A used door for a mainstream vehicle is typically $100–$400, not $1,000+.
-- Small fast-moving parts (mirrors, lamps, glass, modules, sensors) hold value better and sell nearer the middle of their range.
+PRICING — report each part's USED-LISTING price. This is a USED vehicle being parted out by a dismantler:
+- "usedPartPriceUsd": the typical price a dismantler LISTS this part for as a USED/recycled part — the realistic ASKING price you'd see on car-part.com, eBay, and dismantler listings for THIS exact make/model/year/trim, in good used (Grade B) condition. NEVER the new/OEM/MSRP/aftermarket-new price (a used part lists for a FRACTION of new), and not a fire-sale or wholesale clearance price either — the price a yard would actually put on the listing.
+- The system applies the condition-grade handling itself — report the good-used baseline and let the grade (A/B/C) you already assigned carry the wear. Do not zero a damaged part; grade it C instead.
 - Left & right of a paired part have the SAME price — don't differ them. "Wheel / Rim" and "Tire" each get their own price.
 - Use realistic round numbers. If you genuinely have no basis for a price, use null rather than guessing.
-- "usedPartPriceLowUsd" / "usedPartPriceHighUsd": the realistic USED-market RANGE — what the same part sells for across condition/market variation. low ≤ usedPartPriceUsd ≤ high, always. Keep it TIGHT (±15% or less) when you know this part and vehicle well; make it WIDE when you're less sure. If usedPartPriceUsd is null, both are null.
+- "usedPartPriceLowUsd" / "usedPartPriceHighUsd": the realistic USED-listing RANGE — what the same part lists for across condition/market variation. low ≤ usedPartPriceUsd ≤ high, always. Keep it TIGHT (±15% or less) when you know this part and vehicle well; make it WIDE when you're less sure. If usedPartPriceUsd is null, both are null.
 
 NO INFERRED / GUESSED PARTS:
 - Catalog ONLY what you can actually see in the photo. If a part is not visible, do NOT list it — never infer, guess, or assume.
@@ -327,7 +335,7 @@ function vinContext(decoded: { make?: string | null; model?: string | null; year
     decoded.drivetrain ? `drivetrain ${decoded.drivetrain}` : null,
   ].filter(Boolean).join(", ");
   return `\n\nKNOWN SOURCE VEHICLE — decoded from its VIN; treat as GROUND TRUTH and override any visual guess: ${id}${specs ? ` (${specs})` : ""}.` +
-    ` Classify each part as the correct part FOR THIS EXACT VEHICLE, set its "fitment" to this vehicle, and base "usedPartPriceUsd" on what a USED part for this make/model/year/trim${decoded.engine ? "/engine" : ""} actually sells for.` +
+    ` Classify each part as the correct part FOR THIS EXACT VEHICLE, set its "fitment" to this vehicle, and base "usedPartPriceUsd" on the typical dismantler LISTING price for a USED part for this make/model/year/trim${decoded.engine ? "/engine" : ""}.` +
     ` Only include a part if it visibly belongs to this vehicle.`;
 }
 
@@ -418,32 +426,43 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     return NextResponse.json({ ok: false, userMessage: "Sign in required", internalError: "no auth" }, { status: 401 });
   }
 
-  // Plan usage gate: the Solo plan caps AI scans per month. Resolve the shop +
-  // plan and block when over quota. Fail-open (allows the scan) if usage isn't
-  // migrated yet or the lookup errors.
-  let scanShopId: string | null = null;
-  try {
-    const udb = supabaseAdmin();
-    const { data: prof } = await udb.from("profiles").select("shop_id").eq("id", user.id).single();
-    scanShopId = (prof?.shop_id as string) || null;
-    if (scanShopId) {
-      const { data: shopRow } = await udb.from("shops").select("plan").eq("id", scanShopId).single();
-      const usage = await checkUsage(udb, scanShopId, (shopRow?.plan as string) || null, "scan");
-      if (!usage.allowed) {
-        return NextResponse.json(
-          { ok: false, userMessage: limitMessage("scan", usage.limit ?? 0), internalError: "scan quota exceeded" },
-          { status: 402 },
-        );
-      }
-    }
-  } catch { /* fail-open: never block a scan on a usage-lookup error */ }
-
-  let body: { imageBase64?: string; imageUrl?: string; photoContext?: string; vin?: { vin?: string; make?: string; model?: string; year?: number } };
+  let body: { imageBase64?: string; imageUrl?: string; photoContext?: string; scanBatch?: string; scanFirst?: boolean; vin?: { vin?: string; make?: string; model?: string; year?: number } };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json(busyResult("bad request body"), { status: 400 });
   }
+
+  // Plan usage gate: plans cap AI car scans per month (Growth 5, Max 20,
+  // Ultimate unlimited; the free trial and founding month cap too). All photos
+  // of one car share a scanBatch id and count as ONE scan. Block when over
+  // quota; fail-open (allows the scan) if usage isn't migrated or lookup errors.
+  const scanBatch = typeof body.scanBatch === "string" && body.scanBatch.length <= 64 ? body.scanBatch : null;
+  const scanFirst = body.scanFirst !== false;
+  let scanShopId: string | null = null;
+  try {
+    const udb = supabaseAdmin();
+    const { shopId, plan, failed } = await resolveShopPlan(udb, user.id);
+    scanShopId = shopId;
+    if (!scanShopId && !failed) {
+      // Signups are open: without a workspace there is nothing to meter, so a
+      // shop-less account would get unmetered scans. Make them onboard first.
+      // (A failed lookup stays fail-open, matching the rest of usage metering.)
+      return NextResponse.json(
+        { ok: false, userMessage: "Finish creating your workspace, then scan away.", internalError: "no shop for scan metering" },
+        { status: 403 },
+      );
+    }
+    if (scanShopId) {
+      const usage = await checkScanUsage(udb, scanShopId, plan, scanBatch);
+      if (!usage.allowed) {
+        return NextResponse.json(
+          { ok: false, userMessage: limitMessage("scan", usage.limit ?? 0, plan), internalError: "scan quota exceeded" },
+          { status: 402 },
+        );
+      }
+    }
+  } catch { /* fail-open: never block a scan on a usage-lookup error */ }
 
   const imageUrl =
     body.imageUrl ??
@@ -707,16 +726,17 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     if (powertrain.source !== "default") data = data.filter((p) => !isImpossiblePart(p.partName, powertrain.type));
 
     // ── PRICING (lib/used-pricing) ───────────────────────────────────────────
-    // usedPartPriceUsd is the model's good-used (Grade B) market anchor. The final
-    // suggested price = point positioned in the used band by PART CLASS (painted
-    // panels → low end; fast movers → middle) × GRADE factor (A ×1.15, B ×1.0,
-    // C null — heavily damaged stays unpriced for the seller to judge).
+    // usedPartPriceUsd is the model's good-used (Grade B) market anchor and IS the
+    // base price (2026-07-03: class positioning removed — it double-discounted an
+    // already-conservative estimate). GRADE only gates: A/B price as-is (the ×1.15
+    // A-premium was also removed — it overvalued parts), C null — heavily damaged
+    // stays unpriced for the seller to judge; the band renders as confidence.
     for (const p of data) {
       const grade: ConditionGrade = (["A", "B", "C"] as const).includes(p.condition) ? p.condition : "B";
-      const cls = partClass(p.partName);
-      const base = p.usedPartPriceLowUsd != null && p.usedPartPriceHighUsd != null
-        ? usedPointFromBand(p.usedPartPriceLowUsd, p.usedPartPriceHighUsd, cls)
-        : (p.usedPartPriceUsd != null ? usedPointFallback(p.usedPartPriceUsd, cls) : null);
+      const base = p.usedPartPriceUsd
+        ?? (p.usedPartPriceLowUsd != null && p.usedPartPriceHighUsd != null
+          ? Math.round((p.usedPartPriceLowUsd + p.usedPartPriceHighUsd) / 2)
+          : null);
       p.usedPartPriceUsd = base; // normalized anchor — what pair-parity shares
       const price = gradeAdjustUsed(base, grade);
       p.suggestedPriceUsd = price;
@@ -758,7 +778,8 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
     }
 
     // Count this successful scan against the shop's monthly quota (best-effort).
-    void recordUsage(supabaseAdmin(), scanShopId, "scan");
+    // The batch id dedupes the per-photo calls so the whole car counts once.
+    void recordScanUsage(supabaseAdmin(), scanShopId, scanBatch, scanFirst);
     return NextResponse.json({ ok: true, data, vehicle, vehicleFront, piiRegions });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

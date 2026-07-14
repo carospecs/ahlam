@@ -19,17 +19,63 @@ import { buildListingText, buildVehicleText } from "../data";
 import { useData, csToast } from "../Dashboard";
 import { WARRANTY_DAYS, effectiveWarranty, warrantyLabel } from "@/lib/warranty";
 import { fileToJpegDataUrl } from "@/lib/image";
+import { prepareChannelsFor } from "@/lib/plan-limits";
+import { EXTENSION_URL } from "@/lib/extension";
 
 // Platforms with no listing API — we prepare the text + photos and open the
-// posting page so the seller just pastes and hits post.
-const PREPARE_CHANNELS = [
+// posting page so the seller just pastes and hits post. Channels flagged `soon`
+// render as "Coming soon" and can't be picked yet.
+type PrepareChannel = { key: string; name: string; icon: typeof Share2; color: string; url: string; note: string; soon?: boolean };
+const PREPARE_CHANNELS: PrepareChannel[] = [
   { key: "facebook", name: "Facebook Marketplace", icon: Share2, color: "#1877f2", url: "https://www.facebook.com/marketplace/create/item", note: "No posting API — we copy your text, save the photos, and open the form to paste & drag in. For bulk, use the Facebook catalog CSV below." },
   { key: "offerup", name: "OfferUp", icon: Tag, color: "var(--accent)", url: "https://offerup.com/post/", note: "Copies text and saves your photos so you just paste & drag them in." },
-  { key: "craigslist", name: "Craigslist", icon: Globe, color: "var(--success)", url: "https://post.craigslist.org/", note: "Copies the formatted listing text and saves photos; pick your city." },
+  { key: "craigslist", name: "Craigslist", icon: Globe, color: "var(--success)", url: "https://post.craigslist.org/", note: "In development — Craigslist posting is coming soon.", soon: true },
 ];
+const LIVE_CHANNELS = PREPARE_CHANNELS.filter((c) => !c.soon);
+
+// One shared message for every plan-locked cross-post surface. Generic on
+// purpose: it covers both Growth (eBay-only) and an expired free month.
+const LOCKED_CHANNEL_MSG = "This channel isn't included in your current plan. Upgrade under Settings > Billing.";
+
+// Detect the Ahlam Auto-Poster browser extension (it sets this attribute on
+// ahlam.io). Polls briefly because the content script can land after mount.
+function useAhlamExtension(): boolean {
+  const [ext, setExt] = React.useState(false);
+  React.useEffect(() => {
+    const has = () => document.documentElement.getAttribute("data-ahlam-autopost") === "1";
+    if (has()) { setExt(true); return; }
+    let n = 0;
+    const id = setInterval(() => { if (has()) { setExt(true); clearInterval(id); } else if (++n > 12) clearInterval(id); }, 300);
+    return () => clearInterval(id);
+  }, []);
+  return ext;
+}
+
+// Growth is eBay-only: its prepareChannels list excludes facebook/offerup.
+function lockedChannel(planId: string | null | undefined, key: string): boolean {
+  const allowed = prepareChannelsFor(planId);
+  return allowed != null && !allowed.includes(key);
+}
+
+// Install prompt shown wherever cross-posting happens without the extension.
+function ExtensionPromo({ compact }: { compact?: boolean }) {
+  if (isMobileDevice()) return null; // phones use the native share sheet instead
+  return (
+    <div style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: compact ? 12 : 12.5, color: "var(--muted)", lineHeight: 1.5, background: "var(--accent-tint)", border: "1px solid color-mix(in srgb, var(--accent) 26%, transparent)", borderRadius: 10, padding: compact ? "9px 12px" : "11px 14px" }}>
+      <Info size={15} color="var(--accent)" style={{ flexShrink: 0, marginTop: 1 }} />
+      <span>
+        <strong style={{ color: "var(--foreground)" }}>Install the Ahlam Auto-Poster extension</strong> and we open Facebook Marketplace and OfferUp with the form already filled. You just review and hit Publish.{" "}
+        <a href={EXTENSION_URL} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 700, textDecoration: "none" }}>Get it from the Chrome Web Store</a>
+      </span>
+    </div>
+  );
+}
 
 export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
   const { listings, vehicles, shop } = useData();
+  const ext = useAhlamExtension();
+  const planId = (shop?.planId as string | undefined) ?? null;
+  const menuChannels = LIVE_CHANNELS.filter((c) => !lockedChannel(planId, c.key));
   const ready = listings.filter((l: any) => l.status === "Draft" || l.status === "Posted");
 
   // Resolve a listing's car from its vehicleId (live data has no inline name).
@@ -275,29 +321,42 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
       <div>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Other marketplaces</div>
         <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>These don't allow third-party auto-posting — we prep your text + photos and open the form so you just paste.</div>
+        {!ext && <div style={{ marginBottom: 12 }}><ExtensionPromo /></div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
-          {PREPARE_CHANNELS.map((c) => (
-            <Card key={c.name} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          {PREPARE_CHANNELS.map((c) => {
+            const locked = !c.soon && lockedChannel(planId, c.key);
+            return (
+            <Card key={c.name} style={{ display: "flex", gap: 12, alignItems: "flex-start", opacity: c.soon || locked ? 0.6 : 1 }}>
               <span style={{ width: 38, height: 38, borderRadius: 10, background: "var(--surface2)", display: "grid", placeItems: "center", flexShrink: 0 }}><c.icon size={18} color={c.color} /></span>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700 }}>{c.name}</div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>{c.note}</div>
+                <div style={{ fontSize: 13.5, fontWeight: 700 }}>
+                  {c.name}
+                  {c.soon && <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 45%, transparent)", borderRadius: 999, padding: "1.5px 7px", verticalAlign: "middle" }}>Coming soon</span>}
+                  {locked && <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 45%, transparent)", borderRadius: 999, padding: "1.5px 7px", verticalAlign: "middle" }}>Upgrade</span>}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>
+                  {locked ? LOCKED_CHANNEL_MSG : c.note}
+                </div>
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       </div>
 
       {/* Car-Part.com / URG — the wholesale salvage channel (CSV / feed) */}
       <div>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Car-Part.com · URG <span style={{ color: "var(--muted)", fontWeight: 500 }}>wholesale</span></div>
-        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>The pro wholesale channel — repair shops and the wrecker network search it from their estimating software. Export your priced parts as a recycler-standard interchange CSV, then upload it in Car-Part.com&apos;s inventory tool (or map it into a URG-compatible feed).</div>
-        <Card style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+          Car-Part.com · URG <span style={{ color: "var(--muted)", fontWeight: 500 }}>wholesale</span>
+          <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 45%, transparent)", borderRadius: 999, padding: "1.5px 7px", verticalAlign: "middle" }}>Coming soon</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>The pro wholesale channel — repair shops and the wrecker network search it from their estimating software. The recycler-standard interchange CSV export for Car-Part.com&apos;s inventory tool (and URG-compatible feeds) is in development.</div>
+        <Card style={{ display: "flex", gap: 12, alignItems: "flex-start", opacity: 0.6 }}>
           <span style={{ width: 38, height: 38, borderRadius: 10, background: "var(--surface2)", display: "grid", placeItems: "center", flexShrink: 0 }}><Boxes size={18} color="var(--accent)" /></span>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 13.5, fontWeight: 700 }}>Inventory CSV</div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>Dealer, Stock #, Year/Make/Model, Part Type, <strong>Interchange/Hollander #</strong>, Grade, Price, Location. Add Hollander/interchange numbers to your parts for the best matching.</div>
-            <button onClick={exportCarPartCSV} disabled={!ready.length} style={{ ...advBtn, marginTop: 10 }}><Download size={16} color="var(--accent)" /> Download Car-Part CSV{ready.length ? ` · ${ready.length}` : ""}</button>
+            <button disabled style={{ ...advBtn, marginTop: 10, cursor: "not-allowed", opacity: 0.7 }}><Download size={16} color="var(--accent)" /> Car-Part CSV — coming soon</button>
           </div>
         </Card>
       </div>
@@ -326,7 +385,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
                     {busy === `car:${v.id}` ? <LoaderCircle size={14} className="spin" /> : <Car size={14} />} List on eBay
                   </button>
                 ) : null}
-                <PrepareMenu channels={PREPARE_CHANNELS} onPick={(ch) => prepareCar(ch, v)} />
+                <PrepareMenu channels={menuChannels} onPick={(ch) => prepareCar(ch, v)} />
               </div>
             ))}
           </Card>
@@ -388,7 +447,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
                           {busy === `part:${l.id}` ? <LoaderCircle size={14} className="spin" /> : <ShoppingBag size={14} />} List on eBay
                         </button>
                       ) : null}
-                      <PrepareMenu channels={PREPARE_CHANNELS} onPick={(ch) => prepareAndOpen(ch, l)} />
+                      <PrepareMenu channels={menuChannels} onPick={(ch) => prepareAndOpen(ch, l)} />
                     </div>
                   ))}
                 </Card>
@@ -471,6 +530,7 @@ const advBtn: React.CSSProperties = { display: "inline-flex", alignItems: "cente
 // Small dropdown to prepare a listing for a non-API channel.
 function PrepareMenu({ channels, onPick }: { channels: typeof PREPARE_CHANNELS; onPick: (c: typeof PREPARE_CHANNELS[number]) => void }) {
   const [open, setOpen] = React.useState(false);
+  const empty = channels.length === 0; // e.g. Growth: eBay-only, nothing to prep
   const ref = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     function onDoc(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
@@ -478,7 +538,10 @@ function PrepareMenu({ channels, onPick }: { channels: typeof PREPARE_CHANNELS; 
   }, []);
   return (
     <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
-      <button onClick={() => setOpen((o) => !o)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+      <button
+        onClick={() => { if (empty) { csToast(LOCKED_CHANNEL_MSG); return; } setOpen((o) => !o); }}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: empty ? 0.55 : 1 }}
+      >
         <Send size={13} /> Post elsewhere <ChevronDown size={13} />
       </button>
       {open && (
@@ -604,20 +667,20 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   const [saving, setSaving] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   // Which no-API marketplaces to open & fill (extension flow). Seeded with the
-  // channel the seller entered from; they can tick on the others.
-  const [selected, setSelected] = React.useState<Set<string>>(() => new Set([(data.channel as any).key]));
-  const toggleSel = (k: string) => setSelected((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  // channel the seller entered from; they can tick on the others. Channels the
+  // plan doesn't include (Growth is eBay-only) can't be selected.
+  const planId = (shop?.planId as string | undefined) ?? null;
+  const [selected, setSelected] = React.useState<Set<string>>(
+    () => new Set(lockedChannel(planId, (data.channel as any).key) ? [] : [(data.channel as any).key]),
+  );
+  const toggleSel = (k: string) => {
+    if (lockedChannel(planId, k)) { csToast(LOCKED_CHANNEL_MSG); return; }
+    setSelected((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  };
 
-  // Detect the Ahlam Auto-Poster browser extension (it sets this attribute on
-  // ahlam.io). When present we hand it the listing and it fills the form for you.
-  const [ext, setExt] = React.useState(false);
-  React.useEffect(() => {
-    const has = () => document.documentElement.getAttribute("data-ahlam-autopost") === "1";
-    if (has()) { setExt(true); return; }
-    let n = 0;
-    const id = setInterval(() => { if (has()) { setExt(true); clearInterval(id); } else if (++n > 12) clearInterval(id); }, 300);
-    return () => clearInterval(id);
-  }, []);
+  // Detect the Ahlam Auto-Poster browser extension. When present we hand it the
+  // listing and it fills the form for you.
+  const ext = useAhlamExtension();
 
   // Live post text rebuilt from the edited fields (what gets pasted).
   const text = isCar
@@ -657,6 +720,12 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
     // (With the extension installed, the primary button calls
     // confirmAndOpenSelected instead — opens every chosen marketplace and fills
     // each. This path is the no-extension fallback: share / copy-and-open.)
+
+    // 1) Plan gate: the plan may not include this channel (Growth is eBay-only).
+    if (lockedChannel(planId, (channel as any).key)) {
+      csToast(LOCKED_CHANNEL_MSG);
+      return;
+    }
 
     // 2) Phone → native share sheet so the photos + text go into the real APP.
     if (isMobileDevice() && typeof navigator !== "undefined" && (navigator as any).share) {
@@ -804,15 +873,17 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
 
         {/* Pick where to post (extension only) + the open-&-fill button */}
         <div style={{ padding: "12px 16px", display: "grid", gap: 10 }}>
+          {!ext && <ExtensionPromo compact />}
           {ext && (
             <div style={{ display: "grid", gap: 7 }}>
               <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 700 }}>Post to (tap to choose):</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {PREPARE_CHANNELS.map((c) => {
+                {LIVE_CHANNELS.map((c) => {
                   const on = selected.has(c.key);
+                  const locked = lockedChannel(planId, c.key);
                   return (
-                    <button key={c.key} onClick={() => toggleSel(c.key)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 12px", borderRadius: 999, border: `1.5px solid ${on ? c.color : "var(--line)"}`, background: on ? `color-mix(in srgb, ${c.color} 14%, transparent)` : "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                      <c.icon size={14} color={c.color} /> {c.name.replace(" Marketplace", "")} {on ? "✓" : ""}
+                    <button key={c.key} onClick={() => toggleSel(c.key)} title={locked ? LOCKED_CHANNEL_MSG : undefined} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 12px", borderRadius: 999, border: `1.5px solid ${on ? c.color : "var(--line)"}`, background: on ? `color-mix(in srgb, ${c.color} 14%, transparent)` : "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: locked ? 0.45 : 1 }}>
+                      <c.icon size={14} color={c.color} /> {c.name.replace(" Marketplace", "")} {on ? "✓" : locked ? "· locked" : ""}
                     </button>
                   );
                 })}

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { geocode } from "@/lib/geocode";
+import { sendMail, FOUNDER_REVIEWERS } from "@/lib/mailer";
+import { buildWelcomeEmail, ONBOARDING_FROM, ONBOARDING_CC } from "@/lib/onboarding-email";
 
 export const runtime = "nodejs";
 
@@ -56,23 +58,61 @@ export async function POST(req: NextRequest) {
   const type = accountType === "individual" ? "individual" : "shop";
   const shopLocation = location || address || null;
 
-  // Try to persist account_type; if the column doesn't exist yet, fall back gracefully.
-  let { data: shop, error: shopErr } = await db
-    .from("shops").insert({
-      name: name.trim(), location: shopLocation, business_phone: phone || null,
-      lat, lng, zip_code: zip, address_line: address || null,
-      account_type: type,
-    }).select().single();
-  if (shopErr && /account_type/.test(shopErr.message || "")) {
-    ({ data: shop, error: shopErr } = await db.from("shops").insert({
-      name: name.trim(), location: shopLocation, business_phone: phone || null,
-      lat, lng, zip_code: zip, address_line: address || null,
-    }).select().single());
+  // Launch grants: everyone starts with a free month (plan "starter"). Waitlist
+  // members get the founding month instead — every top-tier feature unlocked,
+  // 5 AI car scans, unlimited manual posting (enforced in lib/plan-limits.ts).
+  // Every new shop starts on the free month (a Growth month). "founder" is the
+  // founders' own full-access plan, assigned by hand from the founder console.
+  const plan = "starter";
+  const trialEndsAt = new Date(Date.now() + 30 * 86400000).toISOString();
+
+  // Try to persist account_type; if a column doesn't exist yet, fall back
+  // gracefully. Only a column-shaped error drops a field, and plan +
+  // trial_ends_at travel as a pair (a trial plan without an end date would
+  // read as already expired).
+  const shopRow: Record<string, unknown> = {
+    name: name.trim(), location: shopLocation, business_phone: phone || null,
+    lat, lng, zip_code: zip, address_line: address || null,
+    account_type: type, plan, trial_ends_at: trialEndsAt,
+  };
+  const columnError = (msg: string, col: string) =>
+    msg.includes(col) && /column|schema cache|does not exist/i.test(msg);
+  let { data: shop, error: shopErr } = await db.from("shops").insert(shopRow).select().single();
+  for (let attempt = 0; shopErr && attempt < 3; attempt++) {
+    let dropped = false;
+    const msg = shopErr.message || "";
+    if ("account_type" in shopRow && columnError(msg, "account_type")) { delete shopRow.account_type; dropped = true; }
+    if (("plan" in shopRow && columnError(msg, "plan")) || ("trial_ends_at" in shopRow && columnError(msg, "trial_ends_at"))) {
+      delete shopRow.plan; delete shopRow.trial_ends_at; dropped = true;
+    }
+    if (!dropped) break;
+    ({ data: shop, error: shopErr } = await db.from("shops").insert(shopRow).select().single());
   }
   if (shopErr || !shop) return NextResponse.json({ error: shopErr?.message || "Could not create account" }, { status: 500 });
 
   await db.from("shop_members").insert({ shop_id: shop.id, user_id: user.id, role: "owner" });
   await db.from("profiles").update({ shop_id: shop.id }).eq("id", user.id);
+
+  // Onboarding on autopilot: the moment a shop exists, send the welcome email
+  // (docs/onboarding/ONBOARDING_KIT.md) from Andy with Mohammad CC'd so both
+  // founders see every new shop. Awaited (serverless would drop a floating
+  // promise after the response), but sendMail never throws: a mail hiccup
+  // logs and returns false instead of failing the signup.
+  if (user.email) {
+    const firstName = String(user.user_metadata?.full_name || "").trim().split(/\s+/)[0];
+    const { subject, text } = buildWelcomeEmail({
+      name: firstName || name.trim(),
+      appUrl: process.env.NEXT_PUBLIC_SITE_URL || "https://ahlam.io/adminhost",
+    });
+    await sendMail({
+      to: user.email,
+      from: ONBOARDING_FROM,
+      cc: ONBOARDING_CC,
+      replyTo: FOUNDER_REVIEWERS, // "hit reply" reaches both founders
+      subject,
+      text,
+    });
+  }
 
   return NextResponse.json({ ok: true, shop, geo: lat ? { lat, lng, zip } : null });
 }

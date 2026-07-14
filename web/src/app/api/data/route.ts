@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { normalizeGrade } from "@/lib/grade";
+import { effectivePlan, planLabel } from "@/lib/plan-limits";
 
 export async function GET() {
   const supabase = await supabaseServer();
@@ -21,7 +22,7 @@ export async function GET() {
 
   const shopId = profile?.shop_id || null;
 
-  let shop: any = { name: "", location: "", phone: "", members: [], plan: "Pro", trialDaysLeft: 18 };
+  let shop: any = { name: "", location: "", phone: "", members: [], plan: "Pro", planId: "pro", trialDaysLeft: 18 };
   let vehicles: any[] = [];
   let listings: any[] = [];
   let threads: any[] = [];
@@ -31,8 +32,8 @@ export async function GET() {
   if (shopId) {
     const [shopRes, vehRes, listRes, convRes, actRes, membersRes] = await Promise.all([
       db.from("shops").select("*").eq("id", shopId).single(),
-      db.from("vehicles").select("*").eq("shop_id", shopId).order("created_at", { ascending: false }),
-      db.from("listings").select("*").eq("shop_id", shopId).order("created_at", { ascending: false }),
+      db.from("vehicles").select("*").eq("shop_id", shopId).neq("status", "removed").order("created_at", { ascending: false }),
+      db.from("listings").select("*").eq("shop_id", shopId).neq("status", "removed").order("created_at", { ascending: false }),
       db.from("conversations").select("*, messages(*)").eq("shop_id", shopId).order("created_at", { ascending: false }),
       db.from("activity_log").select("*").eq("shop_id", shopId).order("created_at", { ascending: false }),
       db.from("shop_members").select("*, profiles(display_name, avatar_url)").eq("shop_id", shopId),
@@ -104,10 +105,19 @@ export async function GET() {
         part: c.part_name === "CaroSpecs" ? "Ahlam" : (c.part_name || ""), unread: c.unread || 0,
         buyerId: c.buyer_id || null,
         time: c.last_time || "", avatar: c.contact_avatar || c.contact_name?.slice(0, 2).toUpperCase(),
-        messages: (c.messages || []).map((m: any) => ({
-          from: m.sender === "me" ? "me" : "them", text: m.body, time: m.time || "",
-        })),
+        // Sort by real timestamp and carry it (plus attachments) to the client,
+        // which formats times in the VIEWER's timezone — the legacy `time` label
+        // was rendered from the server clock and is only a fallback now.
+        messages: (c.messages || [])
+          .slice()
+          .sort((a: any, b: any) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+          .map((m: any) => ({
+            from: m.sender === "me" ? "me" : "them", text: m.body, time: m.time || "",
+            at: m.created_at || null,
+            attachments: Array.isArray(m.attachments) ? m.attachments : [],
+          })),
       }));
+      threads.forEach((t: any) => { const last = t.messages[t.messages.length - 1]; t.lastAt = last?.at || null; });
 
       // Attach online status for each unique buyer.
       const buyerIds = [...new Set(threads.map((t: any) => t.buyerId).filter(Boolean))];
@@ -138,12 +148,14 @@ export async function GET() {
       const s = shopRes.data;
       const trialEnd = s.trial_ends_at ? new Date(s.trial_ends_at) : null;
       const trialLeft = trialEnd ? Math.max(0, Math.ceil((trialEnd.getTime() - Date.now()) / 86400000)) : 0;
-      const planName = s.plan || "Pro";
+      // planId is what limits are enforced against (an expired free month
+      // becomes "free"); plan stays the display label.
+      const planId = effectivePlan(s.plan, s.trial_ends_at);
       shop = {
         id: s.id, name: s.name, location: s.location || "",
         phone: s.business_phone || "", email: s.email || "", website: s.website || "",
         description: s.description || "", hours: s.hours || "", logoUrl: s.logo_url || null,
-        coverUrl: s.cover_url || null, members, plan: planName, trialDaysLeft: trialLeft,
+        coverUrl: s.cover_url || null, members, plan: planLabel(s.plan), planId, trialDaysLeft: trialLeft,
         defaultWarrantyDays: typeof s.default_warranty_days === "number" ? s.default_warranty_days : 30,
         returnsPolicy: s.returns_policy || "",
       };
@@ -182,6 +194,7 @@ function statusLabel(s: string) {
   if (s === "active") return "Posted";
   if (s === "draft") return "Draft";
   if (s === "sold") return "Sold";
+  if (s === "removed") return "Removed";
   return s;
 }
 

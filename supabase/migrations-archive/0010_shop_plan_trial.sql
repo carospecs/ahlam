@@ -20,18 +20,22 @@ update shops set trial_ends_at = created_at + interval '30 days'
 
 -- Public marketplace: anyone can see active listings and vehicles from other
 -- shops. These are intentionally permissive since the marketplace is public.
-create policy if not exists "public read active listings" on listings
+drop policy if exists "public read active listings" on listings;
+create policy "public read active listings" on listings
   for select using (status = 'active');
 
-create policy if not exists "public read active vehicles" on vehicles
+drop policy if exists "public read active vehicles" on vehicles;
+create policy "public read active vehicles" on vehicles
   for select using (status = 'active');
 
 -- Shops: anyone can read name/location for marketplace display
-create policy if not exists "public read shop info" on shops
+drop policy if exists "public read shop info" on shops;
+create policy "public read shop info" on shops
   for select using (true);
 
 -- Disable anon key from directly reading profiles (must go through API)
-create policy if not exists "users read own profile" on profiles
+drop policy if exists "users read own profile" on profiles;
+create policy "users read own profile" on profiles
   for select using (auth.uid() = id);
 
 -- ---------------------------------------------------------------------------

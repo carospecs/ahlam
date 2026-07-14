@@ -35,9 +35,24 @@ cd web && pnpm install && pnpm dev      # http://localhost:3000
 # 3. App (mobile)
 cd app && pnpm install && pnpm start    # Expo dev server
 
-# 4. Database
-#    Create a Supabase project, then run supabase/migrations/*.sql in the SQL editor.
+# 4. Database (local — no production access needed)
+#    Requires Docker (OrbStack/Docker Desktop) + the Supabase CLI.
+supabase start                          # local stack on ports 54341-54350
+supabase db reset                       # applies supabase/migrations/*.sql + supabase/seed.sql
 ```
+
+### Local database notes
+
+- `supabase start` prints the local **API URL** and **anon key** — use those in
+  `web/.env.local` as `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+  Local Studio: http://localhost:54343
+- `supabase/seed.sql` is **deliberately not in git** (it's a snapshot of real data,
+  with credentials stripped). Ask Mohammad for the current file and drop it into
+  `supabase/` before `supabase db reset`. Without it you still get the full
+  schema, just empty tables.
+- The production database and Vercel are owner-only. All development happens
+  against the local stack; ship changes as a PR — merging to `main` requires
+  Mohammad's approval (enforced by branch protection).
 
 ## API keys / services required
 

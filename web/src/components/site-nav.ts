@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Warehouse, Car, Wrench, Globe2, User } from "lucide-react";
+import { Warehouse, Car, Wrench } from "lucide-react";
 
 // Single source of truth for the marketing site's audience pages and competitor
 // comparisons. Imported by SiteHeader (nav dropdown), SiteFooter, the /audiences
@@ -17,8 +17,6 @@ export const AUDIENCES: Audience[] = [
   { slug: "salvage-yards", nav: "Salvage & dismantling yards", title: "salvage & dismantling yards", tagline: "Turn a whole car into priced, posted listings without a parts expert on staff.", icon: Warehouse },
   { slug: "used-car-dealers", nav: "Used car & wholesale dealers", title: "used car & wholesale dealers", tagline: "Recover real money from trade-ins and aged units by parting what won't retail.", icon: Car },
   { slug: "repair-shops", nav: "Mechanics & repair shops", title: "mechanics & repair shops", tagline: "Sell the good parts off cars you scrap instead of paying to haul them away.", icon: Wrench },
-  { slug: "parts-exporters", nav: "Exporters & resellers", title: "exporters & resellers", tagline: "Catalog and price high volumes of mixed inventory in a fraction of the time.", icon: Globe2 },
-  { slug: "individual-sellers", nav: "Individual sellers & flippers", title: "individual sellers & flippers", tagline: "Flip a parts car from your driveway with listings that look professional.", icon: User },
 ];
 
 export function getAudience(slug: string): Audience | undefined {

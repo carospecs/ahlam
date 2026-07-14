@@ -165,6 +165,151 @@ export const GUIDES: Guide[] = [
       { q: "Do I need to replace my existing system?", a: "Not necessarily. Many yards layer an AI listing tool on top of their current workflow to speed up the identify-and-price step that software has historically left to staff expertise." },
     ],
   },
+  {
+    slug: "ahlam-vs-car-part-ebay-hollander-spreadsheets",
+    title: "Ahlam vs Car-Part.com, eBay, Hollander, and Spreadsheets: A Fair Comparison",
+    description:
+      "How Ahlam compares to Car-Part.com, listing on eBay by hand, Hollander and Checkmate yard systems, and spreadsheets. Ahlam identifies, grades, and prices every part from a photo, then writes and posts the listing.",
+    category: "Software",
+    readMinutes: 8,
+    updated: "2026-07-04",
+    image: "/img/compare.webp",
+    intro:
+      "Most tools start after the hard part is done. They store a part you already identified, or list a price you already set. Ahlam starts at the photo: it identifies every sellable part, grades its condition, prices it from real market comps, then writes the listing and posts it. Here is how that compares to the tools small yards actually weigh, honestly, including where each alternative genuinely fits.",
+    sections: [
+      {
+        heading: "The seven jobs, side by side",
+        paragraphs: [
+          "Compare any of these options on the same seven jobs: identifying the part from a photo, grading condition on a consistent A, B, C rubric, pricing from real market comps, writing the listing, posting to eBay and more in one tap, working for a two-person yard, and starting free.",
+          "Most tools handle the storing and the listing. Ahlam is the only one that does the identifying, grading, and pricing first. Car-Part.com, eBay, and yard systems offer partial pricing help (you can search what others ask), and eBay and yard systems can partially automate posting. None of them looks at a photo and tells you what the part is, what shape it is in, and what it should sell for.",
+        ],
+      },
+      {
+        heading: "Ahlam vs Car-Part.com",
+        paragraphs: [
+          "Car-Part.com is the largest used-parts locator in the trade, the place buyers and yards have searched for decades to find a specific part sitting in stock somewhere.",
+          "But it shows what you have already typed up and priced. You bring the part name, the fitment, the grade, and the number, then it lists and locates it.",
+          "Ahlam works a step earlier. It reads a photo, identifies the part, grades its condition, and prices it from real comps, then hands you a finished listing ready for everywhere you sell, with a direct Car-Part.com feed coming soon.",
+        ],
+        bullets: [
+          "Where Car-Part.com fits: decades of buyer trust, deep interchange and fitment data, and the go-to network when a buyer needs one specific part.",
+          "Where Ahlam wins: identifies and grades the part for you straight from a photo, prices from live market comps instead of your own guess, and posts to eBay, Facebook, OfferUp, and your own storefront too.",
+        ],
+      },
+      {
+        heading: "Ahlam vs listing on eBay by hand",
+        paragraphs: [
+          "eBay is where a huge share of used-parts buyers already shop, and its sold-listing history is a genuine pricing signal.",
+          "The catch is the work. Listing by hand means you already know what the part is, which cars it fits, what condition to call it, and what to charge, then you type all of it in, one part at a time.",
+          "Ahlam does the knowing for you. It names the part, grades it, prices it from the median of real sales, writes the listing, and posts it to eBay in a tap, with Facebook and OfferUp next.",
+        ],
+        bullets: [
+          "Where eBay fits: an enormous buyer base actively searching for parts, sold-listing history as a real pricing reference, and built-in payments, shipping, and buyer protection.",
+          "Where Ahlam wins: no parts expertise needed (the AI identifies and grades), median-of-comps pricing instead of a manual lookup per part, and one scan becomes listings across every channel.",
+        ],
+      },
+      {
+        heading: "Ahlam vs Hollander and Checkmate",
+        paragraphs: [
+          "Hollander and Checkmate are the backbone of large, established dismantlers: serious inventory databases with interchange numbers, tear-down tracking, and multi-yard reporting.",
+          "That power comes with a price tag, a learning curve, and a workflow built around a full back office. It is a lot of system for a yard run by one or two people.",
+          "Ahlam is not trying to replace that for a 40-person operation. It is the photo-to-listing tool a small yard can open today, scan a car, and have priced, posted listings by lunch, with no implementation project.",
+        ],
+        bullets: [
+          "Where Hollander and Checkmate fit: mature inventory control for high-volume yards, industry-standard interchange and tear-down tracking, and multi-location reporting with established integrations.",
+          "Where Ahlam wins: live in minutes with no setup or training project, the AI does the identifying, grading, and pricing, and it is priced for a two-person yard, free to start.",
+        ],
+      },
+      {
+        heading: "Ahlam vs spreadsheets and notebooks",
+        paragraphs: [
+          "A spreadsheet is free, familiar, and completely under your control, which is exactly why most small yards still run on one.",
+          "But a spreadsheet only records a part after you have done the hard parts: figuring out what it is, what shape it is in, and what it should sell for.",
+          "Ahlam does that work and keeps the record itself, so your inventory, grades, prices, and live listings all live in one place that also posts them for sale.",
+        ],
+        bullets: [
+          "Where spreadsheets fit: free, flexible, nothing new to learn, total control over your own columns and notes, and fine for a handful of parts a week.",
+          "Where Ahlam wins: identifies, grades, and prices so you just review, inventory and live listings in one system instead of two, and scales to a whole car in minutes, not an afternoon.",
+        ],
+      },
+      {
+        heading: "The fastest way to compare is to scan one car",
+        paragraphs: [
+          "Every option here earns its place for someone. The question is whether it does the part that actually slows you down: knowing what a part is, what it is worth, and getting it listed.",
+          "Create your account for your free first month, or book a 15-minute walkthrough and we will scan one of your vehicles live and price every part on the spot.",
+        ],
+      },
+    ],
+    faqs: [
+      { q: "Does Ahlam replace Car-Part.com?", a: "No. Car-Part.com handles distribution to trade buyers. Ahlam handles the step before it: identifying, grading, pricing, and writing the listing. A direct Car-Part.com feed is coming soon, so the two will work together." },
+      { q: "Can Ahlam post to eBay today?", a: "Yes. eBay auto-posting is live now, with one-tap prep for Facebook Marketplace and OfferUp. Craigslist, Car-Part.com, and DoorDash delivery are in development." },
+      { q: "Is Ahlam a yard management system?", a: "No. Hollander and Checkmate are ERP-grade inventory systems for high-volume dismantlers. Ahlam is a photo-to-listing tool built so a one or two person yard can price and post a whole car in minutes." },
+    ],
+  },
+  {
+    slug: "how-dismantlers-can-use-doordash-to-sell-auto-parts",
+    title: "How Dismantlers Can Use DoorDash to Sell and Deliver Auto Parts",
+    description:
+      "Same-day local delivery is changing how used auto parts sell. Here is how salvage yards and dismantlers can use DoorDash-style delivery to win repair shop and DIY business.",
+    category: "Selling strategy",
+    readMinutes: 7,
+    updated: "2026-07-05",
+    image: "/img/guide-doordash.svg",
+    intro:
+      "The big retail parts chains already deliver same-day through DoorDash: a shop orders a part and a driver drops it at the service bay within the hour. Used parts have not caught up, and that is an opening. A dismantler who can get a tested alternator across town in 45 minutes competes on the two things that matter most to a repair shop: price and speed.",
+    sections: [
+      {
+        heading: "Why local delivery matters for used parts",
+        paragraphs: [
+          "Most used parts sell in one of two ways today: shipped through eBay (slow, with packing overhead) or picked up at the yard (fast, but the buyer has to stop working and drive). Local delivery splits the difference. The buyer keeps working, the part arrives the same day, and you charge for the convenience.",
+          "The buyers who care most are professional: repair shops and mobile mechanics with a car on the lift and a customer waiting. A shop paying $120 for a used part delivered in an hour still beats paying $300 for a new one delivered tomorrow. Speed is what unlocks that sale.",
+        ],
+      },
+      {
+        heading: "How DoorDash delivery works for a parts business",
+        paragraphs: [
+          "Beyond restaurant delivery, DoorDash runs a white-label service (DoorDash Drive) that businesses use to dispatch a driver on demand from their own website or system. The retail chains like AutoZone and O'Reilly already use this model for same-day parts delivery.",
+          "For a dismantler, the flow looks like this: a local buyer finds your part online, pays, and instead of choosing pickup they choose local delivery. A driver is dispatched to your yard, your counter person hands over the boxed part, and it arrives at the buyer's shop within the hour. You never leave the yard and you do not maintain a delivery truck or driver.",
+        ],
+        bullets: [
+          "Works best for parts one person can carry: alternators, starters, ECUs, mirrors, lamps, sensors, small body hardware.",
+          "Charge the delivery fee to the buyer, or bake it into a delivered price for professional accounts.",
+          "Keep a stack of boxes and basic padding at the counter so handoff takes a minute, not fifteen.",
+        ],
+      },
+      {
+        heading: "What sells well by courier, and what does not",
+        paragraphs: [
+          "Courier delivery has a practical weight and size ceiling. Engines, transmissions, doors, and hoods still move by pickup, freight, or your own truck. The sweet spot is the high-margin small and medium parts that fail suddenly and stop a repair job cold.",
+        ],
+        bullets: [
+          "Great by courier: starters, alternators, coil packs, window regulators, mirrors, headlights and tail lights, control modules, sensors, interior trim.",
+          "Case by case: wheels, radiators, driveshafts, seats (depends on the vehicle the driver has).",
+          "Not by courier: engines, transmissions, axles, hoods, doors, quarter panels.",
+        ],
+      },
+      {
+        heading: "Pricing delivered parts",
+        paragraphs: [
+          "Delivered same-day is a premium service, so price it like one. Start from your normal comp-based price, then add the actual courier cost plus a handling margin. Professional buyers accept a delivered premium because their alternative is sending an employee to you, which costs them shop time.",
+          "Be explicit in the listing: pickup price and delivered price, with a realistic delivery window. Clarity converts better than a single vague number.",
+        ],
+      },
+      {
+        heading: "Where Ahlam fits",
+        paragraphs: [
+          "Ahlam already turns a photo of a car into priced, ready-to-post listings for eBay, Facebook, and OfferUp, plus your own storefront and the Ahlam marketplace. DoorDash-powered local delivery is in development: the goal is that a local buyer can find your part on your Ahlam storefront and have it couriered from your yard the same hour, with the dispatch handled for you.",
+          "Until that ships, the playbook above works manually today: list the part, flag same-day local delivery in the description, and dispatch a courier when the order lands. The yards that build the delivery habit early will own the repair shop relationships in their area.",
+        ],
+      },
+    ],
+    faqs: [
+      { q: "Do I need a DoorDash partnership to start?", a: "Not to test the concept. You can dispatch on-demand couriers per order today, or simply offer your own local dropoff for orders inside a radius. A formal integration just automates the dispatch." },
+      { q: "Who pays for the delivery?", a: "The buyer, almost always. Either as a visible delivery fee at checkout or baked into a delivered price. Repair shops happily pay it because a stalled lift costs more than the courier." },
+      { q: "What about returns on delivered parts?", a: "Use the same warranty terms as pickup sales, and grade honestly. A tested part with a 30-day guarantee generates repeat professional buyers, which is the real prize of offering delivery." },
+      { q: "When is Ahlam's DoorDash integration coming?", a: "It is in development now, alongside Craigslist and Car-Part.com support. Join the waitlist and you will hear the moment it goes live." },
+    ],
+  },
 ];
 
 export function getGuide(slug: string): Guide | undefined {

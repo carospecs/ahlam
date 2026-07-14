@@ -83,8 +83,8 @@ export default async function AudiencePage({ params }: Params) {
                 {c.intro}
               </p>
               <div style={{ display: "flex", gap: 16, marginTop: 28, flexWrap: "wrap", alignItems: "center" }}>
-                <Link href="/waitlist" className="cs-raise" style={{ ...solidBtn, padding: "14px 26px", fontSize: 15.5 }}>
-                  Join the waitlist <ArrowRight size={17} />
+                <Link href="/?signup=1" className="cs-raise" style={{ ...solidBtn, padding: "14px 26px", fontSize: 15.5 }}>
+                  Start free <ArrowRight size={17} />
                 </Link>
                 <Link href="/#how" className="cs-textlink" style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 15, fontWeight: 600, color: "var(--foreground)", textDecoration: "none" }}>
                   See how it works <ArrowRight size={15} style={{ opacity: 0.6 }} />
@@ -203,12 +203,12 @@ export default async function AudiencePage({ params }: Params) {
                   <div className="cs-kicker">Get started</div>
                   <h2 className="cs-display" style={{ ...h2, margin: "10px 0 0" }}>See Ahlam on your own inventory</h2>
                   <p style={{ color: "var(--muted)", fontSize: 16, lineHeight: 1.6, margin: "12px 0 0", maxWidth: 520 }}>
-                    Join the waitlist for the free first month, or book a 15-minute walkthrough and we will scan one of your cars live.
+                    Create your account for the free first month, or book a 15-minute walkthrough and we will scan one of your cars live.
                   </p>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <Link href="/waitlist" className="cs-raise" style={{ ...solidBtn, justifyContent: "center", padding: "14px 24px", fontSize: 15.5 }}>
-                    Join the waitlist <ArrowRight size={17} />
+                  <Link href="/?signup=1" className="cs-raise" style={{ ...solidBtn, justifyContent: "center", padding: "14px 24px", fontSize: 15.5 }}>
+                    Start free <ArrowRight size={17} />
                   </Link>
                   <a href={CAL_DEMO_URL} target="_blank" rel="noopener noreferrer" style={{ ...ghostBtn, justifyContent: "center", padding: "13px 22px", fontSize: 15 }}>
                     <CalendarCheck size={16} /> Book a demo

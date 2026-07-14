@@ -106,7 +106,7 @@ function VinReport({ decode: d, vehicle }: { decode: any; vehicle: any }) {
       <div style={{ fontSize: 12.5, color: "var(--muted)", fontFamily: "var(--font-mono, monospace)", marginBottom: 10 }}>{d.vin}</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 24px" }} className="cs-grid-2">
         <Row label="Year" value={d.year} />
-        <Row label="Make" value={d.make} />
+        <Row label="Company/Brand" value={d.make} />
         <Row label="Model" value={d.model} />
         <Row label="Trim" value={d.trim} />
         <Row label="Body class" value={d.bodyClass} />

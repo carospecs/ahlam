@@ -12,6 +12,11 @@ export async function identifyPart(params: {
   vin?: { make?: string; model?: string; year?: number };
   /** Vision model to use. */
   provider?: "gpt" | "gemini" | "sonnet" | "haiku";
+  /** Shared id for all photos of one car so the batch counts as ONE plan scan.
+   * Without it the backend meters each photo as its own scan. */
+  scanBatch?: string;
+  /** True on the first photo of a batch (metering fallback pre-migration). */
+  scanFirst?: boolean;
 }): Promise<AIResult> {
   try {
     // The app has no cookies — send the Supabase access token so the backend
@@ -26,6 +31,8 @@ export async function identifyPart(params: {
         imageBase64: params.imageBase64,
         vin: params.vin,
         provider: params.provider ?? "gemini",
+        scanBatch: params.scanBatch,
+        scanFirst: params.scanFirst,
       }),
     });
     const data = (await res.json()) as AIResult;

@@ -96,7 +96,7 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
   async function writeWithAI() {
     if (busy) return;
     if (kind === "part" && !partName.trim()) { csToast("Pick or type the part first"); return; }
-    if (kind === "car" && !make && !model) { csToast("Add the make/model (or scan/decode) first"); return; }
+    if (kind === "car" && !make && !model) { csToast("Add the company/brand and model (or scan/decode) first"); return; }
     setBusy("write");
     try {
       const r = await fetch("/api/assistant/listing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, partName, vehicle: vehicleObj(), condition, mileage, notes: description }) });
@@ -136,8 +136,24 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
 
   async function save(draft: boolean) {
     if (busy) return;
-    if (kind === "car" && !make && !model && !title.trim()) { csToast("Add at least the make/model or a title"); return; }
+    // Quality gate before anything goes public: real names and realistic
+    // prices. Drafts stay loose so in-progress work is never blocked.
+    const realName = (s: string) => /[a-zA-Z]{2}/.test(s) && s.trim().length >= 3;
+    if (kind === "car" && !make && !model && !title.trim()) { csToast("Add at least the company/brand and model or a title"); return; }
     if (kind === "part" && !partName.trim()) { csToast("Pick or type the part"); return; }
+    if (!draft) {
+      if (kind === "part" && !realName(partName)) { csToast("Give the part its real name, like \"Alternator\" or \"Front bumper\""); return; }
+      if (kind === "car" && !(realName(make) && realName(model)) && !realName(title)) { csToast("Add the real company/brand and model before posting"); return; }
+      const priceCheck = price === "" ? null : Number(price);
+      if (priceCheck != null && (kind === "part" ? priceCheck < 1 : priceCheck < 50)) {
+        csToast(kind === "part" ? "Set a realistic price (at least $1), or leave it blank" : "Set a realistic asking price (at least $50)");
+        return;
+      }
+      if (kind === "car") {
+        const y = Number(year);
+        if (year && (!Number.isInteger(y) || y < 1900 || y > new Date().getFullYear() + 2)) { csToast("That vehicle year doesn't look right"); return; }
+      }
+    }
     setBusy("save");
     try {
       const images = photos.length ? await Promise.all(photos.map((p) => fileToJpegDataUrl(p.file))) : [];
@@ -220,7 +236,7 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
           <span style={lbl}>{isCar ? "Vehicle" : "Fits (vehicle)"}</span>
           <div style={{ display: "grid", gridTemplateColumns: "90px 1fr 1fr", gap: 8 }}>
             <input value={year} onChange={(e) => setYear(e.target.value)} placeholder="Year" style={field} />
-            <input value={make} onChange={(e) => setMake(e.target.value)} placeholder="Make" style={field} />
+            <input value={make} onChange={(e) => setMake(e.target.value)} placeholder="Company/Brand" style={field} />
             <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="Model" style={field} />
           </div>
           {isCar && (

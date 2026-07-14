@@ -113,6 +113,30 @@ export function reconcilePairPrices<
   });
 }
 
+// Drop a generic part when a POSITIONED synonym exists — e.g. a stray "Spoiler"
+// next to "Rear Spoiler", or "Door Panel" next to "Front Door Panel". Same
+// phantom-dedupe logic as dropGenericWhenSided, but for the front/rear/upper/
+// lower axis: two photos of the same physical part often come back once bare and
+// once positioned, and both surviving the merge double-counts the part.
+const POSITION_PREFIX = /^(front|rear|back|upper|lower)\s+/i;
+
+export function dropGenericWhenPositioned<T extends { partName: string }>(parts: T[]): T[] {
+  const strip = (name: string) => name.replace(POSITION_PREFIX, "").toLowerCase().trim();
+  const isPositioned = (name: string) => POSITION_PREFIX.test(name.trim());
+  const groups = new Map<string, T[]>();
+  for (const p of parts) {
+    const base = strip(p.partName);
+    const g = groups.get(base);
+    if (g) g.push(p); else groups.set(base, [p]);
+  }
+  const drop = new Set<T>();
+  for (const members of groups.values()) {
+    if (members.length < 2 || !members.some((m) => isPositioned(m.partName))) continue;
+    for (const m of members) if (!isPositioned(m.partName)) drop.add(m); // bare sibling = phantom
+  }
+  return parts.filter((p) => !drop.has(p));
+}
+
 // Drop a generic (unsided) part when a sided sibling exists — e.g. a stray "Front Seat"
 // next to "Driver Side Front Seat". Generalizes the old lateral-only rule to ANY part
 // type (seats, etc.): the system only ever adds a side to a genuinely sidable part

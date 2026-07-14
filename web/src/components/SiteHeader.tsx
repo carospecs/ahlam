@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { ChevronDown, X } from "lucide-react";
-import { BrandMark, BetaBadge } from "./BrandMark";
+import { BrandMark } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
 import { AUDIENCES } from "./site-nav";
 
@@ -21,17 +21,18 @@ type Lang = "en" | "es";
 const PRIMARY: { label: string; href: string }[] = [
   { label: "How it works", href: "/#how" },
   { label: "Marketplace", href: "/#marketplace" },
-  { label: "Compare", href: "/compare" },
+  { label: "Pricing", href: "/#pricing" },
   { label: "Guides", href: "/guides" },
-  { label: "Blog", href: "/blog" },
 ];
 
 export function SiteHeader({
   onGetStarted,
+  onSignIn,
   lang,
   setLang,
 }: {
   onGetStarted?: () => void;
+  onSignIn?: () => void;
   lang?: Lang;
   setLang?: (l: Lang) => void;
 }) {
@@ -62,8 +63,11 @@ export function SiteHeader({
   const closeMenu = () => setMenuOpen(false);
 
   const cta = onGetStarted
-    ? <button onClick={onGetStarted} className="cs-raise" style={solidBtnSm}>Join the waitlist</button>
-    : <Link href="/waitlist" className="cs-raise" style={solidBtnSm}>Join the waitlist</Link>;
+    ? <button onClick={onGetStarted} className="cs-raise" style={solidBtnSm}>Start free</button>
+    : <Link href="/?signup=1" className="cs-raise" style={solidBtnSm}>Start free</Link>;
+  const signIn = onSignIn
+    ? <button onClick={onSignIn} style={ghostBtnSm}>Sign in</button>
+    : <Link href="/?signin=1" style={ghostBtnSm}>Sign in</Link>;
 
   const LangToggle = lang && setLang ? (
     <span data-no-i18n style={{ display: "inline-flex", alignItems: "center", border: "1px solid var(--line)", borderRadius: 999, overflow: "hidden" }}>
@@ -83,7 +87,6 @@ export function SiteHeader({
         <Link href="/" onClick={closeMenu} style={{ display: "inline-flex", alignItems: "center", gap: 9, textDecoration: "none", color: "var(--foreground)" }}>
           <span className="cs-brand-ring" style={{ width: 30, height: 30 }}><BrandMark size={19} /></span>
           <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span>
-          <BetaBadge />
         </Link>
 
         <span style={navDivider} className="cs-pill-links" />
@@ -119,15 +122,15 @@ export function SiteHeader({
             )}
           </div>
 
-          <Link href="/compare" style={navLink}>Compare</Link>
+          <Link href="/#pricing" style={navLink}>Pricing</Link>
           <Link href="/guides" style={navLink}>Guides</Link>
-          <Link href="/blog" style={navLink}>Blog</Link>
         </nav>
 
         <span style={navDivider} className="cs-pill-links" />
 
         <span className="cs-pill-links">{LangToggle}</span>
         <span className="cs-pill-links" style={{ display: "inline-flex" }}><ThemeToggle size={31} /></span>
+        <span className="cs-pill-links">{signIn}</span>
         <span className="cs-pill-cta">{cta}</span>
 
         {/* Language toggle stays visible in the pill on mobile (not buried in the
@@ -172,10 +175,13 @@ export function SiteHeader({
               {LangToggle}
               <ThemeToggle size={34} />
             </div>
-            <div style={{ padding: "6px 4px 4px" }} onClick={closeMenu}>
+            <div style={{ padding: "6px 4px 4px", display: "grid", gap: 8 }} onClick={closeMenu}>
               {onGetStarted
-                ? <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtnSm, width: "100%", justifyContent: "center", padding: "13px 0", fontSize: 15 }}>Join the waitlist</button>
-                : <Link href="/waitlist" className="cs-raise" style={{ ...solidBtnSm, width: "100%", justifyContent: "center", padding: "13px 0", fontSize: 15 }}>Join the waitlist</Link>}
+                ? <button onClick={onGetStarted} className="cs-raise" style={{ ...solidBtnSm, width: "100%", justifyContent: "center", padding: "13px 0", fontSize: 15 }}>Start free</button>
+                : <Link href="/?signup=1" className="cs-raise" style={{ ...solidBtnSm, width: "100%", justifyContent: "center", padding: "13px 0", fontSize: 15 }}>Start free</Link>}
+              {onSignIn
+                ? <button onClick={onSignIn} style={{ ...ghostBtnSm, width: "100%", justifyContent: "center", padding: "12px 0", fontSize: 15 }}>Sign in</button>
+                : <Link href="/?signin=1" style={{ ...ghostBtnSm, width: "100%", justifyContent: "center", padding: "12px 0", fontSize: 15 }}>Sign in</Link>}
             </div>
           </div>
         </>
@@ -187,5 +193,6 @@ export function SiteHeader({
 const navLink: React.CSSProperties = { color: "var(--muted)", textDecoration: "none", fontSize: 13.5, fontWeight: 600, padding: "8px 9px", borderRadius: 8, whiteSpace: "nowrap" };
 const mobileLink: React.CSSProperties = { display: "block", padding: "12px 12px", fontSize: 15.5, fontWeight: 600, color: "var(--foreground)", textDecoration: "none" };
 const solidBtnSm: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 15px", borderRadius: 999, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", textDecoration: "none" };
+const ghostBtnSm: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 999, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 600, cursor: "pointer", textDecoration: "none", fontFamily: "inherit" };
 const navDivider: React.CSSProperties = { width: 1, height: 18, background: "var(--line)", margin: "0 3px", flexShrink: 0 };
 const burgerBar: React.CSSProperties = { width: 18, height: 2, borderRadius: 2, background: "var(--foreground)" };

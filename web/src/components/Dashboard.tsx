@@ -91,6 +91,7 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
   const { shop, role } = useData();
   const t = useT();
   const nav = NAV.filter((n: any) => !n.ownerOnly || role === "owner");
+  const unread = useUnreadCount();
 
   return (
     <aside style={sx.sidebar} className={"cs-sidebar" + (open ? " open" : "")}>
@@ -116,25 +117,26 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
           }
           const on = active === n.id;
           const IconComp = n.icon;
+          const showDot = n.id === "messages" && unread > 0;
           return (
             <button key={n.id} className="cs-nav-item" onClick={() => onNav(n.id)} style={{ ...sx.navItem, ...(on ? sx.navItemOn : {}) }}>
-              <IconComp size={18} color={on ? "var(--accent)" : "var(--muted)"} />
+              <span style={{ position: "relative", display: "inline-flex" }}>
+                <IconComp size={18} color={on ? "var(--accent)" : "var(--muted)"} />
+                {showDot && <span style={{ position: "absolute", top: -3, right: -4, width: 9, height: 9, borderRadius: 999, background: "var(--danger)", border: "2px solid var(--surface)" }} />}
+              </span>
               <span style={{ flex: 1, textAlign: "left" }}>{t(n.label!)}</span>
+              {showDot && (
+                <span style={{ minWidth: 18, height: 18, padding: "0 5px", borderRadius: 999, background: "var(--danger)", color: "#fff", fontSize: 10.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                  {unread > 9 ? "9+" : unread}
+                </span>
+              )}
             </button>
           );
         })}
       </nav>
       <div style={{ marginTop: "auto", display: "grid", gap: 12 }}>
-        {shop.name && (
-          <div style={sx.shopCard}>
-            <div style={sx.shopIcon}><Store size={16} color="var(--accent)" /></div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{shop.name}</div>
-              <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{t("Owner")} · {shop.members?.length || 0} {t("members")}</div>
-            </div>
-          </div>
-        )}
         <button style={sx.signout} onClick={onSignOut}><LogOut size={16} /> {t("Sign out")}</button>
+        <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ display: "block", textAlign: "center", marginTop: 8, fontSize: 11.5, color: "var(--muted)", textDecoration: "none" }}>{t("Privacy Policy")}</a>
       </div>
     </aside>
   );
@@ -204,9 +206,9 @@ function ProfileMenu({ onSignOut, onNav }: { onSignOut: () => void; onNav?: (id:
     <div ref={ref} style={{ position: "relative" }}>
       <button style={mx.profileBtn} onClick={() => setOpen(!open)}>
         <span style={mx.avatar}>{initials}</span>
-        <span className="cs-profile-text" style={{ textAlign: "left", lineHeight: 1.2 }}>
-          <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>{user.displayName || "User"}</span>
-          <span style={{ display: "block", fontSize: 11.5, color: "var(--muted)" }}>{user.email || ""}</span>
+        <span className="cs-profile-text" style={{ textAlign: "left", lineHeight: 1.2, minWidth: 0, maxWidth: 190 }}>
+          <span style={{ display: "block", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.displayName || "User"}</span>
+          <span style={{ display: "block", fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email || ""}</span>
         </span>
         <ChevronDown size={15} color="var(--muted)" />
       </button>
@@ -264,6 +266,25 @@ const VIEWS: Record<string, React.ComponentType<any>> = {
 
 let toastFn: (msg: string) => void = () => {};
 export function csToast(msg: string) { toastFn(msg); }
+
+// ---------------------------------------------------------------------------
+// Thread targeting: the bell (or a notification) asks Messages to open one
+// specific conversation. Works whether or not the view is mounted yet — the
+// target is stored, then any mounted listener is pinged; the matching side
+// consumes it on mount otherwise.
+export type ThreadTarget = { side: "selling" | "buying"; conversationId: string };
+let _pendingThread: ThreadTarget | null = null;
+export function csOpenThread(t: ThreadTarget) {
+  _pendingThread = t;
+  try { window.dispatchEvent(new CustomEvent("cs:open-thread")); } catch {}
+}
+export function csPendingThread(): ThreadTarget | null { return _pendingThread; }
+export function csConsumePendingThread(side: "selling" | "buying"): string | null {
+  if (_pendingThread?.side !== side) return null;
+  const id = _pendingThread.conversationId;
+  _pendingThread = null;
+  return id;
+}
 
 function ToastHost() {
   const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([]);
@@ -332,29 +353,33 @@ function MessageNotifier() {
     requestNotifyPermission();
     let seeded = false;
     let stopped = false;
+    let lastTotal = 0;
 
     async function poll() {
       try {
         const r = await fetch("/api/messages/unread", { cache: "no-store" });
         if (!r.ok) return;
         const d = await r.json();
-        setUnread(d.total || 0);
-        if (!seeded) { seeded = true; _latestId = d.latestId || null; return; }
-        if (d.latestId && d.latestId !== _latestId) {
-          _latestId = d.latestId;
+        const total = d.total || 0;
+        setUnread(total);
+        if (!seeded) { seeded = true; _latestId = d.latestId || null; lastTotal = total; return; }
+        // Alert on a brand-new message: the newest-message id changed, or (belt
+        // and braces) the unread total grew without an id change.
+        const newMessage = (d.latestId && d.latestId !== _latestId) || total > lastTotal;
+        _latestId = d.latestId || _latestId;
+        lastTotal = total;
+        if (newMessage) {
           const name = d.latest?.name || "A buyer";
           const preview = d.latest?.preview || "sent you a new message";
           playMessageChime();
           csToast(`New message from ${name}`);
           fireBrowserNotification(`New message from ${name}`, preview);
-        } else {
-          _latestId = d.latestId || _latestId;
         }
       } catch {}
     }
 
     poll();
-    const iv = setInterval(() => { if (!stopped) poll(); }, 20_000);
+    const iv = setInterval(() => { if (!stopped) poll(); }, 15_000);
     const onFocus = () => { if (!stopped) poll(); };
     window.addEventListener("focus", onFocus);
     return () => { stopped = true; clearInterval(iv); window.removeEventListener("focus", onFocus); };
@@ -362,23 +387,98 @@ function MessageNotifier() {
   return null;
 }
 
-// A topbar bell that shows the unread badge and jumps to Messages.
+// Compact relative time for the bell dropdown ("now", "4m", "2h", "3d").
+function agoLabel(at: number) {
+  const s = Math.floor((Date.now() - (at || 0)) / 1000);
+  if (s < 60) return "now";
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+// The topbar bell: unread badge + a dropdown of the latest message per
+// conversation. Clicking an item jumps straight to that thread in Messages.
 function NotificationBell({ onNav }: { onNav?: (id: string) => void }) {
   const unread = useUnreadCount();
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<any[] | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setItems(null);
+    fetch("/api/messages/recent", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setItems(Array.isArray(d.items) ? d.items : []))
+      .catch(() => setItems([]));
+  }, [open]);
+
+  function openItem(it: any) {
+    setOpen(false);
+    csOpenThread({ side: it.side, conversationId: it.conversationId });
+    onNav?.("messages");
+  }
+
   return (
-    <button
-      title="Messages"
-      aria-label={unread > 0 ? `${unread} unread messages` : "Messages"}
-      onClick={() => onNav?.("messages")}
-      style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", cursor: "pointer" }}
-    >
-      <Bell size={17} />
-      {unread > 0 && (
-        <span style={{ position: "absolute", top: -5, right: -5, minWidth: 17, height: 17, padding: "0 4px", borderRadius: 999, background: "var(--danger)", color: "#fff", fontSize: 10.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--background)" }}>
-          {unread > 9 ? "9+" : unread}
-        </span>
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        title="Notifications"
+        aria-label={unread > 0 ? `${unread} unread messages` : "Notifications"}
+        onClick={() => setOpen((o) => !o)}
+        style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: open ? "var(--surface)" : "var(--surface2)", color: "var(--foreground)", cursor: "pointer" }}
+      >
+        <Bell size={17} />
+        {unread > 0 && (
+          <span style={{ position: "absolute", top: -5, right: -5, minWidth: 17, height: 17, padding: "0 4px", borderRadius: 999, background: "var(--danger)", color: "#fff", fontSize: 10.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--background)" }}>
+            {unread > 9 ? "9+" : unread}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="fade-up" style={{ position: "absolute", right: 0, top: 42, width: 350, maxHeight: 430, overflowY: "auto", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, boxShadow: "0 14px 40px rgba(0,0,0,0.28)", zIndex: 70, padding: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px 6px" }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>Notifications</span>
+            {unread > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", background: "var(--accent-tint)", borderRadius: 999, padding: "2px 9px" }}>{unread} new</span>}
+          </div>
+          {items === null && <div style={{ padding: "18px 12px", fontSize: 12.5, color: "var(--muted)", textAlign: "center" }}>Loading…</div>}
+          {items?.length === 0 && <div style={{ padding: "18px 12px", fontSize: 12.5, color: "var(--muted)", textAlign: "center" }}>No messages yet. When buyers or sellers write to you, it shows up here.</div>}
+          {items?.map((it) => (
+            <button key={`${it.side}-${it.conversationId}`} className="cs-nav-item" onClick={() => openItem(it)}
+              style={{ display: "flex", gap: 10, width: "100%", padding: "10px 12px", border: "none", borderRadius: 10, background: "transparent", cursor: "pointer", textAlign: "left", alignItems: "flex-start" }}>
+              <span style={{ width: 34, height: 34, borderRadius: 999, flexShrink: 0, display: "grid", placeItems: "center", background: "var(--accent-tint)", border: "1px solid var(--line)" }}>
+                {it.side === "selling"
+                  ? <MessageSquare size={15} color="var(--accent)" />
+                  : <Store size={15} color="var(--accent)" />}
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", border: "1px solid var(--line)", borderRadius: 999, padding: "1px 7px", flexShrink: 0 }}>{it.side === "selling" ? "Buyer" : "Seller"}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>{agoLabel(it.at)}</span>
+                </span>
+                {it.part && <span style={{ display: "block", fontSize: 11.5, color: "var(--accent)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.part}</span>}
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.preview}</span>
+                  {it.unread > 0 && <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--danger)", flexShrink: 0 }} />}
+                </span>
+              </span>
+            </button>
+          ))}
+          <div style={{ borderTop: "1px solid var(--line)", marginTop: 4, paddingTop: 4 }}>
+            <button className="cs-nav-item" onClick={() => { setOpen(false); onNav?.("messages"); }}
+              style={{ display: "flex", justifyContent: "center", width: "100%", padding: "9px 12px", border: "none", borderRadius: 10, background: "transparent", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "var(--accent)" }}>
+              Open Messages
+            </button>
+          </div>
+        </div>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -395,6 +495,7 @@ function ExportModal() {
   const [price, setPrice] = useState("");
   const [desc, setDesc] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [lightbox, setLightbox] = useState<number | null>(null); // photo open in the viewer
   const [showExport, setShowExport] = useState(false);           // export overlay open
@@ -473,6 +574,20 @@ function ExportModal() {
       setSaving(false);
       close();
     } catch { csToast("Couldn't save — check your connection"); setSaving(false); }
+  }
+  // Soft-delete this post — it leaves the inventory and the public market.
+  async function deletePost() {
+    if (deleting) return;
+    if (!window.confirm(`Delete "${name || "this post"}"? It comes off the marketplace and out of your inventory.`)) return;
+    setDeleting(true);
+    try {
+      const r = await fetch("/api/listings", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: listing.id }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't delete"); setDeleting(false); return; }
+      csToast("Post deleted");
+      (window as any).csReloadData?.();
+      setDeleting(false);
+      close();
+    } catch { csToast("Couldn't delete — check your connection"); setDeleting(false); }
   }
 
   const fieldInput: React.CSSProperties = { width: "100%", border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 14, padding: "10px 12px", borderRadius: 10, boxSizing: "border-box" };
@@ -568,6 +683,9 @@ function ExportModal() {
               </button>
               <button onClick={() => setShowExport(true)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "11px 16px", borderRadius: 11, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                 <Send size={15} /> Export
+              </button>
+              <button onClick={deletePost} disabled={deleting} title="Delete this post" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 44, borderRadius: 11, border: "1px solid color-mix(in srgb, var(--signal) 45%, transparent)", background: "transparent", color: "var(--signal)", cursor: "pointer", opacity: deleting ? 0.6 : 1 }}>
+                {deleting ? <LoaderCircle size={16} style={{ animation: "spin 0.8s linear infinite" }} /> : <Trash2 size={16} />}
               </button>
             </div>
           </div>
@@ -734,7 +852,7 @@ function CreateShopGate({ user, onDone, onSignOut }: { user: any; onDone: () => 
         <div className="grain login-panel" style={{ padding: 34, display: "flex", flexDirection: "column", gap: 22, justifyContent: "space-between", borderRight: "1px solid var(--line)", minHeight: 500 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 10 }}><BrandChip size={34} /><span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>Ahlam</span></span>
           <div>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, borderRadius: 999, border: "1px solid color-mix(in srgb, var(--accent) 22%, transparent)", background: "var(--accent-tint)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--accent)" }}><span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--accent)" }} /> Pilot shops · early access</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, borderRadius: 999, border: "1px solid color-mix(in srgb, var(--accent) 22%, transparent)", background: "var(--accent-tint)", padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--accent)" }}><span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--accent)" }} /> Now live · first month free</span>
             <h1 style={{ margin: "16px 0 0", fontSize: 31, fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.02em" }}>You&apos;re one step<br /><span style={{ color: "var(--accent)" }}>from your first listing.</span></h1>
             <p style={{ margin: "12px 0 0", color: "var(--muted)", fontSize: 14, lineHeight: 1.55 }}>Set up your {isIndiv ? "account" : "shop"} and your AI-graded inventory starts building itself.</p>
           </div>
@@ -830,6 +948,19 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   // Let views (e.g. Add vehicle) trigger a data refresh after they save.
   useEffect(() => { (window as any).csReloadData = reload; }, []);
 
+  // Reopen the view the user was on after a full page load — e.g. hitting Back
+  // from a public profile returns them to Messages, not Overview. Declared
+  // before the Stripe-return effect so an explicit ?order/?billing marker wins.
+  useEffect(() => {
+    try {
+      const v = sessionStorage.getItem("cs-view");
+      if (v && VIEWS[v]) setActive(v);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try { sessionStorage.setItem("cs-view", active); } catch {}
+  }, [active]);
+
   // Handle returns from Stripe (checkout + Connect payout onboarding): toast the
   // result, land the user on the right view, and strip the marker from the URL.
   useEffect(() => {
@@ -842,8 +973,12 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     else if (payouts === "done") { csToast("Payout setup updated"); setActive("billing"); }
     else if (billing === "success") { csToast("Subscription active — your plan is live"); setActive("billing"); }
     else if (billing === "cancelled") { csToast("Checkout cancelled — no charge made"); }
-    if (order || payouts || billing) {
-      ["order", "id", "payouts", "billing"].forEach((k) => p.delete(k));
+    const emailUpdated = p.get("email-updated");
+    if (emailUpdated === "1") { csToast("Email updated. Use the new address next time you sign in."); setActive("settings"); }
+    else if (emailUpdated === "taken") { csToast("That email is already on another account."); setActive("settings"); }
+    else if (emailUpdated === "invalid" || emailUpdated === "failed") { csToast("That confirmation link expired. Request the email change again."); setActive("settings"); }
+    if (order || payouts || billing || emailUpdated) {
+      ["order", "id", "payouts", "billing", "email-updated"].forEach((k) => p.delete(k));
       const url = new URL(window.location.href);
       url.search = p.toString();
       window.history.replaceState({}, "", url);
@@ -858,6 +993,14 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     return () => { clearInterval(iv); fetch("/api/online/heartbeat", { method: "DELETE" }).catch(() => {}); };
   }, []);
 
+  function navTo(id: string) { setVehicle(null); setActive(id); setNavOpen(false); }
+
+  // Let a browser notification click jump straight to the inbox. MUST run
+  // before the CreateShopGate early return below — a hook after a conditional
+  // return crashes React (#300, "rendered fewer hooks") the moment a shop-less
+  // account loads, which is every brand-new signup.
+  useEffect(() => { (window as any).csGoMessages = () => navTo("messages"); }, []);
+
   if (!loading && !data.user?.shopId) {
     return <CreateShopGate user={data.user} onDone={() => { setLoading(true); reload(); }} onSignOut={onSignOut} />;
   }
@@ -871,11 +1014,6 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   const meta = vehicle
     ? { title: `${vehicle.year} ${vehicle.make} ${vehicle.model}`, sub: "Vehicle profile — whole car and its parts" }
     : META[effectiveActive] || META.overview;
-
-  function navTo(id: string) { setVehicle(null); setActive(id); setNavOpen(false); }
-
-  // Let a browser notification click jump straight to the inbox.
-  useEffect(() => { (window as any).csGoMessages = () => navTo("messages"); }, []);
 
   return (
     <DataContext.Provider value={data}>
@@ -909,8 +1047,8 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 }
 
 const sx: Record<string, React.CSSProperties> = {
-  layout: { display: "grid", gridTemplateColumns: "248px 1fr", height: "100vh", overflow: "hidden" },
-  sidebar: { background: "var(--surface)", borderRight: "1px solid var(--line)", padding: 18, display: "flex", flexDirection: "column", gap: 6 },
+  layout: { display: "grid", gridTemplateColumns: "248px 1fr", gridTemplateRows: "minmax(0, 1fr)", height: "100vh", overflow: "hidden" },
+  sidebar: { background: "var(--surface)", borderRight: "1px solid var(--line)", padding: 18, display: "flex", flexDirection: "column", gap: 6, minHeight: 0, overflowY: "auto" },
   brand: { display: "flex", alignItems: "center", gap: 10, padding: "6px 8px 14px" },
   navClose: { display: "none", marginLeft: "auto", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: "transparent", placeItems: "center" },
   hamburger: { display: "none", width: 40, height: 40, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface2)", placeItems: "center", flexShrink: 0 },
@@ -932,7 +1070,7 @@ const sx: Record<string, React.CSSProperties> = {
   search: { display: "flex", alignItems: "center", gap: 9, padding: "0 12px", width: 280, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 10 },
   searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 13.5, padding: "9px 0" },
   addBtn: { display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600 },
-  content: { flex: 1, overflowY: "auto", padding: 28 },
+  content: { flex: 1, overflowY: "auto", padding: "28px 28px 56px" },
 };
 
 const mx: Record<string, React.CSSProperties> = {

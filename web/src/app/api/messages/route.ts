@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { sendMail } from "@/lib/mailer";
+import { uploadMessageImages, insertMessage } from "@/lib/message-storage";
 
 // Seller-side conversation actions. Both verify the caller is a member of the
 // conversation's shop before touching anything (admin client bypasses RLS).
@@ -25,26 +26,44 @@ function nowLabel() {
   return new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-// POST { conversationId, body } → persist a seller reply (sender 'me').
+// POST { conversationId, body?, images? } → persist a seller reply (sender 'me').
+// images: JPEG/PNG/WebP data URLs (≤4) uploaded to storage and stored on the
+// message as attachments, so photos travel like text. A message needs text OR
+// at least one image.
 export async function POST(req: Request) {
-  const { conversationId, body } = await req.json().catch(() => ({}));
-  if (!body?.trim()) return NextResponse.json({ error: "Message is required" }, { status: 400 });
+  const { conversationId, body, images } = await req.json().catch(() => ({}));
+  const text = typeof body === "string" ? body.trim() : "";
+  const hasImages = Array.isArray(images) && images.length > 0;
+  if (!text && !hasImages) return NextResponse.json({ error: "Message is required" }, { status: 400 });
 
   const ctx = await authConversation(conversationId);
   if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
 
+  const attachments = hasImages ? await uploadMessageImages(ctx.db, conversationId, images) : [];
+  if (!text && !attachments.length) return NextResponse.json({ error: "Those images couldn't be uploaded" }, { status: 400 });
+
   const time = nowLabel();
-  const { error } = await ctx.db.from("messages").insert({ conversation_id: conversationId, sender: "me", body: body.trim(), time });
+  const { error, withAttachments } = await insertMessage(
+    ctx.db, { conversation_id: conversationId, sender: "me", body: text, time }, attachments,
+  );
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Replying means the seller has seen the thread — clear unread and bump the time.
-  await ctx.db.from("conversations").update({ unread: 0, last_time: time }).eq("id", conversationId);
+  // Replying means the seller has seen the thread — clear unread and bump the
+  // time. Also bump the BUYER's unread counter so their in-app notifier fires
+  // (graceful before migration 0040: retry without buyer_unread).
+  const { data: convRow } = await ctx.db.from("conversations").select("buyer_unread").eq("id", conversationId).maybeSingle();
+  const { error: bumpErr } = await ctx.db.from("conversations")
+    .update({ unread: 0, last_time: time, buyer_unread: ((convRow as { buyer_unread?: number } | null)?.buyer_unread ?? 0) + 1 })
+    .eq("id", conversationId);
+  if (bumpErr) {
+    await ctx.db.from("conversations").update({ unread: 0, last_time: time }).eq("id", conversationId);
+  }
 
   // Ping the customer by email that they have a new message (fire-and-forget so a
   // mail hiccup never fails the reply, and the seller isn't kept waiting on SMTP).
-  void notifyBuyerByEmail(ctx.db, ctx.conv, body.trim());
+  void notifyBuyerByEmail(ctx.db, ctx.conv, text || "📷 Photo");
 
-  return NextResponse.json({ ok: true, time });
+  return NextResponse.json({ ok: true, time, at: new Date().toISOString(), attachments: withAttachments ? attachments : [] });
 }
 
 // Email the buyer on a conversation that they've received a new message. Best

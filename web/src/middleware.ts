@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { validateSlug } from "@/lib/slug";
 
 const allowedOrigins = [
   "http://localhost:3000",
@@ -27,7 +28,49 @@ function corsMiddleware(req: NextRequest, res: NextResponse) {
   return res;
 }
 
+// {slug}.ahlam.io (or {slug}.localhost in dev) → the shop's personal website.
+// Returns the slug when the host is a tenant subdomain, else null. Reserved
+// labels (www, app, …) and multi-label hosts fall through to the main app;
+// *.vercel.app previews never match.
+function tenantSlug(req: NextRequest): string | null {
+  const host = (req.headers.get("host") || "").toLowerCase().split(":")[0];
+  let label: string | null = null;
+  if (host.endsWith(".ahlam.io")) label = host.slice(0, -".ahlam.io".length);
+  else if (host.endsWith(".localhost")) label = host.slice(0, -".localhost".length);
+  if (!label || label.includes(".")) return null;
+  // "demo" is reserved (no shop can claim it) but resolves to the built-in
+  // example site — the live preview of what the Ultimate plan buys.
+  if (label === "demo") return label;
+  return validateSlug(label).ok ? label : null;
+}
+
 export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  const slug = tenantSlug(req);
+
+  // The /site route group is internal — only ever reached via the host rewrite
+  // below. Direct hits (apex or tenant) 404 so no duplicate URL gets indexed.
+  // Segment check, not startsWith("/site") — that would eat /sitemap.xml.
+  if (pathname === "/site" || pathname.startsWith("/site/")) {
+    return new NextResponse(null, { status: 404 });
+  }
+
+  // Tenant hosts: API routes pass through (same-origin calls from site pages);
+  // every page path rewrites into /site/{slug}/…, which also means main-app
+  // routes like /dashboard can't render on a subdomain (they 404 there).
+  if (slug && !pathname.startsWith("/api")) {
+    const url = req.nextUrl.clone();
+    url.pathname = `/site/${slug}${pathname === "/" ? "" : pathname}`;
+    return NextResponse.rewrite(url);
+  }
+
+  // Everything below only concerns the API + dashboard surface. The broadened
+  // matcher (needed for the tenant rewrite) must not add auth latency or CORS
+  // headers to ordinary marketing pages.
+  if (!pathname.startsWith("/api") && !pathname.startsWith("/dashboard")) {
+    return NextResponse.next();
+  }
+
   const res = NextResponse.next();
 
   // CORS preflight
@@ -71,5 +114,8 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*", "/dashboard/:path*"],
+  // Broad matcher so tenant hosts rewrite on every page path (including
+  // /sitemap.xml and /robots.txt — don't exclude by file extension). Static
+  // assets and the PWA files stay out of middleware entirely.
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|manifest\\.webmanifest|sw\\.js).*)"],
 };

@@ -1,4 +1,5 @@
-import { notFound } from "next/navigation";
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import { PublicHeader } from "@/components/PublicHeader";
 import { normalizeGrade } from "@/lib/grade";
@@ -40,15 +41,23 @@ function timeAgo(t: string | null): string {
   return `${Math.floor(sec / 86400)}d ago`;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default async function ProfilePage({ params }: Params) {
   const { id } = await params;
+  if (!UUID_RE.test(id)) notFound();
   let profile: any = null;
+  let shopId: string | null = null;
   let listingRows: any[] = [];
   try {
     const db = supabaseAdmin();
     const { data: p } = await db.from("profiles").select("*").eq("id", id).single();
     profile = p;
-    if (profile) {
+    if (profile?.shop_id) {
+      const { data: s } = await db.from("shops").select("id").eq("id", profile.shop_id).maybeSingle();
+      shopId = (s as { id?: string } | null)?.id || null;
+    }
+    if (profile && !shopId) {
       const { data: l } = await db
         .from("listings")
         .select("*, shops(name, location)")
@@ -61,6 +70,10 @@ export default async function ProfilePage({ params }: Params) {
     // fall through
   }
   if (!profile) notFound();
+  // Their shop storefront IS their real profile: vehicles being parted out,
+  // parts, rating, and the message box all live there. The person-page below
+  // only covers shop-less accounts. (redirect() throws — keep it outside try.)
+  if (shopId) redirect(`/shop/${shopId}`);
 
   const name = profile.display_name || "Ahlam User";
   const initials = name.split(" ").map((s: string) => s[0]).join("").toUpperCase().slice(0, 2);
@@ -75,6 +88,7 @@ export default async function ProfilePage({ params }: Params) {
       fitment: fmtFit(c.fitment),
       category: c.partCategory || c.part_category || "",
       shopName: l.shops?.name || "Independent seller",
+      photo: l.photo_url || (Array.isArray(l.photo_urls) ? l.photo_urls[0] : null) || null,
     };
   });
 
@@ -122,15 +136,21 @@ export default async function ProfilePage({ params }: Params) {
             <h2 style={sectionH}>Listings ({parts.length})</h2>
             <div style={grid}>
               {parts.map((p) => (
-                <div key={p.id} style={card}>
-                  <div className="photo-cell" style={{ height: 140, borderRadius: 0 }} />
+                <Link key={p.id} href={`/p/${p.id}`} style={{ ...card, textDecoration: "none", color: "var(--foreground)", display: "block" }} className="cs-card-btn">
+                  {p.photo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.photo} alt={p.part} style={{ width: "100%", height: 140, objectFit: "cover", display: "block" }} />
+                  ) : (
+                    <div className="photo-cell" style={{ height: 140, borderRadius: 0 }} />
+                  )}
                   <div style={{ padding: 14 }}>
                     <div style={{ fontSize: 18, fontWeight: 800, color: "var(--success)" }}>${p.price}</div>
                     <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2 }}>{p.part}</div>
                     {p.fitment && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Fits {p.fitment}</div>}
                     {p.shopName && <div style={{ fontSize: 11.5, color: "var(--accent)", marginTop: 2 }}>{p.shopName}</div>}
+                    <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: "var(--accent)" }}>View & message →</div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </>

@@ -8,9 +8,9 @@ import { csToast } from "../Dashboard";
 import { looksLikeScannable, isPdf, normalizeImageFile, fileToJpegDataUrl, fileToAIDataUrl } from "@/lib/image";
 import { playSonarPing } from "@/lib/sound";
 import { ManualListing } from "./ManualListing";
-import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, type ScanSession } from "@/lib/scanSession";
+import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, addScanSlot, removeScanSlot, finishScanSlot, useScanSlots, useScanPhases, PRIMARY_SLOT, type ScanSession } from "@/lib/scanSession";
 import type { VinInfo } from "@/lib/vin";
-import { applyVinEngine, reconcilePairPrices, dropGenericWhenSided } from "@/lib/part-enrich";
+import { applyVinEngine, reconcilePairPrices, dropGenericWhenSided, dropGenericWhenPositioned } from "@/lib/part-enrich";
 import { instanceScore, type PhotoFront } from "@/lib/photo-select";
 import { runScanQa } from "@/lib/scan-qa";
 import { bandFor, bandFraction, priceAtFraction, roundYardPrice } from "@/lib/price-band";
@@ -38,7 +38,7 @@ interface AIPart {
   lowConfidenceFields?: string[];
   // Pricing provenance from the ladder (AHLAM-53): which rung set the price + how
   // trustworthy it is. Spread through from the identify response.
-  pricingInsight?: { source?: "shop" | "grounded" | "ebay" | "asking" | "model" | "formula"; confidence?: "high" | "medium" | "low"; similarCount?: number; ebayMedian?: number; ebayRange?: { min: number; max: number }; pricedBy?: "claude" | "gemini" | "vision" };
+  pricingInsight?: { source?: "shop" | "grounded" | "ebay" | "asking" | "model" | "formula" | "market"; confidence?: "high" | "medium" | "low"; similarCount?: number; ebayMedian?: number; ebayRange?: { min: number; max: number }; pricedBy?: "claude-market" | "claude" | "gemini" | "vision"; sources?: string[] };
   // Restricted-resale flag from the scan (AHLAM-54), surfaced in the review summary.
   compliance?: { label: string; reason: string };
   photoUrl?: string; // the photo this part was scanned from — used as its thumbnail
@@ -55,9 +55,6 @@ interface VehicleEstimate {
   trim?: string | null; engine?: string | null; drivetrain?: string | null; vinInfo?: VinInfo | null; color?: string | null;
 }
 type AIResult = { ok: true; data: AIPart[]; vehicle?: VehicleEstimate | null; vehicleFront?: string; piiRegions?: PiiBox[] } | { ok: false; userMessage: string; internalError: string };
-
-// A market-comp research result for one part (A2 agent, /api/price-research).
-type MarketCheck = { compMedianUsd: number; compCount: number; proposedPriceUsd: number; confidence: "high" | "low"; sources: { title: string; url: string }[] };
 
 // Map a scan-QA flag message to the agent case kind that can settle it (A1).
 function qaKindOf(message: string): "side" | "color" | "zone" | null {
@@ -248,16 +245,79 @@ function pairedPriceMismatches(parts: AIPart[]): { base: string }[] {
   return out;
 }
 
+// The Add-vehicle view: mode gate + the scanner queue. Slot "0" is the primary
+// scanner; "Scan another car" stacks more CarScanner instances below it, each
+// with its own independent session/run in lib/scanSession, so a high-volume
+// yard can upload car #2 while car #1 is still analyzing.
 export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
+  const primary = useScanSession(PRIMARY_SLOT);
+  const slots = useScanSlots();
+  const anyBusy = slots.length > 1 || primary.phase !== "upload" || primary.photos.length > 0;
+
+  if (primary.mode === "manualCar") return <ManualListing kind="car" onBack={() => setScanSession({ mode: null })} go={go} />;
+  if (primary.mode === "manualPart") return <ManualListing kind="part" onBack={() => setScanSession({ mode: null })} go={go} />;
+  if (!primary.mode) return <ModePicker onPick={(m) => setScanSession({ mode: m })} />;
+
+  return (
+    <div style={{ display: "grid", gap: 34 }}>
+      <ScanCredits />
+      {slots.map((k, i) => <CarScanner key={k} slot={k} isPrimary={i === 0} go={go} />)}
+      {/* Queue another car — a fresh, independent scanner right below this one */}
+      {anyBusy && (
+        <button
+          onClick={() => addScanSlot()}
+          className="cs-raise"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, maxWidth: 880, width: "100%", margin: "0 auto", padding: "18px 20px", borderRadius: "var(--radius-md)", border: "1.5px dashed var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 14.5, fontWeight: 600, cursor: "pointer" }}
+        >
+          <Plus size={17} color="var(--accent)" /> Scan another car — queue it while this one runs
+        </button>
+      )}
+    </div>
+  );
+}
+
+// "X car scans left this month" — live quota ticker for capped plans. Refetches
+// whenever any scan starts/finishes (a finished scan was just metered). Hidden
+// on unlimited plans and while the endpoint is unavailable.
+function ScanCredits() {
+  const phases = useScanPhases();
+  const [q, setQ] = React.useState<{ used: number; limit: number | null; remaining: number | null; planLabel?: string } | null>(null);
+  React.useEffect(() => {
+    let dead = false;
+    fetch("/api/usage/scan")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!dead && d && typeof d.used === "number") setQ(d); })
+      .catch(() => {});
+    return () => { dead = true; };
+  }, [phases]);
+  if (!q || q.limit == null) return null;
+  const out = (q.remaining ?? 0) <= 0;
+  const low = !out && (q.remaining ?? 0) <= 2;
+  const tone = out ? "var(--danger)" : low ? "var(--signal)" : "var(--accent)";
+  return (
+    <div style={{ maxWidth: 880, width: "100%", margin: "0 auto", display: "flex", justifyContent: "flex-end" }}>
+      <span title={`${q.used} of ${q.limit} AI car scans used this month`}
+        style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700, color: tone, background: `color-mix(in srgb, ${tone} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${tone} 35%, transparent)`, borderRadius: 999, padding: "6px 13px" }}>
+        <Sparkles size={13} />
+        {out
+          ? `0 of ${q.limit} car scans left this month — upgrade in Settings › Billing`
+          : `${q.remaining} of ${q.limit} car scan${q.remaining === 1 ? "" : "s"} left this month`}
+        {q.planLabel ? <span style={{ fontWeight: 500, color: "var(--muted)" }}>· {q.planLabel}</span> : null}
+      </span>
+    </div>
+  );
+}
+
+function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: string; isPrimary: boolean }) {
   // Session state lives in a module store (lib/scanSession) so an in-progress scan
   // and its results survive switching sections and coming back. Each field below
   // reads from the store and writes through a useState-compatible setter, so all
   // the handler code stays unchanged.
-  const s = useScanSession();
+  const s = useScanSession(slot);
   function up<K extends keyof ScanSession>(key: K) {
     return (v: ScanSession[K] | ((prev: ScanSession[K]) => ScanSession[K])) =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setScanSession({ [key]: typeof v === "function" ? (v as any)(getScanSession()[key]) : v } as Partial<ScanSession>);
+      setScanSession({ [key]: typeof v === "function" ? (v as any)(getScanSession(slot)[key]) : v } as Partial<ScanSession>, slot);
   }
   type Dispatch<T> = (v: T | ((prev: T) => T)) => void;
 
@@ -288,10 +348,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   // Which stage of the analyzing card to narrate: vision catalog vs the blocking
   // Claude pricing pass that follows it (pricing runs before results render).
   const [scanStage, setScanStage] = React.useState<"scanning" | "pricing">("scanning");
-  // Agent state (docs/agent-layer-blueprint.md) — transient advisory results; a new scan
-  // resets both. A1 = QA resolver (settles warn flags), A2 = market-comp price research.
+  // Agent state (docs/agent-layer-blueprint.md) — transient advisory results; a new
+  // scan resets it. A1 = QA resolver (settles warn flags).
   const [qaAgent, setQaAgent] = React.useState<{ running: boolean; resolutions: QaAgentResolution[] }>({ running: false, resolutions: [] });
-  const [research, setResearch] = React.useState<{ running: boolean; results: Record<string, MarketCheck> }>({ running: false, results: {} });
   const fileRef = React.useRef<HTMLInputElement>(null);
   const partSeq = React.useRef(0);
   // After a remount (e.g. returning to a restored session), continue ids above the
@@ -345,10 +404,9 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
   // the scan keeps running and lands its results even if the user navigates away
   // mid-scan. The run token lets a cancel (resetScanSession) discard a stale run.
   async function runAnalysis() {
-    const myToken = beginScanRun();
+    const myToken = beginScanRun(slot);
     setPhase("analyzing"); setError(null); setScanStage("scanning");
     setQaAgent({ running: false, resolutions: [] });
-    setResearch({ running: false, results: {} });
     // VIN-FIRST: resolve the VIN BEFORE cataloging, so every photo is classified AND
     // priced for the exact vehicle on the first pass (no blind classification, no
     // after-the-fact reprice). A typed VIN wins; otherwise read it from the photos in
@@ -359,7 +417,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
     try {
       // Encode each photo once; reused by the VIN-read pass and the catalog pass.
       const dataUrls = await Promise.all(photos.map((p) => fileToAIDataUrl(p.file)));
-      if (!isScanRun(myToken)) return;
+      if (!isScanRun(myToken, slot)) return;
 
       if (!resolvedVin) {
         try {
@@ -369,23 +427,34 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             body: JSON.stringify({ images: dataUrls }),
           });
           const j = await r.json();
-          if (!isScanRun(myToken)) return;
+          if (!isScanRun(myToken, slot)) return;
           if (j?.ok && j.vin) { resolvedVin = j.vin as string; setVin(resolvedVin); setVinStatus("confirmed"); }
         } catch { /* VIN read failed — proceed; the catalog reads VINs per-photo too */ }
       }
 
+      // All photos of this analyze run share one scanBatch id, so the whole car
+      // counts as a single AI scan against the plan quota (not one per photo).
+      const scanBatch =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const results = await Promise.all(
         dataUrls.map(async (dataUrl, i) => {
           const res = await fetch("/api/identify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(resolvedVin ? { imageBase64: dataUrl, vin: { vin: resolvedVin } } : { imageBase64: dataUrl }),
+            body: JSON.stringify({
+              imageBase64: dataUrl,
+              scanBatch,
+              scanFirst: i === 0,
+              ...(resolvedVin ? { vin: { vin: resolvedVin } } : {}),
+            }),
           });
           return { result: (await res.json()) as AIResult, photo: photos[i] };
         })
       );
 
-      if (!isScanRun(myToken)) return; // cancelled / superseded while scanning
+      if (!isScanRun(myToken, slot)) return; // cancelled / superseded while scanning
 
       // PII (Stage 0): mask the license plate + windshield VIN before any image is shown
       // or saved. Redact the DISPLAY copies now; stash the regions on each photo so the
@@ -399,7 +468,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
           if (red !== photo.url) redactedDisplay.set(photo.url, red);
         }
       }));
-      if (!isScanRun(myToken)) return;
+      if (!isScanRun(myToken, slot)) return;
       setPhotos([...photos]); // persist photo.piiRegions into the store for the save path
       const display = (u: string) => redactedDisplay.get(u) ?? u;
 
@@ -462,7 +531,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       // Then ground descriptions (Stage 5): lock the one body color + hedge barely-seen parts.
       const deduped = groundDescriptions(
         propagateImpactDamage(
-          reconcilePairPrices(dropGenericWhenSided([...byName.values()]).sort(comparePartsForDisplay)),
+          reconcilePairPrices(dropGenericWhenPositioned(dropGenericWhenSided([...byName.values()])).sort(comparePartsForDisplay)),
         ).sort((a, b) => (a.inferred ? 1 : 0) - (b.inferred ? 1 : 0)),
         { bodyColor: agg?.color },
       ).map((p) => ({ ...p, _id: newId(), _aiPrice: p.suggestedPriceUsd ?? null }));
@@ -523,7 +592,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             { year: agg.year, make: agg.make, model: agg.model, trim: agg.trim, engine: agg.engine },
           )
         : null;
-      if (!isScanRun(myToken)) return; // cancelled / superseded while pricing
+      if (!isScanRun(myToken, slot)) return; // cancelled / superseded while pricing
       const shownParts = priced ?? finalParts;
       setParts(shownParts);
       setPhase("results");
@@ -535,14 +604,11 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       if (hasWarnCases(shownParts, distinctColors)) {
         setQaAgent({ running: true, resolutions: [] });
         void runQaAgent(shownParts, photos.map((p) => display(p.url)), distinctColors)
-          .then((resolutions) => { if (isScanRun(myToken)) setQaAgent({ running: false, resolutions }); });
+          .then((resolutions) => { if (isScanRun(myToken, slot)) setQaAgent({ running: false, resolutions }); });
       }
 
-      // A2 market research fires immediately — pricing already completed above, so
-      // the top-value list includes the freshly priced battery pack / engine.
-      void researchMarket(myToken, shownParts, agg);
     } catch (e) {
-      if (!isScanRun(myToken)) return; // cancelled / superseded
+      if (!isScanRun(myToken, slot)) return; // cancelled / superseded
       setError("We couldn't reach the analysis server. Check your connection and try again.");
       setPhase("error");
     }
@@ -564,62 +630,35 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
       const res = await fetch("/api/reprice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Client-side cap: worst case the seller waits +45s, then vision prices render.
-        signal: AbortSignal.timeout(45_000),
+        // Client-side cap: comps-first pricing is parallel retrieval + one fast
+        // judgment call (~10–30s); only zero-comp stragglers hit the slower
+        // grounded fallback. Past 150s the vision prices render instead.
+        signal: AbortSignal.timeout(150_000),
         body: JSON.stringify({ vin: vin || undefined, vehicle: vehicleId, parts: current.map((p) => ({ name: p.partName, grade: p.condition, inferred: p.inferred || undefined })) }),
       });
       const j = await res.json();
-      if (!isScanRun(token)) return null; // a newer scan superseded this one
+      if (!isScanRun(token, slot)) return null; // a newer scan superseded this one
       if (!j?.ok || !Array.isArray(j.parts)) return null;
-      const pricedBy: "claude" | "gemini" | undefined = j.pricedBy === "claude" || j.pricedBy === "gemini" ? j.pricedBy : undefined;
-      const byName = new Map<string, { suggestedPriceUsd: number | null; usedPartPriceUsd: number | null; suggestedPriceLowUsd?: number | null; suggestedPriceHighUsd?: number | null }>();
+      const pricedBy: "claude-market" | "claude" | "gemini" | undefined =
+        j.pricedBy === "claude-market" || j.pricedBy === "claude" || j.pricedBy === "gemini" ? j.pricedBy : undefined;
+      const byName = new Map<string, { suggestedPriceUsd: number | null; usedPartPriceUsd: number | null; suggestedPriceLowUsd?: number | null; suggestedPriceHighUsd?: number | null; confidence?: "high" | "medium" | "low"; compCount?: number; sources?: string[] }>();
       for (const r of j.parts) if (r && typeof r.name === "string") byName.set(r.name.toLowerCase().trim(), r);
       return reconcilePairPrices(current.map((p) => {
         const r = byName.get(p.partName.toLowerCase().trim());
         if (!r || typeof r.usedPartPriceUsd !== "number" || r.usedPartPriceUsd <= 0) return p;
+        // Market-priced parts carry evidence: source "market", the researched
+        // confidence, real comp count, and the domains the comps came from.
+        const market = !!r.confidence;
         return {
           ...p, usedPartPriceUsd: r.usedPartPriceUsd, suggestedPriceUsd: r.suggestedPriceUsd, _aiPrice: r.suggestedPriceUsd ?? p._aiPrice,
           suggestedPriceLowUsd: r.suggestedPriceLowUsd ?? p.suggestedPriceLowUsd, suggestedPriceHighUsd: r.suggestedPriceHighUsd ?? p.suggestedPriceHighUsd,
-          pricingInsight: { ...p.pricingInsight, source: p.pricingInsight?.source ?? "model", confidence: p.pricingInsight?.confidence ?? p.confidence, pricedBy },
+          pricingInsight: market
+            ? { source: "market" as const, confidence: r.confidence, similarCount: r.compCount ?? 0, pricedBy, sources: r.sources ?? [] }
+            : { ...p.pricingInsight, source: p.pricingInsight?.source ?? "model", confidence: p.pricingInsight?.confidence ?? p.confidence, pricedBy },
         };
       }));
     } catch {
       return null; // network/parse error or timeout — vision prices render
-    }
-  }
-
-  // PRICING RESEARCH AGENT (A2): after results land, market-check the top-value parts
-  // via grounded web search on the server. Advisory only — the results render as an
-  // accept/dismiss badge per part; the formula prices stand until the seller accepts.
-  async function researchMarket(token: number, current: AIPart[], agg: { year?: string; make?: string; model?: string; trim?: string | null; engine?: string | null } | null) {
-    if (!agg?.make || !agg?.model) return; // no vehicle identity → nothing to search comps for
-    // Inferred parts are INCLUDED — a BEV's battery pack or a sedan's engine is often
-    // the highest-value item on the car precisely because no photo showed it.
-    const eligible = current.filter((p) => p.condition !== "C" && (p.suggestedPriceUsd || 0) >= 150);
-    if (!eligible.length) return;
-    setResearch({ running: true, results: {} });
-    try {
-      const res = await fetch("/api/price-research", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          vehicle: { year: agg.year, make: agg.make, model: agg.model, trim: agg.trim, engine: agg.engine },
-          parts: eligible.map((p) => ({ name: p.partName, grade: p.condition, currentPriceUsd: p.suggestedPriceUsd })),
-        }),
-      });
-      const j = await res.json();
-      if (!isScanRun(token)) return;
-      const results: Record<string, MarketCheck> = {};
-      if (j?.ok && Array.isArray(j.results)) {
-        for (const r of j.results) {
-          if (r?.name && typeof r.proposedPriceUsd === "number" && Array.isArray(r.sources) && r.sources.length) {
-            results[String(r.name).toLowerCase().trim()] = r;
-          }
-        }
-      }
-      setResearch({ running: false, results });
-    } catch {
-      if (isScanRun(token)) setResearch({ running: false, results: {} });
     }
   }
 
@@ -686,20 +725,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
     if (!r.edit || !r.partId) return;
     setParts((prev) => prev.map((p) => (p._id === r.partId ? { ...p, ...applyQaEdit(p, r.edit!) } : p)));
     csToast(r.edit.field === "condition" ? "Downgraded to Grade B and repriced" : r.edit.field === "partName" ? "Part name corrected" : "Description corrected");
-  }
-
-  // Accept / dismiss a market-comp price proposal (A2).
-  function applyMarketCheck(p: AIPart, m: MarketCheck) {
-    setPartPrice(p._id!, String(m.proposedPriceUsd));
-    dismissMarketCheck(p);
-    csToast(`Priced to market: $${m.proposedPriceUsd.toLocaleString()} (${m.compCount} sold comps)`);
-  }
-  function dismissMarketCheck(p: AIPart) {
-    setResearch((prev) => {
-      const results = { ...prev.results };
-      delete results[p.partName.toLowerCase().trim()];
-      return { ...prev, results };
-    });
   }
 
   // Relative nudge: ±pct% of the CURRENT price, so sellers adjust without retyping.
@@ -790,7 +815,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
         ? "Saved as draft, not posted yet"
         : sellMode === "whole" ? "Vehicle saved and posted to the market" : `Saved. ${d.listings} part${d.listings === 1 ? "" : "s"} posted`);
       (window as any).csReloadData?.();
-      resetScanSession(); // posted/saved — clear the session so it doesn't linger
+      finishScanSlot(slot); // posted/saved — queue slots leave; primary resets
       go(dest);
     } catch {
       csToast("Couldn't save. Check your connection");
@@ -850,7 +875,14 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
 
   return (
     <div style={{ maxWidth: 880, margin: "0 auto", display: "grid", gap: 20 }}>
-      <button onClick={() => resetScanSession()} style={{ ...navBtn, justifySelf: "start" }}><ArrowLeft size={15} /> Back to options</button>
+      {isPrimary ? (
+        <button onClick={() => resetScanSession()} style={{ ...navBtn, justifySelf: "start" }}><ArrowLeft size={15} /> Back to options</button>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <span className="cs-kicker" style={{ fontSize: 11 }}>Queued car</span>
+          <button onClick={() => removeScanSlot(slot)} style={{ ...navBtn }}><X size={14} /> Remove from queue</button>
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <Step n={1} label="Photos" on={phase === "upload"} done={phase !== "upload"} />
         <span style={{ flex: 1, height: 2, background: "var(--line)", borderRadius: 2, maxWidth: 80 }} />
@@ -951,15 +983,15 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             <ScanLine size={26} color={SCAN_TONE} style={{ position: "absolute", inset: 0, margin: "auto" }} />
           </div>
           <div>
-            <div style={{ fontSize: 17, fontWeight: 700 }}>{scanStage === "pricing" ? "Pricing your parts…" : "Scanning your car…"}</div>
+            <div style={{ fontSize: 17, fontWeight: 700 }}>{scanStage === "pricing" ? "Checking live market prices…" : "Scanning your car…"}</div>
             <div style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 420, marginTop: 6, lineHeight: 1.5 }}>
               {scanStage === "pricing"
-                ? "Parts identified. Now pricing each one for your exact vehicle against the used market."
+                ? "Parts identified. Now researching what each one actually lists for on the used-parts market — real comps, not guesses."
                 : "Reading your photos to identify the vehicle and every sellable part, including the VIN or stock number if they show in a picture."}
             </div>
           </div>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: "var(--signal)", background: "var(--signal-bg)", border: "1px solid color-mix(in srgb, var(--signal) 35%, transparent)", borderRadius: 999, padding: "7px 14px" }}>
-            <Info size={14} /> This usually takes under a minute. Hang tight.
+            <Info size={14} /> {scanStage === "pricing" ? "Checking real listings — usually under a minute. Hang tight." : "This usually takes under a minute. Hang tight."}
           </div>
         </Card>
       )}
@@ -1126,7 +1158,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
             const dispL = vi.displacementL || (vi.displacement ? (Number(vi.displacement) / 1000).toFixed(1) : null);
             const engineStr = [dispL ? `${dispL}L` : null, vi.engineCylinders ? `${vi.engineCylinders}-cyl` : null, vi.engine].filter(Boolean).join(" ");
             const rows: [string, string | null][] = [
-              ["VIN", vi.vin], ["Year", vi.year ? String(vi.year) : null], ["Make", vi.make], ["Model", vi.model],
+              ["VIN", vi.vin], ["Year", vi.year ? String(vi.year) : null], ["Company/Brand", vi.make], ["Model", vi.model],
               ["Trim", vi.trim], ["Body", vi.bodyClass], ["Engine", engineStr || null],
               ["Fuel", vi.fuelType], ["Transmission", vi.transmission], ["Drivetrain", vi.driveType],
               ["Doors", vi.doors], ["Seating", vi.seatingCapacity], ["Built in", [vi.plantCity, vi.plantState, vi.plantCountry].filter(Boolean).join(", ") || null],
@@ -1226,11 +1258,6 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                   <span style={{ color: "var(--muted)", fontWeight: 500 }}> · {sellMode === "both" ? "shown as suggested in your post" : "tap any field to fix it"}</span>
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  {research.running && (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--accent)" }}>
-                      <Sparkles size={12} /> Checking market comps…
-                    </span>
-                  )}
                   {anyAiPriced && (
                     <button onClick={() => setAllPctOfSuggested(100)} title="Reset every price to the AI's suggestion" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 12, fontWeight: 600 }}>
                       <RotateCcw size={13} /> Reset all to AI
@@ -1313,38 +1340,26 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
                             </div>
                           );
                         })()}
-                        {(() => {
-                          // A2 market check: comp-backed price proposal with provenance.
-                          const m = research.results[p.partName.toLowerCase().trim()];
-                          if (!m) return null;
-                          const off = price > 0 ? Math.round(((m.proposedPriceUsd - price) / price) * 100) : 0;
-                          return (
-                            <div style={{ display: "grid", gap: 3, justifyItems: "end" }}>
-                              <span title={m.sources.map((s) => `${s.title} — ${s.url}`).join("\n")} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, color: Math.abs(off) >= 40 ? "#f59e0b" : "var(--muted)", whiteSpace: "nowrap" }}>
-                                <Sparkles size={10} /> Market: ${m.proposedPriceUsd.toLocaleString()} · {m.compCount} sold{price > 0 && off !== 0 ? ` (${off > 0 ? "+" : ""}${off}%)` : ""}
-                              </span>
-                              <div style={{ display: "flex", gap: 4 }}>
-                                <button onClick={() => applyMarketCheck(p, m)} style={{ padding: "3px 9px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--accent-tint)", color: "var(--accent)", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>Use ${m.proposedPriceUsd.toLocaleString()}</button>
-                                <button onClick={() => dismissMarketCheck(p)} title="Dismiss" style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", cursor: "pointer" }}><X size={11} color="var(--muted)" /></button>
-                              </div>
-                            </div>
-                          );
-                        })()}
                         {sellMode === "both" && <span style={{ fontSize: 10, color: "var(--muted)" }}>suggested</span>}
                         {p.pricingInsight && (() => {
                           const ins = p.pricingInsight!;
-                          const LBL: Record<string, string> = { shop: "Sold comps", grounded: "Market data", ebay: "eBay listings", asking: "Active asking", model: "AI estimate", formula: "AI estimate" };
+                          const LBL: Record<string, string> = { shop: "Sold comps", grounded: "Market data", ebay: "eBay listings", asking: "Active asking", model: "AI estimate", formula: "AI estimate", market: "Live market comps" };
                           const label = LBL[ins.source || "model"] || "AI estimate";
                           const dot = ins.confidence === "high" ? "#16a34a" : ins.confidence === "medium" ? "#f59e0b" : "var(--muted)";
                           const em = Number(ins.ebayMedian) || 0;
                           const n = Number(ins.similarCount) || 0;
                           // Provenance in the tooltip only — no vendor names surfaced to sellers.
-                          const engine = ins.pricedBy === "claude" ? " · market model" : ins.pricedBy ? " · fallback estimate" : "";
+                          const engine = ins.pricedBy === "claude-market" ? " · researched live" : ins.pricedBy === "claude" ? " · market model" : ins.pricedBy ? " · fallback estimate" : "";
                           return (
                             <>
                               <span title={`${label} · ${ins.confidence || "low"} confidence${engine}`} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap" }}>
                                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, flexShrink: 0 }} />{label}
                               </span>
+                              {ins.source === "market" && n > 0 && (
+                                <span title={(ins.sources || []).join(", ")} style={{ fontSize: 10, color: "var(--muted)", whiteSpace: "nowrap", textAlign: "right" }}>
+                                  {n} comp{n === 1 ? "" : "s"}{ins.sources?.length ? ` · ${ins.sources.slice(0, 2).join(", ")}` : ""}
+                                </span>
+                              )}
                               {em > 0 && (
                                 <span style={{ fontSize: 10, color: "var(--muted)", whiteSpace: "nowrap", textAlign: "right" }}>
                                   Selling on eBay ~${em.toLocaleString()}{n ? ` · ${n} listings` : ""}

@@ -18,8 +18,9 @@ function LinkedinGlyph({ size = 16 }: { size?: number }) {
 // site footer never drifts. Server-component safe (plain links + mailto, no
 // client handlers) so it drops into both server and client pages.
 
-const CONTACT = "mohammadabbas@ahlam.io";
-const RECIPIENTS = "mohammadabbas@ahlam.io,andygarcia@ahlam.io";
+const CONTACT_ANDY = "andygarcia@ahlam.io";
+const CONTACT_MO = "mohammadabbas@ahlam.io";
+const RECIPIENTS = `${CONTACT_ANDY},${CONTACT_MO}`;
 const CAL_DEMO_URL = "https://cal.com/team/ahlam-team";
 const LINKEDIN_URL = "https://www.linkedin.com/company/ahlam-inc/";
 
@@ -29,7 +30,8 @@ const COLS: Col[] = [
   { h: "Product", links: [
     { label: "How it works", href: "/#how" },
     { label: "Marketplace", href: "/#marketplace" },
-    { label: "Compare", href: "/compare" },
+    { label: "Pricing", href: "/#pricing" },
+    { label: "Compare", href: "/guides/ahlam-vs-car-part-ebay-hollander-spreadsheets" },
   ] },
   { h: "Audiences", links: [
     { label: "Overview", href: "/audiences" },
@@ -37,9 +39,8 @@ const COLS: Col[] = [
   ] },
   { h: "Resources", links: [
     { label: "Guides", href: "/guides" },
-    { label: "Blog", href: "/blog" },
     { label: "FAQ", href: "/#faq" },
-    { label: "Waitlist", href: "/waitlist" },
+    { label: "Sign in", href: "/?signin=1" },
   ] },
   { h: "Company", links: [
     { label: "Book a demo", href: CAL_DEMO_URL, external: true },
@@ -63,14 +64,17 @@ export function SiteFooter() {
         <div style={{ maxWidth: 280 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}><BrandChip size={28} /><span style={{ fontSize: 16, fontWeight: 700 }}>Ahlam</span></div>
           <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6, margin: "14px 0 0" }}>
-            Photograph a car. List every part everywhere: eBay, Facebook, OfferUp, Craigslist, and your own storefront.
+            Photograph a car. List every part everywhere: eBay, Facebook, OfferUp, and your own storefront. Craigslist, Car-Part.com, and DoorDash coming soon.
           </p>
           {/* Contact section */}
           <div style={{ marginTop: 18 }}>
             <div className="cs-kicker" style={{ fontSize: 11, marginBottom: 10 }}>Contact</div>
             <div style={{ display: "grid", gap: 7 }}>
-              <a href={`mailto:${RECIPIENTS}`} style={{ ...footLink, display: "inline-flex", alignItems: "center", gap: 8, opacity: 1 }}>
-                <Mail size={14} color="var(--accent)" /> {CONTACT}
+              <a href={`mailto:${CONTACT_ANDY}`} style={{ ...footLink, display: "inline-flex", alignItems: "center", gap: 8, opacity: 1 }}>
+                <Mail size={14} color="var(--accent)" /> {CONTACT_ANDY}
+              </a>
+              <a href={`mailto:${CONTACT_MO}`} style={{ ...footLink, display: "inline-flex", alignItems: "center", gap: 8, opacity: 1 }}>
+                <Mail size={14} color="var(--accent)" /> {CONTACT_MO}
               </a>
               <a href={CAL_DEMO_URL} target="_blank" rel="noopener noreferrer" style={{ ...footLink, display: "inline-flex", alignItems: "center", gap: 8, opacity: 1 }}>
                 <CalendarCheck size={14} color="var(--accent)" /> Book a 15-min demo

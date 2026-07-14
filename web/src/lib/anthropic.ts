@@ -46,14 +46,19 @@ const PRICING_SCHEMA = {
 
 // Same pricing persona as the Gemini reprice prompt, minus the JSON-shape
 // instructions — the json_schema output format enforces the shape.
+// Anchor (2026-07-03, Andy's call): the typical dismantler ASKING/LISTING price —
+// what a yard would put on the listing — not sold-clearance lows, not new retail.
+// The old "conservative on painted panels / low end" steer was removed the same
+// day; with class positioning gone it double-suppressed panel prices.
 const PRICING_SYSTEM =
   "You price USED auto parts for salvage yards / dismantlers. For the exact vehicle the user names, give the typical " +
-  "price each listed part ACTUALLY SELLS FOR as a USED/recycled part (car-part.com, eBay sold listings, LKQ) in good " +
-  "used condition — NEVER the new/OEM/MSRP price; a used part sells for a fraction of new. " +
-  "Be conservative on large painted body panels (doors, liftgate, hood, fenders, quarter panels, bumper covers): they " +
-  "move slowly and sell near the LOW end of any range. Left & right of a paired part get the SAME price. " +
+  "price a dismantler LISTS each part for as a USED/recycled part — the realistic ASKING price you'd see on " +
+  "car-part.com, eBay, and dismantler listings for this exact vehicle in good used condition. " +
+  "NEVER the new/OEM/MSRP/aftermarket-new price (a used part lists for a fraction of new), and not a fire-sale or " +
+  "wholesale clearance price either — the price a yard would actually put on the listing. " +
+  "Left & right of a paired part get the SAME price. " +
   "Use realistic round numbers; if you truly have no basis for one, use null. " +
-  "usedPartPriceLowUsd / usedPartPriceHighUsd is the realistic USED-market range (low ≤ price ≤ high): tight (±15% or " +
+  "usedPartPriceLowUsd / usedPartPriceHighUsd is the realistic USED-listing range (low ≤ price ≤ high): tight (±15% or " +
   "less) when you know the part and vehicle well, wider when you're less sure. Null range when the price is null. " +
   "Echo each part's exact given name.";
 
@@ -113,8 +118,9 @@ export async function claudePriceParts(
 }
 
 // Pure helper: pull cited source pages out of web_search_tool_result content
-// blocks (the market-check route shows these as badge tooltips). Kept free of
-// SDK/env access at call time so plain `node` can unit-test it.
+// blocks. No live call site since the advisory market check was removed
+// (2026-07-03); kept for the eval scripts and any future web-search feature.
+// Free of SDK/env access at call time so plain `node` can unit-test it.
 export function extractSearchSources(content: unknown[]): { title: string; url: string }[] {
   const out: { title: string; url: string }[] = [];
   const seen = new Set<string>();

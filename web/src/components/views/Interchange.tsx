@@ -134,7 +134,7 @@ export function Interchange(_: { go: (id: string) => void }) {
   async function runSearch(forcePart?: string) {
     const p = (forcePart ?? part).trim();
     if (!p) { setError("Pick or type the part you're looking for."); return; }
-    if (!make.trim()) { setError("Add at least a brand (make)."); return; }
+    if (!make.trim()) { setError("Add at least a company/brand."); return; }
     if (forcePart) setPart(forcePart);
     setError(""); setConfirming(false); setLoading(true); setResult(null); setCached(false);
     try {
@@ -158,7 +158,7 @@ export function Interchange(_: { go: (id: string) => void }) {
   // Step 1: validate + ask the user to confirm the vehicle before we search.
   function review() {
     if (!part.trim()) { setError("Pick or type the part you're looking for."); return; }
-    if (!make.trim()) { setError("Add at least a brand (make)."); return; }
+    if (!make.trim()) { setError("Add at least a company/brand."); return; }
     setError(""); setConfirming(true);
   }
 
@@ -220,7 +220,7 @@ export function Interchange(_: { go: (id: string) => void }) {
           <>
             {mode === "part" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }} className="cs-grid-2">
-                <Combobox label="Brand (make)" value={make} onChange={(v) => { setMake(v); setModel(""); setConfirming(false); }} options={COMMON_MAKES} placeholder="e.g. Nissan" icon={<Car size={15} />} />
+                <Combobox label="Company/Brand" value={make} onChange={(v) => { setMake(v); setModel(""); setConfirming(false); }} options={COMMON_MAKES} placeholder="e.g. Nissan" icon={<Car size={15} />} />
                 <Combobox label="Model" value={model} onChange={(v) => { setModel(v); setConfirming(false); }} options={models} placeholder={make ? "e.g. Rogue" : "Pick a make first"} loading={modelsLoading} disabled={!make.trim()} hint={make && !modelsLoading ? `${models.length} models` : undefined} />
                 <Combobox label="Year" value={year} onChange={(v) => { setYear(v); setConfirming(false); }} options={modelYears.length ? modelYears : YEARS} placeholder="e.g. 2014" icon={<Hash size={14} />} loading={yearsLoading} hint={model && modelYears.length ? `${modelYears[modelYears.length - 1]}–${modelYears[0]}` : undefined} />
                 <Combobox label="Engine / fuel" hint="optional" value={variant} onChange={(v) => { setVariant(v); setConfirming(false); }} options={VARIANTS} placeholder="Gas, Hybrid, Diesel…" icon={<Fuel size={14} />} />

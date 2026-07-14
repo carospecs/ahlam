@@ -17,6 +17,7 @@ export interface Plan {
   desc: string;
   features: string[];
   highlight?: boolean;
+  badge?: string;
 }
 
 export const PLANS: Plan[] = [
@@ -25,28 +26,10 @@ export const PLANS: Plan[] = [
     name: "Free trial",
     price: "$0",
     per: "/first month",
-    desc: "The first 50 yards to join get a full month free, with every feature unlocked and no card required. Try the whole platform, not a stripped-down version.",
+    desc: "The full Growth plan, free for your first month. The first 50 yards to join get every feature unlocked, no card required.",
     features: [
-      "Free for your first month",
-      "Up to 2 cars",
+      "Up to 10 AI car scans",
       "Every feature we've built, included",
-      "AI scan & auto-pricing (photo-to-listing)",
-      "Access to Ahlam marketplace",
-    ],
-  },
-  {
-    id: "solo",
-    name: "Solo",
-    price: "$19",
-    per: "/mo",
-    desc: "For individuals and flippers who mostly want the cross-posting extension, with a few AI scans each month.",
-    features: [
-      "Single user",
-      "AI scan: 3 cars per month (photo-to-listing)",
-      "Cross-post with the Ahlam browser extension (Facebook, OfferUp, Craigslist)",
-      "Post up to 1 car a day",
-      "Export up to 20 cars / 100 parts a month",
-      "List on the Ahlam marketplace",
     ],
   },
   {
@@ -54,17 +37,18 @@ export const PLANS: Plan[] = [
     name: "Growth",
     price: "$100",
     per: "/mo",
-    desc: "For growing dismantlers ready to scale listings and automate their workflow.",
+    desc: "For dismantlers selling on eBay and Facebook who want AI scanning and automation.",
     features: [
-      "10 car listings per month",
-      "AI scan & auto-pricing (photo-to-listing)",
+      "AI scan: 10 cars per month (photo-to-listing)",
+      "Cross-post to eBay & Facebook",
+      "Unlimited manual listings",
       "Team access: Owner & Editor",
       "AI Interchange Assistant (parts fitment across vehicles)",
-      "AI Auto-Repricing (market watch, updates prices automatically)",
       "Inventory analytics",
-      "eBay listing integration",
+      "List on the Ahlam marketplace",
     ],
     highlight: true,
+    badge: "Most popular",
   },
   {
     id: "max",
@@ -73,13 +57,12 @@ export const PLANS: Plan[] = [
     per: "/mo",
     desc: "For high-volume yards that need full team access and cross-platform selling power.",
     features: [
-      "50 car listings per month",
-      "AI scan & auto-pricing (photo-to-listing)",
+      "AI scan: 25 cars per month (photo-to-listing)",
+      "Cross-post to eBay, Facebook & OfferUp",
+      "Unlimited manual listings",
       "Team access: Owner & Unlimited Editors",
       "AI Interchange Assistant (parts fitment across vehicles)",
-      "AI Auto-Repricing (market watch, updates prices automatically)",
       "Full inventory analytics & profit tracking",
-      "Cross-platform export (eBay, Facebook, OfferUp, Craigslist)",
     ],
   },
   {
@@ -89,29 +72,32 @@ export const PLANS: Plan[] = [
     per: "/mo",
     desc: "Everything in Max, plus we build and host a professional website for your business with your own custom domain, fully managed by Ahlam.",
     features: [
-      "Unlimited car listings per month",
-      "AI scan & auto-pricing (photo-to-listing)",
+      "Unlimited AI car scans (photo-to-listing)",
+      "Cross-post to eBay, Facebook & OfferUp",
+      "Unlimited manual listings",
       "Team access: Owner & Unlimited Editors",
       "AI Interchange Assistant (parts fitment across vehicles)",
-      "AI Auto-Repricing (market watch, updates prices automatically)",
       "Full inventory analytics & profit tracking",
-      "Cross-platform export (eBay, Facebook, OfferUp, Craigslist)",
-      "Custom business website, built for you",
+      "Custom business website, built for you: the inventory you upload on Ahlam links straight to your own site, so customers can browse it, interact, and ask questions",
       "Managed domain registration & hosting · priority support",
     ],
+    badge: "Greatest value",
   },
 ];
 
 export function PricingPlans({
   onChoose,
   ctaLabel,
+  exclude,
 }: {
   onChoose?: (planId: string) => void;
   ctaLabel?: string;
+  exclude?: string[]; // plan ids to hide (e.g. "starter" in the billing view)
 }) {
+  const plans = exclude?.length ? PLANS.filter((p) => !exclude.includes(p.id)) : PLANS;
   return (
     <div className="cs-plan-row" style={{ display: "flex", gap: 14, alignItems: "stretch", justifyContent: "center", flexWrap: "wrap" }}>
-      {PLANS.map((p) => (
+      {plans.map((p) => (
         <div
           key={p.id}
           className="cs-glass"
@@ -130,9 +116,9 @@ export function PricingPlans({
             background: p.highlight ? "color-mix(in srgb, var(--accent) 5%, var(--surface))" : "var(--surface)",
           }}
         >
-          {p.highlight && (
+          {p.badge && (
             <span style={{ position: "absolute", top: -12, left: 28, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#fff", background: "var(--accent)", borderRadius: 999, padding: "4px 12px" }}>
-              Most popular
+              {p.badge}
             </span>
           )}
           <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{p.name}</div>

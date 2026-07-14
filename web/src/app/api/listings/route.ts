@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { floorPrice } from "@/lib/price-bands";
-import { checkUsage, recordUsage, limitMessage } from "@/lib/usage";
+import { checkUsage, recordUsage, effectiveShopPlan, limitMessage } from "@/lib/usage";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -21,6 +21,7 @@ export async function GET(req: Request) {
     .from("listings")
     .select("*")
     .eq("shop_id", shopId)
+    .neq("status", "removed")
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -53,14 +54,47 @@ export async function POST(req: Request) {
   // Save-as-draft keeps everything private (not surfaced in the public market).
   const status = body.draft ? "draft" : "active";
 
-  // Solo plan caps whole-car posts per day. Only an actually-posted (active) car
-  // counts; drafts are free. Fail-open if usage isn't migrated / lookup errors.
+  // Quality gate for ACTIVE posts: junk like part "1" priced at $1 makes the
+  // whole marketplace look fake. Drafts stay loose so nothing in progress is
+  // ever lost — the bar applies when it goes public.
+  if (status === "active") {
+    const looksLikeName = (s: unknown) => typeof s === "string" && /[a-zA-Z]{2}/.test(s) && s.trim().length >= 3;
+    const wholeCar = sellMode === "whole" || sellMode === "both";
+    if (wholeCar) {
+      const year = Number(vehicle.year);
+      if (!looksLikeName(vehicle.make) || !looksLikeName(vehicle.model)) {
+        return NextResponse.json({ error: "Add the vehicle's real company/brand and model before posting.", code: "invalid" }, { status: 400 });
+      }
+      if (vehicle.year && (!Number.isInteger(year) || year < 1900 || year > new Date().getFullYear() + 2)) {
+        return NextResponse.json({ error: "That vehicle year doesn't look right.", code: "invalid" }, { status: 400 });
+      }
+      if (carPrice != null && (!Number.isFinite(carPrice) || carPrice < 50 || carPrice > 2_000_000)) {
+        return NextResponse.json({ error: "Set a realistic asking price for the whole car (at least $50).", code: "invalid" }, { status: 400 });
+      }
+    }
+    if (sellMode !== "whole") {
+      for (const p of parts) {
+        const nm = String(p.partName ?? "").trim();
+        if (!looksLikeName(nm)) {
+          return NextResponse.json({ error: `"${nm || "Unnamed part"}" isn't a real part name. Name every part before posting (e.g. "Alternator").`, code: "invalid" }, { status: 400 });
+        }
+        const price = p.suggestedPriceUsd;
+        if (price != null && (!Number.isFinite(Number(price)) || Number(price) < 1 || Number(price) > 100_000)) {
+          return NextResponse.json({ error: `Set a realistic price for "${nm}" (between $1 and $100,000), or leave it blank to price later.`, code: "invalid" }, { status: 400 });
+        }
+      }
+    }
+  }
+
+  // Some plans cap whole-car posts per day (Solo 1/day; an expired free month
+  // blocks posting). Only an actually-posted (active) car counts; drafts are
+  // free. Fail-open if usage isn't migrated / lookup errors.
   if (status === "active") {
     try {
-      const { data: shopRow } = await db.from("shops").select("plan").eq("id", shopId).single();
-      const usage = await checkUsage(db, shopId, (shopRow?.plan as string) || null, "car_post");
+      const plan = await effectiveShopPlan(db, shopId);
+      const usage = await checkUsage(db, shopId, plan, "car_post");
       if (!usage.allowed) {
-        return NextResponse.json({ error: limitMessage("car_post", usage.limit ?? 0), code: "quota" }, { status: 402 });
+        return NextResponse.json({ error: limitMessage("car_post", usage.limit ?? 0, plan), code: "quota" }, { status: 402 });
       }
     } catch { /* fail-open: never block a post on a usage-lookup error */ }
   }
@@ -338,4 +372,41 @@ export async function PATCH(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
+}
+
+// DELETE soft-deletes a post (status → 'removed') so it leaves the seller's
+// inventory and the public market, but the row survives for anything that
+// references it (conversations, orders, activity). Shapes, scoped to the
+// seller's own shop:
+//   { listingId }  | { listingIds }  → delete part listing(s)
+//   { vehicleId }                    → delete a vehicle post + its part listings
+export async function DELETE(req: Request) {
+  const supabase = await supabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const db = supabaseAdmin();
+  const { data: profile } = await db.from("profiles").select("shop_id").eq("id", user.id).single();
+  const shopId = profile?.shop_id;
+  if (!shopId) return NextResponse.json({ error: "No workspace" }, { status: 400 });
+
+  const body = await req.json().catch(() => ({}));
+
+  const ids: string[] = Array.isArray(body.listingIds) ? body.listingIds : body.listingId ? [body.listingId] : [];
+  if (ids.length) {
+    const { error } = await db.from("listings").update({ status: "removed" }).in("id", ids).eq("shop_id", shopId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, removed: ids.length });
+  }
+
+  if (body.vehicleId) {
+    const { error } = await db.from("vehicles").update({ status: "removed" }).eq("id", body.vehicleId).eq("shop_id", shopId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    // The car's part listings are posts from this car — they go with it.
+    const { error: pErr } = await db.from("listings").update({ status: "removed" }).eq("vehicle_id", body.vehicleId).eq("shop_id", shopId);
+    if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  return NextResponse.json({ error: "listingId, listingIds, or vehicleId required" }, { status: 400 });
 }

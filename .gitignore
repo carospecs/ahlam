@@ -19,6 +19,8 @@ web/build/
 # supabase CLI temp + stray root npm lockfile (project uses pnpm)
 supabase/.temp/
 /package-lock.json
+# local seed carries a copy of main's data — share privately, never commit
+supabase/seed.sql
 
 # expo
 app/.expo/

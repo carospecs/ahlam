@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Car, Wrench, ChevronLeft, Copy, Send, Sparkles, ScanLine, Check, CheckCircle2, Pencil, Lightbulb, LoaderCircle, ChevronDown, ChevronRight, Building, Cpu, Fuel, Gauge, Hash, AlertTriangle } from "lucide-react";
+import { Car, Wrench, ChevronLeft, Copy, Send, Sparkles, ScanLine, Check, CheckCircle2, Pencil, Lightbulb, LoaderCircle, ChevronDown, ChevronRight, Building, Cpu, Fuel, Gauge, Hash, AlertTriangle, Trash2 } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge, SellModeBadge, StatusBadge } from "../UI";
 import { buildVehicleText, partsForVehicle, SELL_MODE } from "../data";
 import { csToast, useData } from "../Dashboard";
@@ -105,6 +105,47 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
     setSavingMode(false);
   }
 
+  // Soft-delete all selected parts (they leave the market and this list).
+  async function bulkDelete() {
+    if (savingMode || !selectedCount) return;
+    const ids = parts.filter((p: any) => selected.has(p.id)).map((p: any) => p.id);
+    if (!window.confirm(`Delete ${ids.length} part${ids.length === 1 ? "" : "s"}? They come off the marketplace and out of your inventory.`)) return;
+    setSavingMode(true);
+    try {
+      const r = await fetch("/api/listings", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingIds: ids }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't delete"); }
+      else { csToast(`Deleted ${ids.length} part${ids.length === 1 ? "" : "s"}`); setSelected(new Set()); (window as any).csReloadData?.(); }
+    } catch { csToast("Couldn't delete — check your connection"); }
+    setSavingMode(false);
+  }
+
+  // Soft-delete a single part from its edit panel.
+  async function deletePart(id: string, p: any) {
+    if (savingParts.has(id)) return;
+    if (!window.confirm(`Delete "${p.part || "this part"}"? It comes off the marketplace and out of your inventory.`)) return;
+    setSavingParts((prev) => new Set(prev).add(id));
+    try {
+      const r = await fetch("/api/listings", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: id }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't delete"); }
+      else { csToast("Part deleted"); (window as any).csReloadData?.(); }
+    } catch { csToast("Couldn't delete — check your connection"); }
+    setSavingParts((prev) => { const n = new Set(prev); n.delete(id); return n; });
+  }
+
+  // Soft-delete the whole vehicle post (its part listings go with it).
+  const [deletingVeh, setDeletingVeh] = React.useState(false);
+  async function deleteVehicle() {
+    if (deletingVeh) return;
+    if (!window.confirm(`Delete this ${v.year} ${v.make} ${v.model} and all its parts? Everything comes off the marketplace and out of your inventory.`)) return;
+    setDeletingVeh(true);
+    try {
+      const r = await fetch("/api/listings", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vehicleId: v.id }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't delete"); }
+      else { csToast("Vehicle deleted"); (window as any).csReloadData?.(); onBack(); }
+    } catch { csToast("Couldn't delete — check your connection"); }
+    setDeletingVeh(false);
+  }
+
   // Toggle the inline edit panel for a part.
   const toggleExpand = (id: string) => setExpanded((prev) => {
     const n = new Set(prev);
@@ -194,6 +235,9 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
       {/* Header row: back link on the left, Post car on the top-right corner. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <button onClick={onBack} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "var(--muted)", fontSize: 13.5, fontWeight: 600, padding: 0, width: "fit-content" }}><ChevronLeft size={16} /> Back to shop vehicles</button>
+        <button onClick={deleteVehicle} disabled={deletingVeh} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 9, border: "1px solid color-mix(in srgb, var(--signal) 45%, transparent)", background: "transparent", color: "var(--signal)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: deletingVeh ? 0.6 : 1 }}>
+          {deletingVeh ? <LoaderCircle size={14} className="spin" /> : <Trash2 size={14} />} Delete vehicle
+        </button>
       </div>
 
       <Card pad={0} style={{ overflow: "hidden" }}>
@@ -257,7 +301,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
               {vinData && (
                 <>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    {vinData.make && <VINField icon={Building} label="Make" value={vinData.make} />}
+                    {vinData.make && <VINField icon={Building} label="Company/Brand" value={vinData.make} />}
                     {vinData.model && <VINField icon={Car} label="Model" value={vinData.model} />}
                     {vinData.year && <VINField icon={Hash} label="Year" value={String(vinData.year)} />}
                     {vinData.trim && <VINField icon={Car} label="Trim" value={vinData.trim} />}
@@ -344,6 +388,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
                   { label: "Post", action: postSelected },
                   { label: "Mark as Draft", action: () => bulkStatus("Draft") },
                   { label: "Mark as Sold", action: () => bulkStatus("Sold") },
+                  { label: "Delete", action: bulkDelete },
                 ]}
               />
               {selectedCount > 0 && (
@@ -437,13 +482,22 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
                       <div style={fieldLabel}>Description</div>
                       <textarea value={f.desc} onChange={(e) => setField(l.id, l, { desc: e.target.value })} rows={3} placeholder="Describe condition, compatibility, etc…" style={{ ...fieldInput, lineHeight: 1.5, resize: "vertical", fontFamily: "inherit" }} />
                     </div>
-                    <button
-                      onClick={() => savePart(l.id, l)}
-                      disabled={isSaving}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, opacity: isSaving ? 0.6 : 1 }}
-                    >
-                      {isSaving ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />} {isSaving ? "Saving…" : "Save changes"}
-                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <button
+                        onClick={() => savePart(l.id, l)}
+                        disabled={isSaving}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, opacity: isSaving ? 0.6 : 1 }}
+                      >
+                        {isSaving ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />} {isSaving ? "Saving…" : "Save changes"}
+                      </button>
+                      <button
+                        onClick={() => deletePart(l.id, l)}
+                        disabled={isSaving}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 9, border: "1px solid color-mix(in srgb, var(--signal) 45%, transparent)", background: "transparent", color: "var(--signal)", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: isSaving ? 0.6 : 1 }}
+                      >
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    </div>
                   </div>
                 )}
               </React.Fragment>
