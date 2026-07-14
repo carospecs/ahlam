@@ -209,6 +209,22 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
 .cs-card-btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 16px 34px -18px rgba(0,0,0,0.7); filter: none; }
 .cs-card-btn:hover:not(:disabled) .photo-cell { filter: brightness(1.06); }
 
+/* Marketplace listing rows: horizontal rectangle cards that lift on hover and
+   stack (photo on top, price bar below) on narrow screens. */
+.cs-listing-row { transition: transform 0.18s var(--ease-out), box-shadow 0.2s var(--ease-out), border-color 0.18s var(--ease-out); }
+.cs-listing-row:hover { transform: translateY(-2px); box-shadow: 0 16px 34px -18px rgba(0,0,0,0.7); }
+.cs-listing-row:hover .photo-cell { filter: brightness(1.06); }
+@media (max-width: 680px) {
+  .cs-listing-row { flex-direction: column !important; }
+  .cs-listing-row .cs-listing-photo { width: 100% !important; height: 172px; }
+  .cs-listing-row .cs-listing-cta {
+    width: 100% !important; border-left: none !important; border-top: 1px solid var(--line);
+    flex-direction: row !important; align-items: center !important; justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .cs-listing-row .cs-listing-cta button { width: auto; margin-top: 0 !important; margin-left: auto; }
+}
+
 /* Chat rows: highlight + actions revealed on hover */
 .cs-chat-row { transition: background-color 0.16s var(--ease-out), box-shadow 0.16s var(--ease-out), transform 0.12s var(--ease-out); }
 .cs-chat-row:hover { background: var(--surface2); box-shadow: inset 0 0 0 1px var(--line); }

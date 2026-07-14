@@ -12,6 +12,7 @@ interface MktPart {
   location: string; note: string; desc: string; shopId?: string; phone?: string | null;
   distance?: number | null; driveTime?: number | null;
   verified?: boolean; rating?: number; ratingCount?: number;
+  warrantyText?: string; asIs?: boolean;
 }
 interface MktVehicle {
   id: string; year: string; make: string; model: string; trim: string; body: string;
@@ -329,56 +330,18 @@ export function Browse() {
               <Camera size={16} /> Photo search <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {photoSearchResult.length} match{photoSearchResult.length === 1 ? "" : "es"}</span>
               <button onClick={() => setPhotoSearchResult(null)} style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)", background: "none", border: "none", cursor: "pointer" }}>Clear</button>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
+            <div style={{ display: "grid", gap: 12 }}>
               {photoSearchResult.map((l) => (
-                <div key={l.id} style={{ ...card, cursor: "pointer" }} onClick={() => openPart(l)} className="cs-hover-card">
-                  <div style={{ position: "relative" }}>
-                    <PhotoCell icon="Wrench" url={l.photoUrl} style={{ height: 150, borderRadius: 0 }} iconSize={40} />
-                    <div style={{ position: "absolute", top: 10, left: 10 }}><ConditionBadge grade={l.grade} size="sm" /></div>
-                  </div>
-                  <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
-                    <div className="tnum" style={{ fontSize: 19, fontWeight: 800, color: "var(--success)" }}>${l.price}</div>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.part}</div>
-                    {l.fitment && <div style={{ fontSize: 12, color: "var(--muted)" }}>Fits {l.fitment}</div>}
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                      <Store size={13} /> <ShopLink id={l.shopId} name={l.shopName} />{l.verified ? <VerifiedBadge size={12} /> : null}{(l.ratingCount ?? 0) > 0 ? <>· <Stars value={l.rating || 0} count={l.ratingCount} size={11} /></> : null}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                      <MapPin size={13} /> {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views > 0 ? `${l.views} views` : "New"}
-                    </div>
-                    <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}`, phone: l.phone }); }}>
-                      <MessageSquare size={14} /> Message seller
-                    </button>
-                  </div>
-                </div>
+                <PartRow key={l.id} l={l} onOpen={() => openPart(l)} onContact={() => setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}`, phone: l.phone })} />
               ))}
             </div>
           </div>
         )}
         {fParts.length > 0 && (
           <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
+          <div style={{ display: "grid", gap: 12 }}>
             {shownParts.map((l) => (
-              <div key={l.id} style={{ ...card, cursor: "pointer" }} onClick={() => openPart(l)} className="cs-hover-card">
-                <div style={{ position: "relative" }}>
-                  <PhotoCell icon="Wrench" url={l.photoUrl} style={{ height: 150, borderRadius: 0 }} iconSize={40} />
-                  <div style={{ position: "absolute", top: 10, left: 10 }}><ConditionBadge grade={l.grade} size="sm" /></div>
-                </div>
-                <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
-                  <div className="tnum" style={{ fontSize: 19, fontWeight: 800, color: "var(--success)" }}>${l.price}</div>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.part}</div>
-                  {l.fitment && <div style={{ fontSize: 12, color: "var(--muted)" }}>Fits {l.fitment}</div>}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                    <Store size={13} /> <ShopLink id={l.shopId} name={l.shopName} />{l.verified ? <VerifiedBadge size={12} /> : null}{(l.ratingCount ?? 0) > 0 ? <>· <Stars value={l.rating || 0} count={l.ratingCount} size={11} /></> : null}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                    <MapPin size={13} /> {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""} · <Eye size={12} /> {l.views > 0 ? `${l.views} views` : "New"}
-                  </div>
-                    <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}`, phone: l.phone }); }}>
-                      <MessageSquare size={14} /> Message seller
-                    </button>
-                </div>
-              </div>
+              <PartRow key={l.id} l={l} onOpen={() => openPart(l)} onContact={() => setContact({ listingId: l.id, title: `${l.part} · ${l.shopName}`, phone: l.phone })} />
             ))}
           </div>
           {fParts.length > visible && <div ref={sentinelRef} aria-hidden style={{ height: 1 }} />}
@@ -389,26 +352,9 @@ export function Browse() {
       ) : (
         fVehicles.length === 0 ? <Empty label="No vehicles match your search." /> : (
           <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
+          <div style={{ display: "grid", gap: 12 }}>
             {shownVehicles.map((v) => (
-              <div key={v.id} style={{ ...card, cursor: "pointer" }} onClick={() => openVehicle(v)} className="cs-hover-card">
-                <div style={{ position: "relative" }}>
-                  <PhotoCell icon="Car" url={v.photoUrl} style={{ height: 168, borderRadius: 0 }} iconSize={46} />
-                </div>
-                <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
-                  {v.askingPrice ? <div className="tnum" style={{ fontSize: 20, fontWeight: 800 }}>${v.askingPrice.toLocaleString()}</div> : <div style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>Contact for price</div>}
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{v.year} {v.make} {v.model} {v.trim}</div>
-                  <div style={{ fontSize: 12.5, color: "var(--muted)", display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <span>{v.mileage}</span><span>·</span><span>{v.body}</span><span>·</span><span>{v.color}</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
-                    <Store size={13} /> <ShopLink id={v.shopId} name={v.shopName} />{v.verified ? <VerifiedBadge size={12} /> : null}{(v.ratingCount ?? 0) > 0 ? <> · <Stars value={v.rating || 0} count={v.ratingCount} size={11} /></> : null} · <MapPin size={12} /> {v.location || "—"}{v.distance != null ? ` · ${v.distance} mi` : ""}{v.driveTime != null ? ` · ~${v.driveTime} min` : ""} · <Eye size={12} /> {v.views > 0 ? `${v.views} views` : "New"}
-                  </div>
-                  <button style={contactBtn} onClick={(e) => { e.stopPropagation(); setContact({ shopId: v.shopId, subject: `${v.year} ${v.make} ${v.model}`, title: `${v.year} ${v.make} ${v.model} · ${v.shopName}`, phone: v.phone }); }}>
-                    <MessageSquare size={14} /> Message seller
-                  </button>
-                </div>
-              </div>
+              <VehicleRow key={v.id} v={v} onOpen={() => openVehicle(v)} onContact={() => setContact({ shopId: v.shopId, subject: `${v.year} ${v.make} ${v.model}`, title: `${v.year} ${v.make} ${v.model} · ${v.shopName}`, phone: v.phone })} />
             ))}
           </div>
           {fVehicles.length > visible && <div ref={sentinelRef} aria-hidden style={{ height: 1 }} />}
@@ -701,6 +647,95 @@ function ShopLink({ id, name }: { id?: string; name: string }) {
     <a href={`/shop/${id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
       {name}
     </a>
+  );
+}
+
+// One full-width listing rectangle — photo on the left, the facts a buyer weighs
+// before driving out in the middle (fitment, condition notes, description,
+// seller reputation, distance), price + warranty + actions on the right.
+// Stacks vertically on phones via the .cs-listing-row media query.
+function PartRow({ l, onOpen, onContact }: { l: MktPart; onOpen: () => void; onContact: () => void }) {
+  const photoCount = l.photoUrls?.length || (l.photoUrl ? 1 : 0);
+  const blurb = [l.desc, l.note && l.note !== l.desc ? l.note : ""].filter(Boolean).join(" · ");
+  return (
+    <div onClick={onOpen} className="cs-listing-row" style={{ ...card, height: "auto", flexDirection: "row", cursor: "pointer" }}>
+      <div className="cs-listing-photo" style={{ position: "relative", width: 216, flexShrink: 0 }}>
+        <PhotoCell icon="Wrench" url={l.photoUrl} style={{ width: "100%", height: "100%", minHeight: 158, borderRadius: 0 }} iconSize={42} />
+        <div style={{ position: "absolute", top: 10, left: 10 }}><ConditionBadge grade={l.grade} size="sm" /></div>
+        {photoCount > 1 && <span style={{ position: "absolute", bottom: 8, right: 8, fontSize: 11, fontWeight: 700, color: "#fff", background: "rgba(7,11,22,0.66)", borderRadius: 6, padding: "2px 8px" }}>{photoCount} photos</span>}
+      </div>
+      <div style={{ flex: 1, minWidth: 0, padding: "13px 16px", display: "flex", flexDirection: "column", gap: 5 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 15.5, fontWeight: 700, lineHeight: 1.25 }}>{l.part}</span>
+          {l.category && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", border: "1px solid var(--line)", borderRadius: 999, padding: "2px 9px", whiteSpace: "nowrap" }}>{l.category}</span>}
+        </div>
+        {l.fitment && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--muted)" }}>
+            <Car size={13} style={{ flexShrink: 0 }} /> Fits {l.fitment}
+          </div>
+        )}
+        {blurb && (
+          <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{blurb}</div>
+        )}
+        <div style={{ marginTop: "auto", paddingTop: 7, display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)", flexWrap: "wrap" }}>
+          <Store size={13} style={{ flexShrink: 0 }} /> <ShopLink id={l.shopId} name={l.shopName} />
+          {l.verified ? <VerifiedBadge size={12} /> : null}
+          {(l.ratingCount ?? 0) > 0 ? <>· <Stars value={l.rating || 0} count={l.ratingCount} size={11} /></> : null}
+          <span>·</span> <MapPin size={13} style={{ flexShrink: 0 }} /> {l.location || "—"}{l.distance != null ? ` · ${l.distance} mi` : ""}{l.driveTime != null ? ` · ~${l.driveTime} min` : ""}
+          <span>·</span> <Eye size={12} style={{ flexShrink: 0 }} /> {l.views > 0 ? `${l.views} views` : "New"}
+        </div>
+      </div>
+      <div className="cs-listing-cta" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "flex-start", gap: 7, padding: "13px 16px", borderLeft: "1px solid var(--line)", width: 192, flexShrink: 0 }}>
+        <div className="tnum" style={{ fontSize: 22, fontWeight: 800, color: "var(--success)", lineHeight: 1 }}>${l.price.toLocaleString()}</div>
+        {l.warrantyText && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "3px 9px", whiteSpace: "nowrap", color: l.asIs ? "var(--muted)" : "var(--success)", background: l.asIs ? "color-mix(in srgb, var(--muted) 14%, transparent)" : "color-mix(in srgb, var(--success) 14%, transparent)" }}>
+            {l.asIs ? null : <ShieldCheck size={11} />}{l.warrantyText}
+          </span>
+        )}
+        <button style={{ ...contactBtn, marginTop: "auto" }} onClick={(e) => { e.stopPropagation(); onContact(); }}>
+          <MessageSquare size={14} /> Message seller
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Vehicle counterpart to PartRow — same rectangle layout for whole-car posts.
+function VehicleRow({ v, onOpen, onContact }: { v: MktVehicle; onOpen: () => void; onContact: () => void }) {
+  const photoCount = v.photoUrls?.length || (v.photoUrl ? 1 : 0);
+  return (
+    <div onClick={onOpen} className="cs-listing-row" style={{ ...card, height: "auto", flexDirection: "row", cursor: "pointer" }}>
+      <div className="cs-listing-photo" style={{ position: "relative", width: 216, flexShrink: 0 }}>
+        <PhotoCell icon="Car" url={v.photoUrl} style={{ width: "100%", height: "100%", minHeight: 158, borderRadius: 0 }} iconSize={46} />
+        {photoCount > 1 && <span style={{ position: "absolute", bottom: 8, right: 8, fontSize: 11, fontWeight: 700, color: "#fff", background: "rgba(7,11,22,0.66)", borderRadius: 6, padding: "2px 8px" }}>{photoCount} photos</span>}
+      </div>
+      <div style={{ flex: 1, minWidth: 0, padding: "13px 16px", display: "flex", flexDirection: "column", gap: 5 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 15.5, fontWeight: 700, lineHeight: 1.25 }}>{v.year} {v.make} {v.model} {v.trim}</span>
+          {v.sellMode === "both" && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 14%, transparent)", borderRadius: 999, padding: "2px 9px", whiteSpace: "nowrap" }}>Also parting out</span>}
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[v.mileage, v.body, v.color].filter(Boolean).map((s, i) => <React.Fragment key={i}>{i > 0 && <span>·</span>}<span>{s}</span></React.Fragment>)}
+        </div>
+        <div style={{ marginTop: "auto", paddingTop: 7, display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)", flexWrap: "wrap" }}>
+          <Store size={13} style={{ flexShrink: 0 }} /> <ShopLink id={v.shopId} name={v.shopName} />
+          {v.verified ? <VerifiedBadge size={12} /> : null}
+          {(v.ratingCount ?? 0) > 0 ? <>· <Stars value={v.rating || 0} count={v.ratingCount} size={11} /></> : null}
+          <span>·</span> <MapPin size={13} style={{ flexShrink: 0 }} /> {v.location || "—"}{v.distance != null ? ` · ${v.distance} mi` : ""}{v.driveTime != null ? ` · ~${v.driveTime} min` : ""}
+          <span>·</span> <Eye size={12} style={{ flexShrink: 0 }} /> {v.views > 0 ? `${v.views} views` : "New"}
+        </div>
+      </div>
+      <div className="cs-listing-cta" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "flex-start", gap: 7, padding: "13px 16px", borderLeft: "1px solid var(--line)", width: 192, flexShrink: 0 }}>
+        {v.askingPrice ? (
+          <div className="tnum" style={{ fontSize: 22, fontWeight: 800, lineHeight: 1 }}>${v.askingPrice.toLocaleString()}</div>
+        ) : (
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--accent)" }}>Contact for price</div>
+        )}
+        <button style={{ ...contactBtn, marginTop: "auto" }} onClick={(e) => { e.stopPropagation(); onContact(); }}>
+          <MessageSquare size={14} /> Message seller
+        </button>
+      </div>
+    </div>
   );
 }
 
