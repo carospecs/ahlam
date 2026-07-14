@@ -108,7 +108,7 @@ export function SiteFooter() {
           <Link href="/terms" style={{ ...footLink, fontSize: 12.5 }}>Terms</Link>
           <Link href="/privacy" style={{ ...footLink, fontSize: 12.5 }}>Privacy</Link>
           <Link href="/refunds" style={{ ...footLink, fontSize: 12.5 }}>Refunds</Link>
-          <a href={`mailto:${RECIPIENTS}`} style={{ ...footLink, marginLeft: "auto" }}>{CONTACT}</a>
+          <a href={`mailto:${RECIPIENTS}`} style={{ ...footLink, fontSize: 12.5, marginLeft: "auto" }}>Contact</a>
           <Link href="/waitlist" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, border: "1px solid var(--line)", background: "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Join the waitlist</Link>
         </div>
       </div>
