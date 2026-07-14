@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { supabaseAdmin } from "@/lib/supabase";
 import { PublicHeader } from "@/components/PublicHeader";
 import { MessageSeller } from "@/components/MessageSeller";
 import { ReportBusiness } from "@/components/ReportBusiness";
-import { normalizeGrade } from "@/lib/grade";
-import { effectiveWarranty, warrantyLabel } from "@/lib/warranty";
+import { getShopById, getShopInventory } from "@/lib/shop-site";
+import { hasPersonalSite, siteOrigin } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
 
@@ -14,82 +13,26 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ id: string }> };
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ahlam.io";
+
 export async function generateMetadata({ params }: Params) {
   const { id } = await params;
-  try {
-    const db = supabaseAdmin();
-    const { data: shop } = await db.from("shops").select("name, location").eq("id", id).single();
-    if (shop) return { title: `${shop.name} · Ahlam`, description: `Used parts & vehicles from ${shop.name}${shop.location ? ` in ${shop.location}` : ""}.` };
-  } catch {}
-  return { title: "Shop · Ahlam" };
-}
-
-function fmtFit(fit: any): string {
-  if (!fit) return "";
-  if (typeof fit === "string") return fit;
-  if (Array.isArray(fit)) {
-    return fit.map((f: any) => {
-      if (typeof f === "string") return f;
-      const yr = f.yearStart && f.yearEnd && f.yearStart !== f.yearEnd ? `${f.yearStart}–${f.yearEnd}` : (f.yearStart || "");
-      return [yr, f.make, f.model].filter(Boolean).join(" ").trim();
-    }).filter(Boolean).join(", ");
-  }
-  return "";
+  const shop = await getShopById(id);
+  if (!shop) return { title: "Shop · Ahlam" };
+  return {
+    title: `${shop.name} · Ahlam`,
+    description: `Used parts & vehicles from ${shop.name}${shop.location ? ` in ${shop.location}` : ""}.`,
+    // Ultimate shops own their SEO: their personal site is the canonical home
+    // of this storefront's content, so link equity flows there.
+    alternates: { canonical: hasPersonalSite(shop) ? siteOrigin(shop.slug) : `${SITE_URL}/shop/${id}` },
+  };
 }
 
 export default async function ShopStorefront({ params }: Params) {
   const { id } = await params;
-  let shop: any = null;
-  let listingRows: any[] = [];
-  let vehicleRows: any[] = [];
-  let reviewRows: any[] = [];
-  try {
-    const db = supabaseAdmin();
-    const res = await db.from("shops").select("*").eq("id", id).single();
-    shop = res.data;
-    if (shop) {
-      const [l, v, rv] = await Promise.all([
-        db.from("listings").select("*").eq("shop_id", id).eq("status", "active").order("created_at", { ascending: false }),
-        db.from("vehicles").select("*").eq("shop_id", id).in("sell_mode", ["whole", "both"]).eq("status", "active").order("created_at", { ascending: false }),
-        db.from("reviews").select("id, rating, body, verified_purchase, created_at, author_id").eq("shop_id", id).order("created_at", { ascending: false }).limit(20),
-      ]);
-      listingRows = l.data || [];
-      vehicleRows = (v.data || []).filter((x: any) => x.status === "active");
-      reviewRows = rv.data || [];
-      const authorIds = Array.from(new Set(reviewRows.map((r: any) => r.author_id)));
-      if (authorIds.length) {
-        const { data: profs } = await db.from("profiles").select("id, display_name").in("id", authorIds);
-        const nameOf = new Map((profs || []).map((p: any) => [p.id, p.display_name]));
-        reviewRows = reviewRows.map((r: any) => ({ ...r, author: nameOf.get(r.author_id) || "Buyer" }));
-      }
-    }
-  } catch {
-    // fall through to notFound below if shop never loaded
-  }
+  const shop = await getShopById(id);
   if (!shop) notFound();
-
-  const parts = listingRows.map((l: any) => {
-    const c = l.corrected || l.ai_output || {};
-    const w = effectiveWarranty({ warrantyDays: c.warrantyDays, asIs: c.asIs }, shop.default_warranty_days);
-    return {
-      id: l.id,
-      part: c.partName || c.part_name || "Used Part",
-      grade: normalizeGrade(c.condition),
-      price: l.price_usd ?? c.suggestedPriceUsd ?? 0,
-      fitment: fmtFit(c.fitment),
-      category: c.partCategory || c.part_category || "",
-      photoUrl: (l.photo_url || (Array.isArray(l.photo_urls) ? l.photo_urls[0] : null) || null) as string | null,
-      desc: (c.description || "") as string,
-      note: (c.conditionNotes || c.condition_notes || "") as string,
-      warrantyText: warrantyLabel(w.days, w.asIs),
-      asIs: w.asIs,
-    };
-  });
-  const vehicles = vehicleRows.map((v: any) => ({
-    id: v.id, year: v.year, make: v.make, model: v.model, trim: v.trim || "",
-    body: v.body || "", color: v.color || "", sellMode: v.sell_mode || "whole", askingPrice: v.asking_price,
-    photoUrl: (v.photo_url || (Array.isArray(v.photo_urls) ? v.photo_urls[0] : null) || null) as string | null, mileage: v.mileage || "",
-  }));
+  const { parts, vehicles, reviews: reviewRows } = await getShopInventory(shop);
 
   const initials = (shop.name || "S").split(" ").map((s: string) => s[0]).join("").toUpperCase().slice(0, 2);
   const count = parts.length + vehicles.length;
