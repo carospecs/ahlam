@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { MessageSeller } from "@/components/MessageSeller";
 import { notFound } from "next/navigation";
-import { supabaseAdmin } from "@/lib/supabase";
 import { PublicHeader } from "@/components/PublicHeader";
-import { normalizeGrade, type Grade } from "@/lib/grade";
-import { effectiveWarranty, warrantyLabel } from "@/lib/warranty";
+import { type Grade } from "@/lib/grade";
+import { getListingDetail, partSeoTitle } from "@/lib/shop-site";
 
 // Public, no-auth, indexable page for a SINGLE part listing — the destination
 // Google/Facebook send shoppers to from the product feed, and the SEO landing the
@@ -23,62 +22,15 @@ const GRADE_LABEL: Record<Grade, string> = {
   C: "Grade C — fair / repairable",
 };
 
-function fmtFit(fit: any): string {
-  if (!fit) return "";
-  if (typeof fit === "string") return fit;
-  if (Array.isArray(fit)) {
-    return fit
-      .map((f: any) => {
-        if (typeof f === "string") return f;
-        const yr = f.yearStart && f.yearEnd && f.yearStart !== f.yearEnd ? `${f.yearStart}–${f.yearEnd}` : f.yearStart || "";
-        return [yr, f.make, f.model].filter(Boolean).join(" ").trim();
-      })
-      .filter(Boolean)
-      .join(", ");
-  }
-  return "";
-}
-
-// One DB read shared by metadata + the page body.
+// One DB read shared by metadata + the page body (getListingDetail is
+// request-cached). The apex page only serves live inventory — anything not
+// active 404s here, same as before.
 async function loadListing(id: string) {
-  try {
-    const db = supabaseAdmin();
-    const { data: l } = await db.from("listings").select("*").eq("id", id).eq("status", "active").single();
-    if (!l) return null;
-    const { data: shop } = await db.from("shops").select("name, location, zip_code, business_phone, verified, default_warranty_days, returns_policy").eq("id", l.shop_id).single();
-    const c = l.corrected || l.ai_output || {};
-    const warranty = effectiveWarranty({ warrantyDays: c.warrantyDays, asIs: c.asIs }, shop?.default_warranty_days);
-    return {
-      id: l.id as string,
-      shopId: l.shop_id as string,
-      part: (c.partName || c.part_name || "Used Part") as string,
-      grade: normalizeGrade(c.condition),
-      price: (l.price_usd ?? c.suggestedPriceUsd ?? 0) as number,
-      fitment: fmtFit(c.fitment),
-      category: (c.partCategory || c.part_category || "") as string,
-      description: (c.description || "") as string,
-      conditionNotes: (c.conditionNotes || "") as string,
-      photoUrl: (l.photo_url || null) as string | null,
-      shopName: (shop?.name || "Independent seller") as string,
-      location: (shop?.zip_code || shop?.location || "") as string,
-      phone: (shop?.business_phone || null) as string | null,
-      verified: !!shop?.verified,
-      warrantyDays: warranty.days,
-      asIs: warranty.asIs,
-      warrantyText: warrantyLabel(warranty.days, warranty.asIs),
-      returnsPolicy: (shop?.returns_policy || "") as string,
-    };
-  } catch {
-    return null;
-  }
+  const l = await getListingDetail(id);
+  return l && l.status === "active" ? l : null;
 }
 
-// Keyword-rich title: "2016–2021 Honda Civic Front Left Door — Grade B used part near 77066".
-function seoTitle(l: NonNullable<Awaited<ReturnType<typeof loadListing>>>): string {
-  const head = [l.fitment, l.part].filter(Boolean).join(" ");
-  const near = l.location ? ` near ${l.location}` : "";
-  return `${head} — used auto part${near}`.trim();
-}
+const seoTitle = partSeoTitle;
 
 export async function generateMetadata({ params }: Params) {
   const { id } = await params;
@@ -86,7 +38,7 @@ export async function generateMetadata({ params }: Params) {
   if (!l) return { title: "Part · Ahlam" };
   const title = `${seoTitle(l)} | Ahlam`;
   const description =
-    (l.description || `${l.part} for sale — ${GRADE_LABEL[l.grade]}, $${l.price}. ${l.fitment ? `Fits ${l.fitment}. ` : ""}From ${l.shopName} on Ahlam.`).slice(0, 300);
+    (l.description || `${l.part} for sale — ${GRADE_LABEL[l.grade as Grade]}, $${l.price}. ${l.fitment ? `Fits ${l.fitment}. ` : ""}From ${l.shopName} on Ahlam.`).slice(0, 300);
   return {
     title,
     description,
@@ -112,7 +64,7 @@ export default async function ListingPage({ params }: Params) {
     "@type": "Product",
     name: seoTitle(l),
     image: l.photoUrl ? [l.photoUrl] : undefined,
-    description: l.description || `${l.part} — ${GRADE_LABEL[l.grade]}.`,
+    description: l.description || `${l.part} — ${GRADE_LABEL[l.grade as Grade]}.`,
     sku: l.id,
     category: l.category || undefined,
     offers: {
@@ -150,7 +102,7 @@ export default async function ListingPage({ params }: Params) {
             <div style={{ marginTop: 16, fontSize: 30, fontWeight: 800, color: "var(--success)" }}>${Number(l.price).toLocaleString()}</div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, padding: "5px 11px", borderRadius: 999, background: "color-mix(in srgb, var(--accent) 14%, transparent)", color: "var(--accent)" }}>{GRADE_LABEL[l.grade]}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, padding: "5px 11px", borderRadius: 999, background: "color-mix(in srgb, var(--accent) 14%, transparent)", color: "var(--accent)" }}>{GRADE_LABEL[l.grade as Grade]}</span>
               <span style={{ fontSize: 12.5, fontWeight: 700, padding: "5px 11px", borderRadius: 999, background: l.asIs ? "color-mix(in srgb, var(--muted) 14%, transparent)" : "color-mix(in srgb, var(--success) 16%, transparent)", color: l.asIs ? "var(--muted)" : "var(--success)" }}>{l.asIs ? "🛈 " : "✔ "}{l.warrantyText}</span>
               {l.category && <span style={{ fontSize: 12.5, fontWeight: 600, padding: "5px 11px", borderRadius: 999, border: "1px solid var(--line)", color: "var(--muted)" }}>{l.category}</span>}
               {l.location && <span style={{ fontSize: 12.5, fontWeight: 600, padding: "5px 11px", borderRadius: 999, border: "1px solid var(--line)", color: "var(--muted)" }}>📍 {l.location}</span>}

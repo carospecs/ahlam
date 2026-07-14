@@ -15,6 +15,7 @@ export function MessageSeller({
   sellerName,
   fullWidth,
   compact,
+  signinHref,
 }: {
   listingId?: string;
   shopId?: string;
@@ -22,6 +23,10 @@ export function MessageSeller({
   sellerName?: string;
   fullWidth?: boolean;
   compact?: boolean;
+  /** Where to send signed-out visitors. The Ultimate personal sites pass an
+   *  absolute ahlam.io URL — Supabase sessions are per-origin, so a visitor on
+   *  {slug}.ahlam.io is always signed out there. */
+  signinHref?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("Hi, is this still available?");
@@ -35,7 +40,7 @@ export function MessageSeller({
       const { supabaseBrowser } = await import("@/lib/supabase-browser");
       const { data: { session } } = await supabaseBrowser().auth.getSession();
       if (!session) {
-        window.location.href = "/?signin=1";
+        window.location.href = signinHref || "/?signin=1";
         return;
       }
       const r = await fetch("/api/marketplace/contact", {
