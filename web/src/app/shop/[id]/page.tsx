@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { PublicHeader } from "@/components/PublicHeader";
 import { MessageSeller } from "@/components/MessageSeller";
 import { ReportBusiness } from "@/components/ReportBusiness";
+import { DealAgent } from "@/components/DealAgent";
 import { normalizeGrade } from "@/lib/grade";
 
 export const dynamic = "force-dynamic";
@@ -212,6 +213,8 @@ export default async function ShopStorefront({ params }: Params) {
           <Link href="/" style={{ display: "inline-flex", marginTop: 12, padding: "10px 20px", borderRadius: 11, background: "var(--accent)", color: "#fff", textDecoration: "none", fontSize: 14, fontWeight: 600 }}>Open Ahlam</Link>
         </div>
       </div>
+
+      <DealAgent shopId={id} shopName={shop.name} />
     </main>
   );
 }
