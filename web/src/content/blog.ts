@@ -304,6 +304,89 @@ export const BLOG: BlogPost[] = [
       },
     ],
   },
+  {
+    slug: "ai-agents-that-negotiate-and-close-deals",
+    title: "The next phase of Ahlam: AI agents that answer, negotiate, and close deals for you",
+    description:
+      "A first look at where Ahlam is headed next: AI voice and messaging agents mapped to your live inventory that handle buyer and business calls, negotiate within limits you set, close deals while you are out of the office, and market your parts to the buyers most likely to want them.",
+    category: "Roadmap",
+    author: "The Ahlam team",
+    readMinutes: 5,
+    published: "2026-08-07",
+    image: "/img/aud-dealer.webp",
+    intro:
+      "Ahlam today takes a part from photo to posted listing in seconds. But the listing is only half the sale. The other half is the conversation: the phone call from a repair shop, the marketplace message asking if you will take a little less. The next phase of Ahlam handles that half too. Here is what we are building.",
+    sections: [
+      {
+        heading: "From listing parts to closing deals",
+        paragraphs: [
+          "Every yard knows the pattern. The listings are up, and then the phone rings while you are pulling an engine, or a buyer messages at 9 pm asking about a door, and by the time you answer the next morning they bought from someone else. Speed wins parts sales, and right now speed depends on you being available.",
+          "The next phase of Ahlam is a set of AI agents that are mapped directly to your inventory. They know every part you have on the shelf, its grade, its price, and its fitment, because they read from the same system your listings do. When a buyer calls or messages, the agent answers like someone who actually works the counter.",
+        ],
+      },
+      {
+        heading: "Voice agents that work the phones",
+        paragraphs: [
+          "The voice agent picks up when you cannot. A retail customer calls asking whether you have an alternator for a 2016 Accord: the agent checks your live inventory, confirms fitment, quotes the price, and takes the deal or the callback. A body shop calls needing three doors this week: the agent handles that conversation too, because it is built for both sides of the counter, business to business and business to customer.",
+        ],
+        bullets: [
+          "Answers with your real inventory, never a script of guesses.",
+          "Confirms fitment from the same data your listings use.",
+          "Handles retail buyers and commercial accounts alike.",
+        ],
+      },
+      {
+        heading: "Messaging agents that negotiate natively",
+        paragraphs: [
+          "Marketplace deals happen in the messages, and the messages are where sales die waiting for a reply. The messaging agent answers buyer questions and handles the negotiation natively in the conversation, whether that buyer is an individual or another business.",
+          "Buyers rarely open with your asking price. The agent knows how to hold a price, when to counter, and when to accept, because you have already told it exactly how far it can go.",
+        ],
+      },
+      {
+        heading: "You set the floor: negotiation thresholds",
+        paragraphs: [
+          "Here is the part that keeps you in control. Before you step away, you set a negotiation threshold: the lowest number you are willing to let a part go for, set separately for large, medium, and small parts.",
+          "Say a door is listed at $600 and you are out of the office. You set the floor at $550. A buyer offers $500, the agent counters, they settle at $560, and the deal closes while you are away. If the best offer never reaches $550, the agent holds the line and the part stays yours. The agent never sells below your number, because the threshold is a rule, not a suggestion.",
+        ],
+        bullets: [
+          "Set your floor by part size: large, medium, and small.",
+          "Out of office does not mean out of business: deals close within your limits.",
+          "The agent never goes below your threshold, full stop.",
+          "Come back to closed deals and held negotiations, not missed calls.",
+        ],
+      },
+      {
+        heading: "And beyond deals: your marketing and advertising agent",
+        paragraphs: [
+          "Answering and negotiating is only the demand you already have. The same inventory-aware intelligence will also work the other direction: Ahlam is becoming your marketing and advertising agent, promoting the parts on your shelf to the buyers most likely to want them.",
+          "Because the agent knows exactly what you have in stock, what it is worth, and what has been sitting, it knows what is worth promoting and to whom. Think of it as a marketing department that reads your shelf every morning: pushing your inventory in front of shops and buyers, advertising the parts with real demand, and moving the slow ones before they become scrap weight.",
+        ],
+        bullets: [
+          "Advertising driven by your live inventory, not a generic campaign.",
+          "Promotes the parts most likely to sell, to the buyers most likely to want them.",
+          "Slow movers get pushed before they turn into scrap weight.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        q: "Will the agent ever sell a part below my threshold?",
+        a: "No. The threshold is a hard floor, not a guideline. If no offer reaches it, the agent holds your price and leaves the negotiation for you to pick up when you are back.",
+      },
+      {
+        q: "How does the agent know what I have in stock?",
+        a: "It is mapped to your live Ahlam inventory, the same data behind your listings. If a part sells or a grade changes, the agent knows immediately, so it never quotes a part you no longer have.",
+      },
+      {
+        q: "Does this handle business buyers or just retail customers?",
+        a: "Both. The agents are built for business-to-business deals with shops and other yards as well as business-to-customer sales, over the phone and in marketplace messages.",
+      },
+      {
+        q: "When is this coming?",
+        a: "This is the next phase after our current round of updates ships. Watch this blog and your dashboard: we will announce early access here first.",
+      },
+    ],
+  },
 ];
 
 export function getPost(slug: string): BlogPost | undefined {
