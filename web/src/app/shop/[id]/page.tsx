@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { PublicHeader } from "@/components/PublicHeader";
 import { MessageSeller } from "@/components/MessageSeller";
 import { ReportBusiness } from "@/components/ReportBusiness";
-import { getShopById, getShopInventory } from "@/lib/shop-site";
-import { hasPersonalSite, siteOrigin } from "@/lib/slug";
+import { DealAgent } from "@/components/DealAgent";
+import { normalizeGrade } from "@/lib/grade";
 
 export const dynamic = "force-dynamic";
 
@@ -181,6 +181,8 @@ export default async function ShopStorefront({ params }: Params) {
           <Link href="/" style={{ display: "inline-flex", marginTop: 12, padding: "10px 20px", borderRadius: 11, background: "var(--accent)", color: "#fff", textDecoration: "none", fontSize: 14, fontWeight: 600 }}>Open Ahlam</Link>
         </div>
       </div>
+
+      <DealAgent shopId={id} shopName={shop.name} />
     </main>
   );
 }
