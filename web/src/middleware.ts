@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { SHOP_SUBDOMAINS } from "@/lib/shop-subdomains";
 
 const allowedOrigins = [
   "http://localhost:3000",
@@ -28,6 +29,19 @@ function corsMiddleware(req: NextRequest, res: NextResponse) {
 }
 
 export async function middleware(req: NextRequest) {
+  // Shop subdomain routing: <slug>.ahlam.io -> /shop/<id>, transparently
+  // (URL bar keeps showing the subdomain). See lib/shop-subdomains.ts.
+  const host = (req.headers.get("host") || "").split(":")[0].toLowerCase();
+  const subdomain = host.endsWith(".ahlam.io") ? host.slice(0, -".ahlam.io".length) : "";
+  const shopId = subdomain && SHOP_SUBDOMAINS[subdomain];
+  if (shopId) {
+    const url = req.nextUrl.clone();
+    if (url.pathname === "/" || url.pathname === "") {
+      url.pathname = `/shop/${shopId}`;
+      return NextResponse.rewrite(url);
+    }
+  }
+
   const res = NextResponse.next();
 
   // CORS preflight
@@ -71,5 +85,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*", "/dashboard/:path*"],
+  matcher: ["/api/:path*", "/dashboard/:path*", "/"],
 };
