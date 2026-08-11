@@ -106,7 +106,9 @@ async function research(fitment, part, grade, notes) {
     max_tokens: 16000,
     thinking: { type: "adaptive" },
     output_config: { effort: "medium" },
-    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }],
+    // 4 searches, not 6: measured ~110k input tokens/part at 5+ searches — the
+    // result payloads dominate cost. 4 keeps multi-source corroboration.
+    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 4 }],
   };
   for (let attempt = 0; ; attempt++) {
     try {

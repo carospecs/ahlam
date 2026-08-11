@@ -48,6 +48,19 @@ export function judgeModel(): string {
   return process.env.PRICING_JUDGE_MODEL || "claude-sonnet-5";
 }
 
+const envInt = (name: string, fallback: number): number => {
+  const n = Number(process.env[name]);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : fallback;
+};
+
+// Sonnet 5 respects effort strictly; "medium" keeps the estimate-first
+// reasoning while cutting the ~5.8k-token essays that default (high) effort
+// wrote at 16k max_tokens. Overridable per eval iteration.
+export function judgeEffort(): "low" | "medium" | "high" {
+  const e = process.env.PRICING_JUDGE_EFFORT;
+  return e === "low" || e === "high" ? e : "medium";
+}
+
 // The appraiser. Verbatim from docs/pricing-prompt.md — edit it there first.
 const JUDGE_SYSTEM = `You are an experienced used auto parts appraiser. You have spent years pricing parts pulled
 from salvage vehicles for resale on eBay Motors, Facebook Marketplace, and directly to local
@@ -305,7 +318,13 @@ async function judgeOne(part: JudgeInputPart, collect?: { usage?: JudgeUsage[] }
     const resp = await getAnthropic().messages.create(
       {
         model: judgeModel(),
-        max_tokens: 16000,
+        // Measured 2026-08-11 (eval smoke): default effort + 16k max_tokens
+        // produced ~5.8k output tokens and ~220s per call — past the 110s
+        // timeout, so production calls would fail to the memory tier. Effort
+        // and the token cap are the latency/cost knobs; tune via env in the
+        // eval loop (scripts/pricing-eval.mjs), not by editing constants.
+        max_tokens: envInt("PRICING_JUDGE_MAX_TOKENS", 8000),
+        output_config: { effort: judgeEffort() },
         thinking: { type: "adaptive" },
         output_config: { format: { type: "json_schema", schema: JUDGE_SCHEMA as unknown as Record<string, unknown> } },
         // Identical for every part in a batch → cache breakpoint here wins back
