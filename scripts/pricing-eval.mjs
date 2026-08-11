@@ -122,6 +122,14 @@ if (DRY) {
   process.exit(0);
 }
 
+// --comps-only: fetch + cache the eBay pools for every selected vehicle and
+// exit — free (no Anthropic calls). Stages a retrieval-constant baseline.
+if (has("--comps-only")) {
+  for (const v of vehicles) await compsFor(v);
+  console.log("Comp pools cached. Done.");
+  process.exit(0);
+}
+
 if (!process.env.ANTHROPIC_API_KEY) { console.error("Missing ANTHROPIC_API_KEY in web/.env.local"); process.exit(1); }
 
 // ── run ──────────────────────────────────────────────────────────────────────

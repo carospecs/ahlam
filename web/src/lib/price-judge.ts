@@ -61,6 +61,15 @@ export function judgeEffort(): "low" | "medium" | "high" {
   return e === "low" || e === "high" ? e : "medium";
 }
 
+// The appraiser prompt already forces explicit reasoning through the schema's
+// reasoning-before-numbers fields — adaptive thinking on top of that reasons
+// TWICE (~7k output tokens, 80-220s/call, past the 110s timeout; measured
+// 2026-08-11). PRICING_JUDGE_THINKING=off lets the schema fields carry the
+// reasoning alone. Kept as a knob until the eval loop settles the quality call.
+export function judgeThinking(): { type: "adaptive" } | { type: "disabled" } {
+  return process.env.PRICING_JUDGE_THINKING === "off" ? { type: "disabled" } : { type: "adaptive" };
+}
+
 // The appraiser. Verbatim from docs/pricing-prompt.md — edit it there first.
 const JUDGE_SYSTEM = `You are an experienced used auto parts appraiser. You have spent years pricing parts pulled
 from salvage vehicles for resale on eBay Motors, Facebook Marketplace, and directly to local
@@ -325,7 +334,7 @@ async function judgeOne(part: JudgeInputPart, collect?: { usage?: JudgeUsage[] }
         // eval loop (scripts/pricing-eval.mjs), not by editing constants.
         max_tokens: envInt("PRICING_JUDGE_MAX_TOKENS", 8000),
         output_config: { effort: judgeEffort() },
-        thinking: { type: "adaptive" },
+        thinking: judgeThinking(),
         output_config: { format: { type: "json_schema", schema: JUDGE_SCHEMA as unknown as Record<string, unknown> } },
         // Identical for every part in a batch → cache breakpoint here wins back
         // the latency the longer reasoning costs (pricing-prompt.md).
