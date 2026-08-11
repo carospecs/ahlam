@@ -60,6 +60,15 @@ async function geminiPriceParts(prompt: string): Promise<RawPriced[] | null> {
 }
 
 export async function POST(req: Request) {
+  const t0 = Date.now();
+  // Per-tier wall-clock (ms) — returned in the response and logged as one
+  // greppable line; this is the seed of the V3 pricing_events telemetry.
+  const tm = { cacheMs: 0, ebayMs: 0, judgeMs: 0, groundedMs: 0, memoryMs: 0 };
+  const judgeCallMs: number[] = [];
+  const counts = { cached: 0, judged: 0, zeroComp: 0, reviewFlagged: 0 };
+  const pct = (a: number[], p: number): number =>
+    a.length ? [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor((p / 100) * a.length))] : 0;
+
   // Auth: web session cookie OR Bearer token (same as /api/identify).
   const supabase = await (await import("@/lib/supabase-server")).supabaseServer();
   let { data: { user } } = await supabase.auth.getUser();
@@ -165,12 +174,15 @@ export async function POST(req: Request) {
 
   if (marketOn) {
     // Tier 0 — cache (48h TTL): a near-term rescan prices in seconds, same numbers.
+    const tCache = Date.now();
     const cached = await readMarketComps(parts.map((p) => compKey(id, spec, p.name, gradeOf(p))));
+    tm.cacheMs = Date.now() - tCache;
     const researchable: InPart[] = [];
     for (const p of parts) {
       const hit = cached[compKey(id, spec, p.name, gradeOf(p))];
       if (gradeOf(p) === "C") continue; // no research spend; gradeAdjustUsed nulls it anyway
       if (hit) {
+        counts.cached++;
         byName.set(nameKey(p.name), { mid: hit.price_usd, lo: hit.low_usd, hi: hit.high_usd });
         metaByName.set(nameKey(p.name), { confidence: hit.confidence, compCount: hit.comp_count, sources: hit.sources });
       } else {
@@ -204,10 +216,13 @@ export async function POST(req: Request) {
       // Generation range widens retrieval; assembly variants are decided per
       // part inside ebay-comps. Widening only — never fitment filtering.
       const gen = resolveGeneration(v.make, v.model, v.year);
+      const tEbay = Date.now();
       const comps = await fetchCompsForParts(fitment, researchable.map((p) => p.name), gen);
+      tm.ebayMs = Date.now() - tEbay;
       if (comps) {
         const withComps = researchable.filter((p) => (comps[p.name] ?? []).length > 0);
         const zeroComp = researchable.filter((p) => (comps[p.name] ?? []).length === 0);
+        counts.zeroComp = zeroComp.length;
         const judgeInput: JudgeInputPart[] = withComps.map((p) => ({
           part_id: p.name,
           name: p.name,
@@ -217,10 +232,16 @@ export async function POST(req: Request) {
           comps: comps[p.name] ?? [],
           photo: typeof p.photoIndex === "number" ? photos[p.photoIndex] ?? null : null,
         }));
+        // Judge and grounded fallback run concurrently; time each branch's own
+        // wall clock (not the shared Promise.all) so the report shows which gated.
+        const tJudge = Date.now(), tGrounded = Date.now();
         const [judged, fallback] = await Promise.all([
-          priceParts(judgeInput),
-          zeroComp.length ? marketPriceParts({ vehicleId: id, spec, powertrainLine, parts: zeroComp }) : Promise.resolve([]),
+          priceParts(judgeInput, { callMs: judgeCallMs }).finally(() => { tm.judgeMs = Date.now() - tJudge; }),
+          zeroComp.length
+            ? marketPriceParts({ vehicleId: id, spec, powertrainLine, parts: zeroComp }).finally(() => { tm.groundedMs = Date.now() - tGrounded; })
+            : Promise.resolve([]),
         ]);
+        counts.judged = judged?.length ?? 0;
         for (const r of judged ?? []) {
           // Null estimate = the judge declined to price (junk pool / cannot
           // identify). The part keeps its vision price downstream, but the
@@ -256,6 +277,7 @@ export async function POST(req: Request) {
   // Tiers 2/3 — memory, then Gemini: run when research is off or its call failed.
   // Cached market rows (if any) still win over the full-list result.
   if (pricedBy !== "claude-market") {
+    const tMemory = Date.now();
     let parsed: RawPriced[] | null = null;
     if (anthropicEnabled()) {
       const claude: RawPricedPart[] | null = await claudePriceParts({ vehicleId: id, spec, powertrainLine, parts });
@@ -273,6 +295,7 @@ export async function POST(req: Request) {
         if (!byName.has(key)) byName.set(key, fromRaw(r)); // cache overlay wins
       }
     }
+    tm.memoryMs = Date.now() - tMemory;
   }
 
   // Claude's price IS the price (class positioning removed 2026-07-03); only the
@@ -300,5 +323,16 @@ export async function POST(req: Request) {
     };
   });
 
-  return NextResponse.json({ ok: true, vehicle: id, pricedBy, parts: out }, { headers: CORS });
+  for (const m of metaByName.values()) if (m.needsReview) counts.reviewFlagged++;
+  const timings = {
+    totalMs: Date.now() - t0,
+    ...tm,
+    judgeCalls: judgeCallMs.length,
+    judgeP50Ms: pct(judgeCallMs, 50),
+    judgeP95Ms: pct(judgeCallMs, 95),
+    counts,
+  };
+  console.log(JSON.stringify({ tag: "reprice-timing", vehicle: id, pricedBy, parts: parts.length, ...timings }));
+
+  return NextResponse.json({ ok: true, vehicle: id, pricedBy, parts: out, timings }, { headers: CORS });
 }

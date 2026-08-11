@@ -25,8 +25,15 @@ export type MarketPricedPart = {
   sourceDomains: string[];
 };
 
-export const MARKET_BUDGET_MS = 120_000; // hard wall clock for the whole research call
-const MAX_SEARCHES = 8;
+// Both env-overridable without a deploy: this branch runs concurrently with the
+// judge but gates the whole reprice response whenever ANY part has zero comps,
+// so its budget is the #1 wall-clock knob (docs/PRICING_V3_PLAN.md, latency).
+const envInt = (name: string, fallback: number): number => {
+  const n = Number(process.env[name]);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : fallback;
+};
+export const MARKET_BUDGET_MS = envInt("MARKET_BUDGET_MS", 120_000); // hard wall clock for the whole research call
+const MAX_SEARCHES = envInt("MARKET_MAX_SEARCHES", 8);
 
 // Structured-output schema. web_search + json_schema may or may not compose on a
 // given API build — marketPriceParts probes once and falls back to instructed

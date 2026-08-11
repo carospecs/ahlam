@@ -341,8 +341,14 @@ async function allLimit<T>(limit: number, tasks: (() => Promise<T>)[]): Promise<
 
 // Judge every part that has comps (and/or a photo). Returns null only when
 // EVERY call fails — the route falls to the memory tier, same as before.
-export async function priceParts(parts: JudgeInputPart[]): Promise<JudgedPrice[] | null> {
+// opts.callMs, when provided, collects each call's wall-clock duration
+// (including failures) so callers can report judge p50/p95 latency.
+export async function priceParts(parts: JudgeInputPart[], opts?: { callMs?: number[] }): Promise<JudgedPrice[] | null> {
   if (!parts.length) return [];
-  const rows = (await allLimit(JUDGE_CONCURRENCY, parts.map((p) => () => judgeOne(p)))).filter((r): r is JudgedPrice => r !== null);
+  const timed = (p: JudgeInputPart) => async () => {
+    const t = Date.now();
+    try { return await judgeOne(p); } finally { opts?.callMs?.push(Date.now() - t); }
+  };
+  const rows = (await allLimit(JUDGE_CONCURRENCY, parts.map(timed))).filter((r): r is JudgedPrice => r !== null);
   return rows.length ? rows : null;
 }
