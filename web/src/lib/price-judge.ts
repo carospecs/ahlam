@@ -42,7 +42,7 @@ export type JudgedPrice = {
 
 // Model choice is deliberately still open: pricing-prompt.md says to test Opus
 // vs Sonnet 5 on this prompt against known sale prices BEFORE settling
-// (scripts/car-price-test.mjs runs both). Until that call is made, the default
+// (scripts/pricing-eval.mjs runs the A/B). Until that call is made, the default
 // stays on the incumbent; PRICING_JUDGE_MODEL flips it without a deploy.
 export function judgeModel(): string {
   return process.env.PRICING_JUDGE_MODEL || "claude-sonnet-5";

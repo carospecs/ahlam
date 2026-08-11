@@ -180,9 +180,9 @@ export async function POST(req: Request) {
 
     // Tier 1 — comps-first: OUR code pulls real eBay listings for every uncached
     // part in parallel (up to three query variants per part), then parallel
-    // ≤15-part judge chunks price them. Parts with zero usable comps route to
-    // the grounded-search fallback on the strong model, concurrently, so the
-    // slow path never blocks the fast majority.
+    // per-part appraiser calls (width-limited; lib/price-judge) price them.
+    // Parts with zero usable comps route to the grounded-search fallback on the
+    // strong model, concurrently, so the slow path never blocks the fast majority.
     if (researchable.length) {
       const gradeByName = new Map(researchable.map((p) => [nameKey(p.name), gradeOf(p)]));
       const written: { part: { name: string; usedPartPriceUsd: number | null; usedPartPriceLowUsd: number | null; usedPartPriceHighUsd: number | null; confidence: MarketConfidence; compCount: number; sourceDomains: string[] }; grade: string }[] = [];

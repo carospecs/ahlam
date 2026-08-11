@@ -49,7 +49,7 @@ if (!process.env.__EBAY_COMPS_TEST_CHILD) {
 
 const assert = (await import("node:assert/strict")).default;
 const { compQuery, cleanComps, isAssemblyClass, compQueryVariants, interleave } = await import("./ebay-comps.ts");
-const { sanitizeJudgedRow, chunkJudgeParts } = await import("./price-judge.ts");
+const { sanitizeJudgedRow } = await import("./price-judge.ts");
 const { dropGenericWhenPositioned } = await import("./part-enrich.ts");
 
 let passed = 0;
@@ -115,24 +115,64 @@ test("drops non-positive / missing prices and empty titles", () => {
   assert.equal(out.length, 0);
 });
 
-// ── sanitizeJudgedRow ────────────────────────────────────────────────────────
+// ── sanitizeJudgedRow (V3 appraiser response shape) ──────────────────────────
 
-test("passes a clean judged row; clamps estimate into band", () => {
-  const r = sanitizeJudgedRow({ part_id: "Tailgate", estimate: 700, low: 750, high: 650, confidence: "high", note: "6 comps" });
-  assert.deepEqual(r, { part_id: "Tailgate", estimate: 700, low: 650, high: 750, confidence: "high", note: "6 comps" });
+const row = (over = {}) => ({
+  independent_estimate: "step 1 reasoning",
+  comp_analysis: "step 2 reasoning",
+  discarded_count: 3,
+  reconciliation: "step 3 reasoning",
+  low: 650,
+  recommended: 700,
+  high: 750,
+  confidence: "high",
+  confidence_reason: "6 concordant complete-assembly comps",
+  needs_human_review: false,
+  missing_information: null,
+  ...over,
 });
 
-test("rejects rows without id; coerces unknown confidence", () => {
-  assert.equal(sanitizeJudgedRow({ estimate: 100 }), null);
-  assert.equal(sanitizeJudgedRow({ part_id: "X", estimate: 100, low: 90, high: 110, confidence: "sure", note: "" }).confidence, "low");
+test("passes a clean appraiser row; swapped low/high are reordered", () => {
+  const r = sanitizeJudgedRow("Tailgate", row({ low: 750, high: 650 }));
+  assert.equal(r.part_id, "Tailgate");
+  assert.equal(r.estimate, 700);
+  assert.equal(r.low, 650);
+  assert.equal(r.high, 750);
+  assert.equal(r.confidence, "high");
+  assert.equal(r.needsReview, false);
+  assert.equal(r.note, "6 concordant complete-assembly comps");
+  assert.equal(r.reasoning.independent_estimate, "step 1 reasoning");
+  assert.equal(r.reasoning.discarded_count, 3);
 });
 
-test("null/invalid estimate is a VALID 'no usable comps' answer, not a rejection", () => {
-  const a = sanitizeJudgedRow({ part_id: "Windshield", estimate: null, low: null, high: null, confidence: "low", note: "no true glass comps" });
-  assert.deepEqual(a, { part_id: "Windshield", estimate: null, low: null, high: null, confidence: "low", note: "no true glass comps" });
-  const b = sanitizeJudgedRow({ part_id: "X", estimate: -5, confidence: "high", note: "" });
-  assert.equal(b.estimate, null); // invalid coerces to the null answer
+test("estimate outside the band widens the band to include it", () => {
+  const r = sanitizeJudgedRow("X", row({ low: 800, high: 900, recommended: 700 }));
+  assert.equal(r.low, 700);
+  assert.equal(r.high, 900);
+});
+
+test("non-object rejects; unknown confidence coerces to low and flags review", () => {
+  assert.equal(sanitizeJudgedRow("X", null), null);
+  const r = sanitizeJudgedRow("X", row({ confidence: "sure" }));
+  assert.equal(r.confidence, "low");
+  assert.equal(r.needsReview, true); // low confidence always routes to review
+});
+
+test("null/invalid recommended is a VALID decline-to-price, not a rejection", () => {
+  const a = sanitizeJudgedRow("Windshield", row({ low: null, recommended: null, high: null, confidence: "low", confidence_reason: "no true glass comps" }));
+  assert.equal(a.estimate, null);
+  assert.equal(a.low, null);
+  assert.equal(a.needsReview, true);
+  assert.equal(a.note, "no true glass comps");
+  const b = sanitizeJudgedRow("X", row({ recommended: -5 }));
+  assert.equal(b.estimate, null); // invalid coerces to the decline answer
   assert.equal(b.confidence, "low");
+});
+
+test("needs_human_review from the model is honored even at high confidence", () => {
+  const r = sanitizeJudgedRow("X", row({ needs_human_review: true }));
+  assert.equal(r.needsReview, true);
+  assert.equal(r.estimate, 700); // price still carried — route decides what to do
 });
 
 // ── dropGenericWhenPositioned (merge synonym dedupe) ─────────────────────────
@@ -155,7 +195,7 @@ test("positioned-only or bare-only groups are untouched", () => {
 });
 
 test("missing band collapses to the estimate", () => {
-  const r = sanitizeJudgedRow({ part_id: "X", estimate: 100, confidence: "med", note: "" });
+  const r = sanitizeJudgedRow("X", row({ low: null, high: null, recommended: 100 }));
   assert.equal(r.low, 100);
   assert.equal(r.high, 100);
 });
@@ -226,20 +266,6 @@ test("merged cap 18: shell flooding in one pool can't starve assembly comps", ()
   for (let i = 0; i < 6; i++) {
     assert.ok(merged.some((c) => c.title === pools[0][i].title), `assembly comp ${i} survived`);
   }
-});
-
-// ── chunkJudgeParts ──────────────────────────────────────────────────────────
-
-test("chunking: fixed-size, order-preserving, flat concat equals input", () => {
-  assert.deepEqual(chunkJudgeParts([]), []);
-  assert.deepEqual(chunkJudgeParts([1, 2, 3]).length, 1);
-  const p15 = Array.from({ length: 15 }, (_, i) => i);
-  assert.deepEqual(chunkJudgeParts(p15).map((c) => c.length), [15]);
-  const p16 = Array.from({ length: 16 }, (_, i) => i);
-  assert.deepEqual(chunkJudgeParts(p16).map((c) => c.length), [15, 1]);
-  const p80 = Array.from({ length: 80 }, (_, i) => i);
-  assert.deepEqual(chunkJudgeParts(p80).map((c) => c.length), [15, 15, 15, 15, 15, 5]);
-  assert.deepEqual(chunkJudgeParts(p80).flat(), p80);
 });
 
 console.log(`  ${passed} passed`);
