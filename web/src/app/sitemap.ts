@@ -15,7 +15,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/guides`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${SITE_URL}/blog`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${SITE_URL}/guidance`, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${SITE_URL}/contact`, changeFrequency: "monthly", priority: 0.5 },
     { url: `${SITE_URL}/privacy`, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${SITE_URL}/terms`, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${SITE_URL}/refunds`, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${SITE_URL}/guidelines`, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${SITE_URL}/acceptable-use`, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${SITE_URL}/cookies`, changeFrequency: "yearly", priority: 0.3 },
   ];
 
   const guideRoutes: MetadataRoute.Sitemap = GUIDES.map((g) => ({
