@@ -291,7 +291,9 @@ export function sanitizeJudgedRow(partId: string, row: unknown): JudgedPrice | n
   return { part_id: partId, estimate, low, high, confidence, needsReview, note, reasoning };
 }
 
-async function judgeOne(part: JudgeInputPart): Promise<JudgedPrice | null> {
+export type JudgeUsage = { input_tokens: number; output_tokens: number };
+
+async function judgeOne(part: JudgeInputPart, collect?: { usage?: JudgeUsage[] }): Promise<JudgedPrice | null> {
   try {
     const { header, marketData } = buildJudgeUserText(part);
     const img = photoBlock(part.photo);
@@ -313,6 +315,7 @@ async function judgeOne(part: JudgeInputPart): Promise<JudgedPrice | null> {
       },
       { timeout: 110_000 },
     );
+    collect?.usage?.push({ input_tokens: resp.usage.input_tokens, output_tokens: resp.usage.output_tokens });
     const text = resp.content.find((b) => b.type === "text");
     if (!text || text.type !== "text") return null;
     return sanitizeJudgedRow(part.part_id, JSON.parse(text.text));
@@ -341,13 +344,14 @@ async function allLimit<T>(limit: number, tasks: (() => Promise<T>)[]): Promise<
 
 // Judge every part that has comps (and/or a photo). Returns null only when
 // EVERY call fails — the route falls to the memory tier, same as before.
-// opts.callMs, when provided, collects each call's wall-clock duration
-// (including failures) so callers can report judge p50/p95 latency.
-export async function priceParts(parts: JudgeInputPart[], opts?: { callMs?: number[] }): Promise<JudgedPrice[] | null> {
+// opts.callMs / opts.usage, when provided, collect each call's wall-clock
+// duration and token usage so callers (route timings, eval harness) can report
+// judge p50/p95 latency and per-run cost.
+export async function priceParts(parts: JudgeInputPart[], opts?: { callMs?: number[]; usage?: JudgeUsage[] }): Promise<JudgedPrice[] | null> {
   if (!parts.length) return [];
   const timed = (p: JudgeInputPart) => async () => {
     const t = Date.now();
-    try { return await judgeOne(p); } finally { opts?.callMs?.push(Date.now() - t); }
+    try { return await judgeOne(p, opts); } finally { opts?.callMs?.push(Date.now() - t); }
   };
   const rows = (await allLimit(JUDGE_CONCURRENCY, parts.map(timed))).filter((r): r is JudgedPrice => r !== null);
   return rows.length ? rows : null;
