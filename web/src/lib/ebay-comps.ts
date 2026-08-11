@@ -23,6 +23,12 @@ export type Comp = {
   price: number;
   title: string;
   condition: string;      // eBay condition label ("Used", "For parts or not working", …)
+  // Judge-facing listing metadata (docs: pricing-prompt.md — shipping-vs-pickup
+  // and listing date are part of what the judge must weigh; a $326 pickup-only
+  // tailgate is not the same number as a $326 shipped one). Optional so the
+  // plain-node tests and older callers keep working.
+  shipping?: string | null;  // "free shipping" | "+$150 shipping" | "calculated shipping" | "local pickup only"
+  listedAt?: string | null;  // ISO date (YYYY-MM-DD) the listing was created, when eBay returns it
 };
 
 // ── App token (client credentials), cached in-module until near expiry ────────
@@ -67,7 +73,7 @@ export function compQuery(fitment: { year?: string | number | null; make?: strin
 const CLEARLY_BROKEN = /\b(for\s+parts|not\s+working|parts\s+only)\b/i;
 
 export function cleanComps(
-  raw: { price: number; title: string; condition?: string }[],
+  raw: { price: number; title: string; condition?: string; shipping?: string | null; listedAt?: string | null }[],
   cap = 12,
 ): Comp[] {
   const seen = new Set<string>();
@@ -81,9 +87,49 @@ export function cleanComps(
     const key = `${title.toLowerCase().replace(/\s+/g, " ").slice(0, 60)}|${Math.round(r.price)}`;
     if (seen.has(key)) continue; // exact repeat (eBay artifact) — real supply still shows as distinct listings
     seen.add(key);
-    out.push({ price: Math.round(r.price), title, condition: r.condition || "Used" });
+    out.push({ price: Math.round(r.price), title, condition: r.condition || "Used", shipping: r.shipping ?? null, listedAt: r.listedAt ?? null });
     if (out.length >= cap) break;
   }
+  return out;
+}
+
+// ── Query variants (pure, unit-tested) ────────────────────────────────────────
+
+// Parts eBay lists BOTH as stripped shells/sub-components and as complete
+// assemblies. Verified live 2026-07-17: "2018 TESLA Model X Driver Side Front
+// Door" best-match = 12/12 shells + motors + glass, zero complete doors; adding
+// "assembly" surfaces a complete door as hit #1. Retrieval widening ONLY —
+// never a fitment filter; the judge still reads every title.
+const ASSEMBLY_CLASS =
+  /\b(door|seat|liftgate|lift\s?gate|tailgate|tail\s?gate|hatch|trunk\s?lid|deck\s?lid|decklid|bumper|mirror|axle|engine|transmission|transaxle|transfer\s?case|differential|steering\s?column|console|headlight|head\s?lamp|taillight|tail\s?light|tail\s?lamp|strut|hub)\b/i;
+
+export function isAssemblyClass(partName: string): boolean {
+  return ASSEMBLY_CLASS.test(partName);
+}
+
+// Priority-ordered variants for one part: [assembly?, generation?, generic].
+// Order matters — it is the interleave priority (scarce assembly comps first).
+export function compQueryVariants(
+  fitment: { year?: string | number | null; make?: string | null; model?: string | null },
+  partName: string,
+  gen?: { from: number; to: number } | null,
+): string[] {
+  const generic = compQuery(fitment, partName);
+  const out: string[] = [];
+  if (isAssemblyClass(partName) && !/\bassembly\b/i.test(partName)) out.push(`${generic} assembly`);
+  if (gen && fitment.make && fitment.model && gen.from !== gen.to)
+    out.push([`${gen.from}-${gen.to}`, fitment.make, fitment.model, partName].join(" ").replace(/\s+/g, " ").trim());
+  out.push(generic);
+  return [...new Set(out)];
+}
+
+// Round-robin [a0,b0,c0,a1,b1,c1,…] so best-match shell flooding in one pool
+// can't starve the others at the cap. cleanComps preserves order, so interleave
+// order decides exactly which comps survive the final cap.
+export function interleave<T>(pools: T[][]): T[] {
+  const out: T[] = [];
+  for (let i = 0; pools.some((p) => i < p.length); i++)
+    for (const p of pools) if (i < p.length) out.push(p[i]);
   return out;
 }
 
@@ -105,29 +151,70 @@ async function searchOne(token: string, query: string): Promise<Comp[]> {
       signal: AbortSignal.timeout(8_000),
     });
     if (!r.ok) return [];
-    const j = (await r.json()) as { itemSummaries?: { title?: string; price?: { value?: string }; condition?: string }[] };
+    const j = (await r.json()) as {
+      itemSummaries?: {
+        title?: string;
+        price?: { value?: string };
+        condition?: string;
+        itemCreationDate?: string;
+        shippingOptions?: { shippingCostType?: string; shippingCost?: { value?: string } }[];
+      }[];
+    };
+    // Shipping label: buyers (and the judge) treat a pickup-only price and a
+    // shipped price as different numbers. No shippingOptions on a Browse
+    // summary almost always means seller-arranged local pickup only.
+    const shippingLabel = (s: { shippingOptions?: { shippingCostType?: string; shippingCost?: { value?: string } }[] }): string => {
+      const o = s.shippingOptions?.[0];
+      if (!o) return "local pickup only";
+      const v = Number(o.shippingCost?.value ?? NaN);
+      if (Number.isFinite(v)) return v === 0 ? "free shipping" : `+$${Math.round(v)} shipping`;
+      return o.shippingCostType === "CALCULATED" ? "calculated shipping" : "shipping unknown";
+    };
     const raw = (j.itemSummaries ?? []).map((s) => ({
       price: Number(s.price?.value ?? NaN),
       title: s.title ?? "",
       condition: s.condition,
+      shipping: shippingLabel(s),
+      listedAt: typeof s.itemCreationDate === "string" ? s.itemCreationDate.slice(0, 10) : null,
     }));
-    return cleanComps(raw);
+    return cleanComps(raw, 24); // per-variant pool stays wide; the merged pool takes the final cap
   } catch {
     return [];
   }
 }
 
-// Fetch comps for every part IN PARALLEL. Returns null when eBay itself is
+const MERGED_CAP = 18;        // final per-part pool: 3 variants round-robin → ≥6 slots each pre-dedupe
+const PART_CONCURRENCY = 16;  // ≤16 parts in flight × ≤3 variants = ≤48 concurrent Browse calls
+
+// Tiny width limiter — variants tripled the query count; don't fire 240 at once.
+async function allLimit<T>(limit: number, tasks: (() => Promise<T>)[]): Promise<T[]> {
+  const out = new Array<T>(tasks.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+      while (next < tasks.length) {
+        const i = next++;
+        out[i] = await tasks[i]();
+      }
+    }),
+  );
+  return out;
+}
+
+// Fetch comps for every part IN PARALLEL (width-limited), up to three query
+// variants per part merged into one pool. Returns null when eBay itself is
 // unavailable (unconfigured / auth failure) so the caller can skip the comps
 // tier entirely instead of treating every part as zero-comp.
 export async function fetchCompsForParts(
   fitment: { year?: string | number | null; make?: string | null; model?: string | null },
   partNames: string[],
+  gen?: { from: number; to: number } | null,
 ): Promise<Record<string, Comp[]> | null> {
   const token = await appToken();
   if (!token) return null;
-  const results = await Promise.all(
-    partNames.map(async (name) => [name, await searchOne(token, compQuery(fitment, name))] as const),
-  );
-  return Object.fromEntries(results);
+  const tasks = partNames.map((name) => async () => {
+    const pools = await Promise.all(compQueryVariants(fitment, name, gen).map((q) => searchOne(token, q)));
+    return [name, cleanComps(interleave(pools), MERGED_CAP)] as const;
+  });
+  return Object.fromEntries(await allLimit(PART_CONCURRENCY, tasks));
 }

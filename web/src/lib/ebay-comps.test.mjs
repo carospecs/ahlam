@@ -48,8 +48,8 @@ if (!process.env.__EBAY_COMPS_TEST_CHILD) {
 }
 
 const assert = (await import("node:assert/strict")).default;
-const { compQuery, cleanComps } = await import("./ebay-comps.ts");
-const { sanitizeJudgedRow } = await import("./price-judge.ts");
+const { compQuery, cleanComps, isAssemblyClass, compQueryVariants, interleave } = await import("./ebay-comps.ts");
+const { sanitizeJudgedRow, chunkJudgeParts } = await import("./price-judge.ts");
 const { dropGenericWhenPositioned } = await import("./part-enrich.ts");
 
 let passed = 0;
@@ -158,6 +158,88 @@ test("missing band collapses to the estimate", () => {
   const r = sanitizeJudgedRow({ part_id: "X", estimate: 100, confidence: "med", note: "" });
   assert.equal(r.low, 100);
   assert.equal(r.high, 100);
+});
+
+// ── isAssemblyClass ──────────────────────────────────────────────────────────
+
+test("assembly-class parts: shells/sub-components flood their eBay best-match", () => {
+  for (const name of ["Driver Side Front Door", "Liftgate", "2nd Row Seat", "Front Bumper", "Side Mirror", "Trunk Lid", "Engine", "Rear Axle", "Front Strut"]) {
+    assert.equal(isAssemblyClass(name), true, name);
+  }
+});
+
+test("non-assembly parts stay single-variant", () => {
+  for (const name of ["Hood", "Fender", "Windshield", "Alloy Wheel", "Alternator"]) {
+    assert.equal(isAssemblyClass(name), false, name);
+  }
+});
+
+// ── compQueryVariants ────────────────────────────────────────────────────────
+
+const silverado = { year: 2019, make: "Chevrolet", model: "Silverado 1500" };
+
+test("assembly part + gen → 3 variants in priority order [assembly, gen, generic]", () => {
+  const qs = compQueryVariants(silverado, "Driver Side Front Door", { from: 2019, to: 2023 });
+  assert.deepEqual(qs, [
+    "2019 Chevrolet Silverado 1500 Driver Side Front Door assembly",
+    "2019-2023 Chevrolet Silverado 1500 Driver Side Front Door",
+    "2019 Chevrolet Silverado 1500 Driver Side Front Door",
+  ]);
+});
+
+test("non-assembly part, no gen → exactly the generic query", () => {
+  assert.deepEqual(compQueryVariants(silverado, "Hood", null), ["2019 Chevrolet Silverado 1500 Hood"]);
+});
+
+test("part name already containing 'Assembly' gets no doubled assembly variant", () => {
+  const qs = compQueryVariants(silverado, "Headlight Assembly", null);
+  assert.deepEqual(qs, ["2019 Chevrolet Silverado 1500 Headlight Assembly"]);
+  assert.equal(new Set(qs).size, qs.length);
+});
+
+test("gen variant skipped when make/model missing or gen is a single year", () => {
+  assert.deepEqual(compQueryVariants({ year: 2019, model: "Silverado 1500" }, "Hood", { from: 2019, to: 2023 }), ["2019 Silverado 1500 Hood"]);
+  assert.deepEqual(compQueryVariants({ year: 2019, make: "Chevrolet" }, "Hood", { from: 2019, to: 2023 }), ["2019 Chevrolet Hood"]);
+  assert.deepEqual(compQueryVariants(silverado, "Hood", { from: 2022, to: 2022 }), ["2019 Chevrolet Silverado 1500 Hood"]);
+});
+
+// ── interleave + merged pool ─────────────────────────────────────────────────
+
+test("interleave round-robins ragged pools and tolerates empties", () => {
+  assert.deepEqual(interleave([["a0", "a1"], ["b0"], ["c0", "c1", "c2"]]), ["a0", "b0", "c0", "a1", "c1", "c2"]);
+  assert.deepEqual(interleave([[], ["b0"], []]), ["b0"]);
+  assert.deepEqual(interleave([]), []);
+});
+
+test("cross-variant dedupe: same title+price survives the merge once", () => {
+  const dupe = mk("2019 Silverado 1500 Front Door assembly OEM", 900);
+  const merged = cleanComps(interleave([[dupe, mk("assembly pool extra", 950)], [dupe, mk("gen pool extra", 850)]]), 18);
+  assert.equal(merged.filter((c) => c.title === dupe.title).length, 1);
+  assert.equal(merged.length, 3);
+});
+
+test("merged cap 18: shell flooding in one pool can't starve assembly comps", () => {
+  const pool = (tag) => Array.from({ length: 12 }, (_, i) => mk(`${tag} listing number ${i} distinct title`, 100 * (i + 1) + tag.length));
+  const pools = [pool("assembly"), pool("generation"), pool("generic")];
+  const merged = cleanComps(interleave(pools), 18);
+  assert.equal(merged.length, 18);
+  for (let i = 0; i < 6; i++) {
+    assert.ok(merged.some((c) => c.title === pools[0][i].title), `assembly comp ${i} survived`);
+  }
+});
+
+// ── chunkJudgeParts ──────────────────────────────────────────────────────────
+
+test("chunking: fixed-size, order-preserving, flat concat equals input", () => {
+  assert.deepEqual(chunkJudgeParts([]), []);
+  assert.deepEqual(chunkJudgeParts([1, 2, 3]).length, 1);
+  const p15 = Array.from({ length: 15 }, (_, i) => i);
+  assert.deepEqual(chunkJudgeParts(p15).map((c) => c.length), [15]);
+  const p16 = Array.from({ length: 16 }, (_, i) => i);
+  assert.deepEqual(chunkJudgeParts(p16).map((c) => c.length), [15, 1]);
+  const p80 = Array.from({ length: 80 }, (_, i) => i);
+  assert.deepEqual(chunkJudgeParts(p80).map((c) => c.length), [15, 15, 15, 15, 15, 5]);
+  assert.deepEqual(chunkJudgeParts(p80).flat(), p80);
 });
 
 console.log(`  ${passed} passed`);

@@ -1,9 +1,10 @@
 // The universal pricing pass — every scan's part list is priced for the EXACT
 // decoded vehicle through a tier ladder, BLOCKING in the scan's critical path:
 //   cached market comp (≤48h)
-//   → COMPS-FIRST: our code pulls real eBay listings in parallel (lib/ebay-comps),
-//     then ONE batched fast-tier judgment call prices everything with comps
-//     (lib/price-judge — a function, not an agent; see PRICING_MIGRATION_INSTRUCTION)
+//   → COMPS-FIRST: our code pulls real eBay listings in parallel, up to three
+//     query variants per part (lib/ebay-comps), then parallel PER-PART appraiser
+//     calls (estimate-first reasoning, part photo included, review flags) price
+//     everything with comps (lib/price-judge — see docs/pricing-prompt.md)
 //   → zero-comp parts only: grounded web-search fallback on the strong model
 //     (lib/market-pricing), run concurrently so it never blocks the fast majority
 //   → Claude memory estimate → Gemini → the client's Gemini-vision prices.
@@ -15,6 +16,7 @@ import { anthropicEnabled, claudePriceParts, type RawPricedPart } from "@/lib/an
 import { marketPriceParts, type MarketConfidence } from "@/lib/market-pricing";
 import { fetchCompsForParts } from "@/lib/ebay-comps";
 import { priceParts, type JudgeInputPart } from "@/lib/price-judge";
+import { resolveGeneration } from "@/lib/generations";
 import { compKey, readMarketComps, writeMarketComps } from "@/lib/market-cache";
 import { isSanePrice } from "@/lib/price-bands";
 import { decodeVin, engineLabel } from "@/lib/vin";
@@ -36,7 +38,7 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS });
 }
 
-type InPart = { name: string; grade: string; inferred?: boolean };
+type InPart = { name: string; grade: string; inferred?: boolean; photoIndex?: number; conditionNotes?: string };
 
 type RawPriced = { name?: string; usedPartPriceUsd?: unknown; usedPartPriceLowUsd?: unknown; usedPartPriceHighUsd?: unknown };
 
@@ -86,6 +88,10 @@ export async function POST(req: Request) {
     vin?: string;
     vehicle?: { year?: number | null; make?: string | null; model?: string | null; trim?: string | null; engine?: string | null; drivetrain?: string | null };
     parts?: InPart[];
+    // Downscaled scan photos (data URLs); parts reference them by photoIndex so
+    // the judge sees the part it is pricing (pricing-prompt.md: photos carry
+    // condition/completeness information the written assessment misses).
+    photos?: string[];
   };
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: "bad body" }, { status: 400, headers: CORS }); }
 
@@ -146,7 +152,9 @@ export async function POST(req: Request) {
   const gradeOf = (p: InPart): ConditionGrade =>
     (["A", "B", "C"] as const).includes(p.grade as ConditionGrade) ? (p.grade as ConditionGrade) : "B";
 
-  type Meta = { confidence: MarketConfidence; compCount: number; sources: string[] };
+  const photos = Array.isArray(body.photos) ? body.photos.filter((s): s is string => typeof s === "string").slice(0, 24) : [];
+
+  type Meta = { confidence: MarketConfidence; compCount: number; sources: string[]; needsReview?: boolean; note?: string };
   const byName = new Map<string, Priced>();     // winning price rows, keyed by part name
   const metaByName = new Map<string, Meta>();   // market-evidence metadata where a market tier priced
   let fullRaw: RawPriced[] | null = null;       // full-list tier result — enables positional name-drift fallback
@@ -171,52 +179,66 @@ export async function POST(req: Request) {
     }
 
     // Tier 1 — comps-first: OUR code pulls real eBay listings for every uncached
-    // part in parallel, then one batched fast-tier call judges them. Parts with
-    // zero usable comps route to the grounded-search fallback on the strong model,
-    // concurrently, so the slow path never blocks the fast majority.
+    // part in parallel (up to three query variants per part), then parallel
+    // ≤15-part judge chunks price them. Parts with zero usable comps route to
+    // the grounded-search fallback on the strong model, concurrently, so the
+    // slow path never blocks the fast majority.
     if (researchable.length) {
       const gradeByName = new Map(researchable.map((p) => [nameKey(p.name), gradeOf(p)]));
       const written: { part: { name: string; usedPartPriceUsd: number | null; usedPartPriceLowUsd: number | null; usedPartPriceHighUsd: number | null; confidence: MarketConfidence; compCount: number; sourceDomains: string[] }; grade: string }[] = [];
-      const accept = (row: { name: string; usedPartPriceUsd: number | null; usedPartPriceLowUsd: number | null; usedPartPriceHighUsd: number | null; confidence: MarketConfidence; compCount: number; sourceDomains: string[] }) => {
+      const accept = (row: { name: string; usedPartPriceUsd: number | null; usedPartPriceLowUsd: number | null; usedPartPriceHighUsd: number | null; confidence: MarketConfidence; compCount: number; sourceDomains: string[]; needsReview?: boolean; note?: string }) => {
         const key = nameKey(row.name);
         if (!gradeByName.has(key)) return; // echo drift to an unknown name — ignore
-        // Sanity rail: an implausible price is DROPPED (never clamped) and the
-        // part falls to the vision price the client already has.
-        if (row.usedPartPriceUsd != null && !isSanePrice(row.usedPartPriceUsd, row.name)) return;
+        // Sanity check runs AFTER the estimate and only FLAGS (pricing-prompt.md:
+        // no bands/caps anywhere the model can see, and no silent drops — an
+        // implausible price routes to human review instead of vanishing).
+        const insane = row.usedPartPriceUsd != null && !isSanePrice(row.usedPartPriceUsd, row.name);
+        const needsReview = !!row.needsReview || insane;
         byName.set(key, { mid: row.usedPartPriceUsd, lo: row.usedPartPriceLowUsd, hi: row.usedPartPriceHighUsd });
-        metaByName.set(key, { confidence: row.confidence, compCount: row.compCount, sources: row.sourceDomains });
-        written.push({ part: row, grade: gradeByName.get(key)! });
+        metaByName.set(key, { confidence: row.confidence, compCount: row.compCount, sources: row.sourceDomains, ...(needsReview ? { needsReview: true } : {}), ...(row.note ? { note: row.note } : {}) });
+        // A review-flagged price must not pin the 48h cache.
+        if (!needsReview) written.push({ part: row, grade: gradeByName.get(key)! });
       };
 
       const fitment = { year: v.year, make: v.make, model: v.model, trim: v.trim, engine: v.engine };
-      const comps = await fetchCompsForParts(fitment, researchable.map((p) => p.name));
+      // Generation range widens retrieval; assembly variants are decided per
+      // part inside ebay-comps. Widening only — never fitment filtering.
+      const gen = resolveGeneration(v.make, v.model, v.year);
+      const comps = await fetchCompsForParts(fitment, researchable.map((p) => p.name), gen);
       if (comps) {
         const withComps = researchable.filter((p) => (comps[p.name] ?? []).length > 0);
         const zeroComp = researchable.filter((p) => (comps[p.name] ?? []).length === 0);
         const judgeInput: JudgeInputPart[] = withComps.map((p) => ({
           part_id: p.name,
           name: p.name,
-          condition: gradeOf(p) === "A" ? "good" : gradeOf(p) === "B" ? "fair" : "unknown",
+          grade: gradeOf(p),
+          conditionNotes: p.conditionNotes ?? null,
           fitment,
           comps: comps[p.name] ?? [],
+          photo: typeof p.photoIndex === "number" ? photos[p.photoIndex] ?? null : null,
         }));
         const [judged, fallback] = await Promise.all([
           priceParts(judgeInput),
           zeroComp.length ? marketPriceParts({ vehicleId: id, spec, powertrainLine, parts: zeroComp }) : Promise.resolve([]),
         ]);
         for (const r of judged ?? []) {
-          // Null estimate = the judge saw a junk pool (accessories/sub-components,
-          // no real comps) and declined to invent a number. Leave the part to the
-          // lower tiers / vision price instead of shipping a fabricated price.
-          if (r.estimate == null) continue;
+          // Null estimate = the judge declined to price (junk pool / cannot
+          // identify). The part keeps its vision price downstream, but the
+          // review flag still surfaces so the yard prices it by hand.
+          if (r.estimate == null) {
+            metaByName.set(nameKey(r.part_id), { confidence: "low", compCount: comps[r.part_id]?.length ?? 0, sources: ["ebay.com"], needsReview: true, ...(r.note ? { note: r.note } : {}) });
+            continue;
+          }
           accept({
             name: r.part_id,
             usedPartPriceUsd: r.estimate,
             usedPartPriceLowUsd: r.low,
             usedPartPriceHighUsd: r.high,
-            confidence: r.confidence === "med" ? "medium" : r.confidence,
+            confidence: r.confidence,
             compCount: comps[r.part_id]?.length ?? 0,
             sourceDomains: ["ebay.com"],
+            needsReview: r.needsReview,
+            note: r.note,
           });
         }
         for (const r of fallback ?? []) accept(r);
@@ -266,7 +288,15 @@ export async function POST(req: Request) {
       suggestedPriceUsd: gradeAdjustUsed(priced.mid, grade),
       suggestedPriceLowUsd: gradeAdjustUsed(priced.lo, grade),
       suggestedPriceHighUsd: gradeAdjustUsed(priced.hi, grade),
-      ...(meta ? { confidence: meta.confidence, compCount: meta.compCount, sources: meta.sources } : {}),
+      ...(meta
+        ? {
+            confidence: meta.confidence,
+            compCount: meta.compCount,
+            sources: meta.sources,
+            ...(meta.needsReview ? { needsReview: true } : {}),
+            ...(meta.note ? { note: meta.note } : {}),
+          }
+        : {}),
     };
   });
 
