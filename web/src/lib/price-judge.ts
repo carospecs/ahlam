@@ -333,9 +333,11 @@ async function judgeOne(part: JudgeInputPart, collect?: { usage?: JudgeUsage[] }
         // and the token cap are the latency/cost knobs; tune via env in the
         // eval loop (scripts/pricing-eval.mjs), not by editing constants.
         max_tokens: envInt("PRICING_JUDGE_MAX_TOKENS", 8000),
-        output_config: { effort: judgeEffort() },
         thinking: judgeThinking(),
-        output_config: { format: { type: "json_schema", schema: JUDGE_SCHEMA as unknown as Record<string, unknown> } },
+        output_config: {
+          effort: judgeEffort(),
+          format: { type: "json_schema", schema: JUDGE_SCHEMA as unknown as Record<string, unknown> },
+        },
         // Identical for every part in a batch → cache breakpoint here wins back
         // the latency the longer reasoning costs (pricing-prompt.md).
         system: [{ type: "text" as const, text: JUDGE_SYSTEM, cache_control: { type: "ephemeral" as const } }],

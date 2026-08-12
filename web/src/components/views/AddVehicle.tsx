@@ -584,12 +584,17 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
       // the pass that gives code-generated inferred powertrain parts their first
       // price, so they land priced at first render — never blank.
       setScanStage("pricing");
+      // The judge prices per part WITH the photo it was detected in (completeness
+      // + condition live in the image, not the text). Map each part's redacted
+      // display URL back to its photo index; dataUrls[i] aligns with photos[i].
+      const photoIndexByDisplay = new Map(photos.map((p, i) => [display(p.url), i]));
       const priced = agg
         ? await repriceForVin(
             myToken,
             resolvedVin || agg.vin || null,
             finalParts,
             { year: agg.year, make: agg.make, model: agg.model, trim: agg.trim, engine: agg.engine },
+            { dataUrls, indexOf: (p) => (p.photoUrl != null ? photoIndexByDisplay.get(p.photoUrl) : undefined) },
           )
         : null;
       if (!isScanRun(myToken, slot)) return; // cancelled / superseded while pricing
@@ -625,6 +630,10 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
     vin: string | null,
     current: AIPart[],
     vehicleId?: { year?: string; make?: string; model?: string; trim?: string | null; engine?: string | null },
+    // Scan photos for the per-part appraiser: the same AI-ready data URLs the
+    // catalog pass used, plus a part→photo-index resolver (docs/pricing-prompt.md:
+    // the photo carries the completeness/condition read the text misses).
+    photoCtx?: { dataUrls: string[]; indexOf: (p: AIPart) => number | undefined },
   ): Promise<AIPart[] | null> {
     try {
       const res = await fetch("/api/reprice", {
@@ -634,7 +643,18 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
         // judgment call (~10–30s); only zero-comp stragglers hit the slower
         // grounded fallback. Past 150s the vision prices render instead.
         signal: AbortSignal.timeout(150_000),
-        body: JSON.stringify({ vin: vin || undefined, vehicle: vehicleId, parts: current.map((p) => ({ name: p.partName, grade: p.condition, inferred: p.inferred || undefined })) }),
+        body: JSON.stringify({
+          vin: vin || undefined,
+          vehicle: vehicleId,
+          ...(photoCtx ? { photos: photoCtx.dataUrls } : {}),
+          parts: current.map((p) => ({
+            name: p.partName,
+            grade: p.condition,
+            inferred: p.inferred || undefined,
+            ...(photoCtx ? { photoIndex: photoCtx.indexOf(p) } : {}),
+            ...(p.conditionNotes?.trim() ? { conditionNotes: p.conditionNotes } : {}),
+          })),
+        }),
       });
       const j = await res.json();
       if (!isScanRun(token, slot)) return null; // a newer scan superseded this one
