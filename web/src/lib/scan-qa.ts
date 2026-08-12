@@ -111,5 +111,25 @@ export function runScanQa(parts: QaPart[], wholeCarUsd?: number | null, photoCol
   const cc = colorConflict(photoColors);
   if (cc) flags.push({ level: "warn", message: `Photos disagree on body color (${cc[0]} vs ${cc[1]}) — verify every photo is the SAME vehicle.` });
 
+  // 7. Wreck with clean mechanicals: some part shows STRONG collision force, yet a
+  //    mechanical part still carries an optimistic grade and a full price. The
+  //    impact-face pass (lib/damage-zones applyImpactFaceDamage) normally condemns
+  //    these; this is the last-line net for the cases it can't see (face origin
+  //    graded B by the model, damage only in a photo the part wasn't boxed in).
+  const STRONG = /crush|caved|collision|impact|torn|frame|airbag/i;
+  const MECHANICAL = /^(engine\b|transmission\b|transaxle\b|radiator\b|condenser|compressor|alternator|starter|drive unit|fuel tank)/i;
+  const wrecked = parts.some((p) => p.condition === "C" && STRONG.test(`${p.conditionNotes ?? ""} ${p.description ?? ""}`));
+  if (wrecked) {
+    const cleanMech = parts.filter(
+      (p) => MECHANICAL.test(p.partName.trim()) && p.condition !== "C" && (p.suggestedPriceUsd || 0) > 0 && !STRONG.test(p.conditionNotes ?? ""),
+    );
+    if (cleanMech.length) {
+      flags.push({
+        level: "warn",
+        message: `This vehicle shows collision damage, but these mechanical parts are still graded clean at full price — inspect before listing: ${names(cleanMech)}.`,
+      });
+    }
+  }
+
   return flags;
 }
