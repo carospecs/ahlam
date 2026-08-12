@@ -18,7 +18,7 @@ import { runQaAgent, hasWarnCases, applyQaEdit, type QaAgentResolution } from "@
 import { classifyPowertrain, ensurePowertrainParts } from "@/lib/powertrain";
 import { redactImage, redactImageToDataUrl, type PiiBox } from "@/lib/redact";
 import { groundDescriptions } from "@/lib/describe-ground";
-import { propagateImpactDamage } from "@/lib/damage-zones";
+import { propagateImpactDamage, applyImpactFaceDamage } from "@/lib/damage-zones";
 
 interface UploadedPhoto { url: string; name: string; file: File; piiRegions?: PiiBox[] }
 
@@ -552,15 +552,21 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
       // silently absent. Only runs with some vehicle identity to hang them on.
       const powertrain = classifyPowertrain(agg?.vinInfo ?? { make: agg?.make, model: agg?.model, trim: agg?.trim });
       const awd = /\b(awd|4wd|4x4|all.?wheel)\b/i.test(`${agg?.vinInfo?.driveType ?? ""} ${agg?.drivetrain ?? ""}`);
-      const finalParts = agg
-        ? ensurePowertrainParts(deduped, powertrain.type, (e) => ({
-            partName: e.partName, partCategory: e.partCategory, fitment: [] as VehicleFit[],
-            condition: "B" as const,
-            conditionNotes: "Inferred from the vehicle's powertrain type — not visible in the photos; verify it is present and intact before listing.",
-            description: e.description, suggestedPriceUsd: null, confidence: "low" as const,
-            inferred: true, _id: newId(), _aiPrice: null,
-          }), { awd }).parts
-        : deduped;
+      // FRONT/REAR IMPACT INFERENCE runs on the FINAL list — after the inferred
+      // powertrain parts are appended — so a front-smashed car's engine/trans/
+      // radiator (observed OR inferred) get condemned to verify-first Grade C
+      // instead of shipping clean at full price (lib/damage-zones).
+      const finalParts = applyImpactFaceDamage(
+        agg
+          ? ensurePowertrainParts(deduped, powertrain.type, (e) => ({
+              partName: e.partName, partCategory: e.partCategory, fitment: [] as VehicleFit[],
+              condition: "B" as const,
+              conditionNotes: "Inferred from the vehicle's powertrain type — not visible in the photos; verify it is present and intact before listing.",
+              description: e.description, suggestedPriceUsd: null, confidence: "low" as const,
+              inferred: true, _id: newId(), _aiPrice: null,
+            }), { awd }).parts
+          : deduped,
+      );
 
       // Prefer the AI's explicit vehicle estimate (incl. whole-car price + mileage);
       // fall back to fitment-derived identity if the model didn't return one. (agg was
