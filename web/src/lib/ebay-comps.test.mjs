@@ -48,7 +48,7 @@ if (!process.env.__EBAY_COMPS_TEST_CHILD) {
 }
 
 const assert = (await import("node:assert/strict")).default;
-const { compQuery, cleanComps, isAssemblyClass, compQueryVariants, interleave } = await import("./ebay-comps.ts");
+const { compQuery, cleanComps, isAssemblyClass, compQueryVariants, interleave, siblingQueries } = await import("./ebay-comps.ts");
 const { sanitizeJudgedRow } = await import("./price-judge.ts");
 const { dropGenericWhenPositioned } = await import("./part-enrich.ts");
 
@@ -266,6 +266,23 @@ test("merged cap 18: shell flooding in one pool can't starve assembly comps", ()
   for (let i = 0; i < 6; i++) {
     assert.ok(merged.some((c) => c.title === pools[0][i].title), `assembly comp ${i} survived`);
   }
+});
+
+// ── siblingQueries (EV interchange retrieval widening) ───────────────────────
+
+test("sibling hints become year-ranged queries, capped at two", () => {
+  const hints = [
+    { make: "Tesla", model: "Model 3", from: 2017, to: 2023 },
+    { make: "Tesla", model: "Model Y", from: 2020, to: 2020 },
+    { make: "Tesla", model: "Model S", from: 2012, to: 2020 },
+  ];
+  const qs = siblingQueries("Rear Drive Unit", hints);
+  assert.deepEqual(qs, [
+    "2017-2023 Tesla Model 3 Rear Drive Unit",
+    "2020 Tesla Model Y Rear Drive Unit", // single-year span renders bare
+  ]); // third hint dropped by the cap
+  assert.deepEqual(siblingQueries("Rear Drive Unit", []), []);
+  assert.deepEqual(siblingQueries("Rear Drive Unit", null), []);
 });
 
 console.log(`  ${passed} passed`);

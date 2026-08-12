@@ -201,19 +201,36 @@ async function allLimit<T>(limit: number, tasks: (() => Promise<T>)[]): Promise<
   return out;
 }
 
+// Sibling-model retrieval hints (EV interchange): a part shared across models
+// (Model 3 ↔ Model Y drive unit) sells under BOTH names, so each sibling adds
+// one query variant. Widening ONLY — the judge reads every title and decides
+// fit, exactly like the generation variant. Pure and unit-tested.
+export type SiblingHint = { make: string; model: string; from: number; to: number };
+const MAX_SIBLING_VARIANTS = 2; // per part, on top of the ≤3 base variants
+
+export function siblingQueries(partName: string, hints: SiblingHint[] | undefined | null): string[] {
+  if (!hints?.length) return [];
+  return hints
+    .slice(0, MAX_SIBLING_VARIANTS)
+    .map((h) => [h.from !== h.to ? `${h.from}-${h.to}` : String(h.from), h.make, h.model, partName].join(" ").replace(/\s+/g, " ").trim());
+}
+
 // Fetch comps for every part IN PARALLEL (width-limited), up to three query
-// variants per part merged into one pool. Returns null when eBay itself is
-// unavailable (unconfigured / auth failure) so the caller can skip the comps
-// tier entirely instead of treating every part as zero-comp.
+// variants per part (+ up to two sibling-model variants from EV interchange)
+// merged into one pool. Returns null when eBay itself is unavailable
+// (unconfigured / auth failure) so the caller can skip the comps tier entirely
+// instead of treating every part as zero-comp.
 export async function fetchCompsForParts(
   fitment: { year?: string | number | null; make?: string | null; model?: string | null },
   partNames: string[],
   gen?: { from: number; to: number } | null,
+  hintsFor?: (partName: string) => SiblingHint[],
 ): Promise<Record<string, Comp[]> | null> {
   const token = await appToken();
   if (!token) return null;
   const tasks = partNames.map((name) => async () => {
-    const pools = await Promise.all(compQueryVariants(fitment, name, gen).map((q) => searchOne(token, q)));
+    const queries = [...new Set([...compQueryVariants(fitment, name, gen), ...siblingQueries(name, hintsFor?.(name))])];
+    const pools = await Promise.all(queries.map((q) => searchOne(token, q)));
     return [name, cleanComps(interleave(pools), MERGED_CAP)] as const;
   });
   return Object.fromEntries(await allLimit(PART_CONCURRENCY, tasks));

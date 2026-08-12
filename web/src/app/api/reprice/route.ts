@@ -15,6 +15,7 @@ import { geminiGenerate } from "@/lib/gemini";
 import { anthropicEnabled, claudePriceParts, type RawPricedPart } from "@/lib/anthropic";
 import { marketPriceParts, type MarketConfidence } from "@/lib/market-pricing";
 import { fetchCompsForParts } from "@/lib/ebay-comps";
+import { evRetrievalHints } from "@/lib/ev-interchange";
 import { priceParts, type JudgeInputPart } from "@/lib/price-judge";
 import { resolveGeneration } from "@/lib/generations";
 import { compKey, readMarketComps, writeMarketComps } from "@/lib/market-cache";
@@ -226,7 +227,12 @@ export async function POST(req: Request) {
       const tEbay = Date.now();
       // groundedOnly = the phase-2 follow-up call: no comps, no judge — every
       // part goes straight to the grounded web-search tier.
-      const comps = body.groundedOnly ? ({} as NonNullable<Awaited<ReturnType<typeof fetchCompsForParts>>>) : await fetchCompsForParts(fitment, researchable.map((p) => p.name), gen);
+      // EV parts shared across models (Model 3 ↔ Y drive unit) pull sibling-model
+      // comps too — wider REAL evidence for the judge (lib/ev-interchange).
+      const evHints = powertrain.type === "bev" && v.make && v.model
+        ? (name: string) => evRetrievalHints(v.make!, v.model!, v.year ?? 0, name)
+        : undefined;
+      const comps = body.groundedOnly ? ({} as NonNullable<Awaited<ReturnType<typeof fetchCompsForParts>>>) : await fetchCompsForParts(fitment, researchable.map((p) => p.name), gen, evHints);
       tm.ebayMs = Date.now() - tEbay;
       if (comps) {
         const withComps = body.groundedOnly ? [] : researchable.filter((p) => (comps[p.name] ?? []).length > 0);
