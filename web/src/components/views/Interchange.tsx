@@ -50,6 +50,8 @@ interface IcResult {
   marketMatches?: MarketMatch[];
   /** Set when the lookup degraded to a verify-manually fallback (INT-1). */
   lowConfidence?: boolean; degraded?: boolean;
+  /** "curated-ev" when served from our hand-checked EV dataset (no AI). */
+  source?: string;
 }
 
 export function Interchange(_: { go: (id: string) => void }) {
@@ -323,7 +325,11 @@ function Results({ result, cached }: { result: IcResult; cached?: boolean }) {
             <div style={{ fontSize: 15, fontWeight: 700 }}>{result.part}</div>
             <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{result.vehicle}</div>
           </div>
-          {!lowConfidence && (
+          {result.source === "curated-ev" ? (
+          <span title="From Ahlam's hand-checked EV interchange dataset — curated platform data, not an AI guess" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: "var(--success)", background: "var(--success-bg, color-mix(in srgb, var(--success) 14%, transparent))", borderRadius: 7, padding: "3px 8px", flexShrink: 0 }}>
+            <CheckCircle2 size={12} /> Curated EV data
+          </span>
+          ) : !lowConfidence && (
           <span title={cached ? "Served from your interchange catalog — no AI call" : "Freshly looked up and saved to your catalog"} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: cached ? "var(--success)" : "var(--accent)", background: cached ? "var(--success-bg, color-mix(in srgb, var(--success) 14%, transparent))" : "var(--accent-tint)", borderRadius: 7, padding: "3px 8px", flexShrink: 0 }}>
             {cached ? "From your catalog" : "New · saved to catalog"}
           </span>
