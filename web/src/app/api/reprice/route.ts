@@ -101,6 +101,12 @@ export async function POST(req: Request) {
     // the judge sees the part it is pricing (pricing-prompt.md: photos carry
     // condition/completeness information the written assessment misses).
     photos?: string[];
+    // Progressive two-phase pricing: phase 1 (skipGrounded) returns the fast
+    // comps-judged prices immediately — zero-comp parts keep their vision
+    // prices and are named in the response so the client can send them back
+    // with groundedOnly for the slow web-search pass in the background.
+    skipGrounded?: boolean;
+    groundedOnly?: boolean;
   };
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: "bad body" }, { status: 400, headers: CORS }); }
 
@@ -168,6 +174,7 @@ export async function POST(req: Request) {
   const metaByName = new Map<string, Meta>();   // market-evidence metadata where a market tier priced
   let fullRaw: RawPriced[] | null = null;       // full-list tier result — enables positional name-drift fallback
   let pricedBy: "claude-market" | "claude" | "gemini" = "gemini";
+  let deferredParts: string[] | null = null;    // skipGrounded: zero-comp parts the client should follow up on
 
   const marketOn = process.env.MARKET_RESEARCH !== "off" && anthropicEnabled();
   const powertrainLine = powertrain.source !== "default" ? powertrainPromptLine(powertrain.type) : null;
@@ -217,11 +224,13 @@ export async function POST(req: Request) {
       // part inside ebay-comps. Widening only — never fitment filtering.
       const gen = resolveGeneration(v.make, v.model, v.year);
       const tEbay = Date.now();
-      const comps = await fetchCompsForParts(fitment, researchable.map((p) => p.name), gen);
+      // groundedOnly = the phase-2 follow-up call: no comps, no judge — every
+      // part goes straight to the grounded web-search tier.
+      const comps = body.groundedOnly ? ({} as NonNullable<Awaited<ReturnType<typeof fetchCompsForParts>>>) : await fetchCompsForParts(fitment, researchable.map((p) => p.name), gen);
       tm.ebayMs = Date.now() - tEbay;
       if (comps) {
-        const withComps = researchable.filter((p) => (comps[p.name] ?? []).length > 0);
-        const zeroComp = researchable.filter((p) => (comps[p.name] ?? []).length === 0);
+        const withComps = body.groundedOnly ? [] : researchable.filter((p) => (comps[p.name] ?? []).length > 0);
+        const zeroComp = body.groundedOnly ? researchable : researchable.filter((p) => (comps[p.name] ?? []).length === 0);
         counts.zeroComp = zeroComp.length;
         const judgeInput: JudgeInputPart[] = withComps.map((p) => ({
           part_id: p.name,
@@ -237,10 +246,13 @@ export async function POST(req: Request) {
         const tJudge = Date.now(), tGrounded = Date.now();
         const [judged, fallback] = await Promise.all([
           priceParts(judgeInput, { callMs: judgeCallMs }).finally(() => { tm.judgeMs = Date.now() - tJudge; }),
-          zeroComp.length
+          zeroComp.length && !body.skipGrounded
             ? marketPriceParts({ vehicleId: id, spec, powertrainLine, parts: zeroComp }).finally(() => { tm.groundedMs = Date.now() - tGrounded; })
             : Promise.resolve([]),
         ]);
+        // Phase-1 contract: name the parts we deliberately left unpriced so the
+        // client can request just those with groundedOnly in the background.
+        if (body.skipGrounded && zeroComp.length) deferredParts = zeroComp.map((p) => p.name);
         counts.judged = judged?.length ?? 0;
         for (const r of judged ?? []) {
           // Null estimate = the judge declined to price (junk pool / cannot
@@ -276,7 +288,9 @@ export async function POST(req: Request) {
 
   // Tiers 2/3 — memory, then Gemini: run when research is off or its call failed.
   // Cached market rows (if any) still win over the full-list result.
-  if (pricedBy !== "claude-market") {
+  // Never for groundedOnly: that call prices ONLY via the grounded tier — a
+  // failed grounded pass returns unpriced rows the client simply ignores.
+  if (pricedBy !== "claude-market" && !body.groundedOnly) {
     const tMemory = Date.now();
     let parsed: RawPriced[] | null = null;
     if (anthropicEnabled()) {
@@ -332,7 +346,10 @@ export async function POST(req: Request) {
     judgeP95Ms: pct(judgeCallMs, 95),
     counts,
   };
-  console.log(JSON.stringify({ tag: "reprice-timing", vehicle: id, pricedBy, parts: parts.length, ...timings }));
+  console.log(JSON.stringify({ tag: "reprice-timing", vehicle: id, pricedBy, parts: parts.length, phase: body.groundedOnly ? "grounded-followup" : body.skipGrounded ? "fast" : "full", ...timings }));
 
-  return NextResponse.json({ ok: true, vehicle: id, pricedBy, parts: out, timings }, { headers: CORS });
+  return NextResponse.json(
+    { ok: true, vehicle: id, pricedBy, parts: out, timings, ...(deferredParts?.length ? { deferredParts } : {}) },
+    { headers: CORS },
+  );
 }

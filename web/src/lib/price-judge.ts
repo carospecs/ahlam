@@ -356,7 +356,9 @@ async function judgeOne(part: JudgeInputPart, collect?: { usage?: JudgeUsage[] }
 
 // Per-part calls tripled the request count vs the old ≤15-part chunks — keep a
 // width limit so an 80-part scan doesn't fire 80 concurrent Opus/Sonnet calls.
-const JUDGE_CONCURRENCY = 12;
+// Env-tunable: wall clock for N parts ≈ ceil(N / width) × per-call latency, so
+// width is the scan-time knob once per-call latency is fixed (rate limits cap it).
+const JUDGE_CONCURRENCY = envInt("PRICING_JUDGE_CONCURRENCY", 12);
 
 async function allLimit<T>(limit: number, tasks: (() => Promise<T>)[]): Promise<T[]> {
   const out = new Array<T>(tasks.length);

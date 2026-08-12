@@ -646,6 +646,10 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
         body: JSON.stringify({
           vin: vin || undefined,
           vehicle: vehicleId,
+          // PROGRESSIVE PHASE 1: don't block first render on the slow grounded
+          // web-search tier — zero-comp parts come back named in deferredParts
+          // and get priced by the background follow-up below.
+          skipGrounded: true,
           ...(photoCtx ? { photos: photoCtx.dataUrls } : {}),
           parts: current.map((p) => ({
             name: p.partName,
@@ -659,6 +663,10 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
       const j = await res.json();
       if (!isScanRun(token, slot)) return null; // a newer scan superseded this one
       if (!j?.ok || !Array.isArray(j.parts)) return null;
+      // PHASE 2 (fire-and-forget): the server deferred these zero-comp parts;
+      // research them on the slow grounded tier and patch prices in when ready.
+      const deferred: string[] = Array.isArray(j.deferredParts) ? j.deferredParts.filter((n: unknown): n is string => typeof n === "string") : [];
+      if (deferred.length) void groundedFollowup(token, vin, vehicleId, current, deferred);
       const pricedBy: "claude-market" | "claude" | "gemini" | undefined =
         j.pricedBy === "claude-market" || j.pricedBy === "claude" || j.pricedBy === "gemini" ? j.pricedBy : undefined;
       const byName = new Map<string, { suggestedPriceUsd: number | null; usedPartPriceUsd: number | null; suggestedPriceLowUsd?: number | null; suggestedPriceHighUsd?: number | null; confidence?: "high" | "medium" | "low"; compCount?: number; sources?: string[] }>();
@@ -680,6 +688,64 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
     } catch {
       return null; // network/parse error or timeout — vision prices render
     }
+  }
+
+  // PHASE 2 of the progressive reprice: the zero-comp parts phase 1 deferred get
+  // the grounded web-search pass off the critical path — results render first,
+  // these prices patch in a minute later. Never overwrites a price the seller
+  // already edited (suggestedPriceUsd !== _aiPrice means a human touched it).
+  async function groundedFollowup(
+    token: number,
+    vin: string | null,
+    vehicleId: { year?: string; make?: string; model?: string; trim?: string | null; engine?: string | null } | undefined,
+    current: AIPart[],
+    names: string[],
+  ): Promise<void> {
+    try {
+      const wanted = new Set(names.map((n) => n.toLowerCase().trim()));
+      const subset = current.filter((p) => wanted.has(p.partName.toLowerCase().trim()));
+      if (!subset.length) return;
+      const res = await fetch("/api/reprice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(90_000), // grounded budget (45s) + headroom
+        body: JSON.stringify({
+          vin: vin || undefined,
+          vehicle: vehicleId,
+          groundedOnly: true,
+          parts: subset.map((p) => ({
+            name: p.partName,
+            grade: p.condition,
+            inferred: p.inferred || undefined,
+            ...(p.conditionNotes?.trim() ? { conditionNotes: p.conditionNotes } : {}),
+          })),
+        }),
+      });
+      const j = await res.json();
+      if (!isScanRun(token, slot)) return; // superseded while researching
+      if (!j?.ok || !Array.isArray(j.parts)) return;
+      const rows = new Map<string, { suggestedPriceUsd: number | null; usedPartPriceUsd: number | null; suggestedPriceLowUsd?: number | null; suggestedPriceHighUsd?: number | null; confidence?: "high" | "medium" | "low"; compCount?: number; sources?: string[] }>();
+      for (const r of j.parts) if (r && typeof r.name === "string") rows.set(r.name.toLowerCase().trim(), r);
+      setParts((prev) => reconcilePairPrices(prev.map((p) => {
+        const key = p.partName.toLowerCase().trim();
+        if (!wanted.has(key)) return p;
+        const r = rows.get(key);
+        if (!r || typeof r.usedPartPriceUsd !== "number" || r.usedPartPriceUsd <= 0) return p;
+        const untouched = p.suggestedPriceUsd == null || p.suggestedPriceUsd === p._aiPrice;
+        if (!untouched) return p;
+        return {
+          ...p,
+          usedPartPriceUsd: r.usedPartPriceUsd,
+          suggestedPriceUsd: r.suggestedPriceUsd,
+          _aiPrice: r.suggestedPriceUsd ?? p._aiPrice,
+          suggestedPriceLowUsd: r.suggestedPriceLowUsd ?? p.suggestedPriceLowUsd,
+          suggestedPriceHighUsd: r.suggestedPriceHighUsd ?? p.suggestedPriceHighUsd,
+          pricingInsight: r.confidence
+            ? { source: "market" as const, confidence: r.confidence, similarCount: r.compCount ?? 0, pricedBy: "claude-market" as const, sources: r.sources ?? [] }
+            : p.pricingInsight,
+        };
+      })));
+    } catch { /* background upgrade only — phase-1 prices stand */ }
   }
 
   // One QA flag row for the report card: short headline (count instead of the part
