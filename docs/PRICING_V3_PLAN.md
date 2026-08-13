@@ -17,6 +17,10 @@ Opus memory → Gemini memory → vision prices) fails in seven ways, ranked by 
    car prices differently between scans; memory prices render like researched ones.
 4. **String-matched join** — prices rejoin parts by echoed name; three regexes
    already patch known drift; new drift silently keeps the vision price.
+   *(2026-08-12: largely addressed — `web/src/lib/part-catalog.ts` is now the
+   canonical vocabulary; the judge path and the 48h comp cache key on stable
+   `slug[:side]` ids and unmatched judge ids log `reprice-unmatched-part-id`.
+   The memory/Gemini tiers still echo names and translate on merge.)*
 5. **One national band per part type** — Corolla and Range Rover fenders share a
    $90–350 sanity band; luxury prices get dropped, cheap-car prices pass too high.
 6. **No learning loop** — seller price edits and eBay sold events are discarded;
@@ -65,4 +69,5 @@ age-formula system) — rewrite it when Phase 0 lands.
 - **Provenance everywhere**: "5 comps · ebay.com" vs "AI estimate" badge on every
   price, all tiers — not just market tiers.
 - **Stable part IDs** through every model call (`part_id` echo, log unmatched rows)
-  instead of name-string matching.
+  instead of name-string matching. *(Shipped for the judge path + comp cache via
+  part-catalog, 2026-08-12; memory tiers remain name-echoed.)*
