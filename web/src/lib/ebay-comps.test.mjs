@@ -48,7 +48,7 @@ if (!process.env.__EBAY_COMPS_TEST_CHILD) {
 }
 
 const assert = (await import("node:assert/strict")).default;
-const { compQuery, cleanComps, isAssemblyClass, compQueryVariants, interleave, siblingQueries } = await import("./ebay-comps.ts");
+const { compQuery, cleanComps, isAssemblyClass, compQueryVariants, interleave, siblingQueries, classifyComp } = await import("./ebay-comps.ts");
 const { sanitizeJudgedRow } = await import("./price-judge.ts");
 const { dropGenericWhenPositioned } = await import("./part-enrich.ts");
 
@@ -283,6 +283,52 @@ test("sibling hints become year-ranged queries, capped at two", () => {
   ]); // third hint dropped by the cap
   assert.deepEqual(siblingQueries("Rear Drive Unit", []), []);
   assert.deepEqual(siblingQueries("Rear Drive Unit", null), []);
+});
+
+// ── classifyComp (OEM / aftermarket title heuristics) ────────────────────────
+
+test("classifyComp: real frozen-pool OEM pulls classify oem", () => {
+  // Titles lifted from scripts/.cache/comps — all genuine salvage pulls.
+  assert.equal(classifyComp("2018-2024 TOYOTA CAMRY FRONT BUMPER COVER OEM", "Used"), "oem");
+  assert.equal(classifyComp("Front Bumper Cover White 2018-2020 Toyota Camry SE XSE 52119+06E20 OEM", "Used"), "oem");
+  assert.equal(classifyComp("2018-2024 Toyota Camry Left Headlight Assembly Grey OEM 730601 42K Miles", "Used"), "oem");
+  assert.equal(classifyComp("MERCEDES BENZ C300 HEADLIGHT LEFT DRIVER 2015 2016 2017 2018 HALOGEN A2059066902", "Used"), "oem");
+  assert.equal(classifyComp("2016-2021 MERCEDES-BENZ C63 AMG S - REAR Trunk / DECK LID Shell 205750240028", "Used"), "oem");
+});
+
+test("classifyComp: reproduction brands and phrases classify aftermarket", () => {
+  assert.equal(classifyComp("TYC Headlight Assembly Left Driver Side", "Used"), "aftermarket");
+  assert.equal(classifyComp("Depo Tail Light Lamp Passenger Side New", "New"), "aftermarket");
+  assert.equal(classifyComp("Front Bumper Cover Black Toyota Camry 2018 2019 2020 CAPA", "Used"), "aftermarket");
+  assert.equal(classifyComp("Aftermarket Front Bumper Cover Primed", "Used"), "aftermarket");
+  assert.equal(classifyComp("Headlight OE-Style Replacement for 2018 Camry", "New"), "aftermarket");
+});
+
+test("classifyComp: 'For <vehicle> 20xx-20xx' phrasing is aftermarket unless OEM evidence excuses it", () => {
+  assert.equal(classifyComp("USED LED Projector Headlight For Toyota Camry 2018-2024 Head Lamps Sequential", "Used"), "aftermarket");
+  assert.equal(classifyComp("RH+LH Full LED Projector Headlamp Assembly For Toyota Camry 2018-2024 Headlights", "Used"), "aftermarket");
+  assert.equal(classifyComp("For 2018-2022 Camry Front Bumper Cover Replacement New", "New"), "aftermarket");
+  // The excuses: an explicit OEM token, a part number, or mileage language.
+  assert.equal(classifyComp("Tailgate for 2016-2019 Ford F-150 OEM w/ camera", "Used"), "oem");
+  assert.equal(classifyComp("Headlight fits 2018-2024 Camry 42K Miles", "Used"), "oem");
+});
+
+test("classifyComp: bare fitment ranges never classify on their own", () => {
+  // The most common OEM-pull title shape: leading year range, no for/fits.
+  assert.equal(classifyComp("2018-2020 Toyota Camry Hood Panel Silver", "Used"), "unknown");
+  assert.equal(classifyComp("W205 15-18 Mercedes C Class Front Bumper Cover Silver Damaged BR577", "Used"), "unknown");
+});
+
+test("classifyComp: 'new' on a Used listing is aftermarket, but take-offs are OEM", () => {
+  assert.equal(classifyComp("Brand New Front Bumper Cover Primed Steel", "Used"), "aftermarket");
+  assert.equal(classifyComp("New Take-Off Ford F150 Tailgate 2018 OEM", "Used"), "oem");
+  assert.equal(classifyComp("F150 Tailgate new takeoff", "Used"), "oem"); // take-off language is OEM evidence in itself
+});
+
+test("classifyComp: year ranges never read as part numbers", () => {
+  // "2018-2024" must not satisfy the OEM part-number pattern.
+  assert.equal(classifyComp("2018-2024 Toyota Camry Front Bumper", "Used"), "unknown");
+  assert.equal(classifyComp("", "Used"), "unknown");
 });
 
 console.log(`  ${passed} passed`);

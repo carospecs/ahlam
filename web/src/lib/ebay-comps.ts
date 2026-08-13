@@ -93,6 +93,80 @@ export function cleanComps(
   return out;
 }
 
+// ── OEM / aftermarket classification (pure, unit-tested) ──────────────────────
+// Aftermarket reproductions listed against used-OEM pulls undercut the true
+// value of an original part — the single comp-quality problem Andy called out.
+// This is a deterministic TITLE heuristic, not a filter: retrieval never drops
+// a listing over it (the wide-net rule stands). The judge receives the label
+// on each listing line and is instructed to anchor on used-OEM comps and
+// treat aftermarket prices as a floor, with the title outranking the label.
+//
+// Rule order is deliberate, first hit wins, and deliberately conservative:
+// a bare fitment range ("Fits 2018-2022 …") is COMMON on used-OEM pulls and
+// must never classify on its own.
+export type CompClass = "oem" | "aftermarket" | "unknown";
+
+// Reproduction/replacement brands that dominate aftermarket auto-parts
+// listings. Word-boundary matched; a brand hit wins even when the title also
+// says "OEM replacement" — that phrasing is itself an aftermarket tell.
+const AFTERMARKET_BRANDS =
+  /\b(tyc|depo|anzo|spyder|spec-?d|akkon|vland|alpharex|eagle eyes|dorman|sherman|keystone|k-?metal|pacific best|brock|evan-?fischer|garage-?pro|diy solutions|action crash|headlights? depot|karparts ?360|perde|marketon|jp auto|carlights360|auto dynasty|topline|winjet|lkq new)\b/i;
+
+const AFTERMARKET_PHRASES = [
+  /\baftermarket\b/i,
+  /\bcapa(?:-| )?(?:certified)?\b/i,
+  /\breproduction\b/i,
+  /\bOE[- ]?style\b/i,
+  /\b(?:replacement|compatible)\s+(?:for|with)\b/i,
+  /\bhalogen\s+type\b/i,
+];
+
+// "Headlight For Toyota Camry 2018-2024" is reproduction phrasing — OEM pulls
+// lead with year-make-model ("2018 Toyota Camry Headlight OEM 42K"), they
+// don't sell "for" a vehicle. Allows a few make/model words between the
+// preposition and the year range. NEVER classifies on its own: a pull whose
+// title also carries OEM evidence (part number, "OEM", mileage) is excused.
+const FITMENT_FOR = /\b(?:fits?|for)\s+(?:[A-Za-z][\w.&'-]*\s+){0,3}(?:19|20)\d{2}\s?[-–]\s?(?:(?:19|20)?\d{2})\b/i;
+
+// Salvage pulls cite mileage; reproductions never do.
+const MILEAGE_LANGUAGE = /\b\d{1,3}\s?k\b|\bmiles?\b/i;
+
+const OEM_SIGNALS = [
+  /\boem\b/i,
+  /\bgenuine\b/i,
+  /\bfactory\b/i,
+  /\boriginal\b(?!\s+style)/i,
+  /\bused\s+(?:pull|take[- ]?off|removed)\b/i,
+  /\btake[- ]?off\b/i,
+  /\bdonor\b/i,
+  // OEM part-number tokens: "52119-06E20", "8T4Z-17D957-AA", and unhyphenated
+  // runs like Mercedes "A2059066902" / "205750240028" or GM's bare 8-digit.
+  // The leading lookahead refuses year-range shapes ("2018-2024") so an
+  // all-caps fitment span never reads as a part number.
+  /\b(?!(?:19|20)\d{2}\s?[-–])(?=[A-Z0-9-]*\d)[A-Z0-9]{2,5}[-–][A-Z0-9]{4,7}(?:[-–][A-Z0-9]{1,4})?\b/,
+  /\b[A-Z]?\d{8,13}\b/,
+];
+
+// "New take-off" is OEM language (a new part pulled from a new vehicle), not
+// reproduction language — it must survive the new-on-Used rule below.
+const TAKEOFF = /\btake[- ]?offs?\b|\btakeoffs?\b/i;
+
+export function classifyComp(title: string, condition?: string): CompClass {
+  const t = (title || "").trim();
+  if (!t) return "unknown";
+  if (AFTERMARKET_BRANDS.test(t)) return "aftermarket";
+  if (AFTERMARKET_PHRASES.some((re) => re.test(t))) return "aftermarket";
+  const oemEvidence = OEM_SIGNALS.some((re) => re.test(t)) || MILEAGE_LANGUAGE.test(t);
+  if (FITMENT_FOR.test(t) && !oemEvidence) return "aftermarket";
+  // A title shouting "new"/"brand new" on a Used-condition listing is a
+  // reproduction sold through the used pipeline, not a yard pull ("new
+  // take-off" excepted — that's an OEM part off a new vehicle).
+  if (/\b(?:brand new|new)\b/i.test(t) && !TAKEOFF.test(t) && !oemEvidence && (condition || "").toLowerCase().includes("used")) return "aftermarket";
+  // Mileage counts as OEM evidence in its own right: only a pulled part has miles.
+  if (oemEvidence) return "oem";
+  return "unknown";
+}
+
 // ── Query variants (pure, unit-tested) ────────────────────────────────────────
 
 // Parts eBay lists BOTH as stripped shells/sub-components and as complete
