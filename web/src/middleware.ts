@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { validateSlug } from "@/lib/slug";
+import { SHOP_SUBDOMAINS } from "@/lib/shop-subdomains";
 
 const allowedOrigins = [
   "http://localhost:3000",
@@ -45,30 +45,17 @@ function tenantSlug(req: NextRequest): string | null {
 }
 
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-  const slug = tenantSlug(req);
-
-  // The /site route group is internal — only ever reached via the host rewrite
-  // below. Direct hits (apex or tenant) 404 so no duplicate URL gets indexed.
-  // Segment check, not startsWith("/site") — that would eat /sitemap.xml.
-  if (pathname === "/site" || pathname.startsWith("/site/")) {
-    return new NextResponse(null, { status: 404 });
-  }
-
-  // Tenant hosts: API routes pass through (same-origin calls from site pages);
-  // every page path rewrites into /site/{slug}/…, which also means main-app
-  // routes like /dashboard can't render on a subdomain (they 404 there).
-  if (slug && !pathname.startsWith("/api")) {
+  // Shop subdomain routing: <slug>.ahlam.io -> /shop/<id>, transparently
+  // (URL bar keeps showing the subdomain). See lib/shop-subdomains.ts.
+  const host = (req.headers.get("host") || "").split(":")[0].toLowerCase();
+  const subdomain = host.endsWith(".ahlam.io") ? host.slice(0, -".ahlam.io".length) : "";
+  const shopId = subdomain && SHOP_SUBDOMAINS[subdomain];
+  if (shopId) {
     const url = req.nextUrl.clone();
-    url.pathname = `/site/${slug}${pathname === "/" ? "" : pathname}`;
-    return NextResponse.rewrite(url);
-  }
-
-  // Everything below only concerns the API + dashboard surface. The broadened
-  // matcher (needed for the tenant rewrite) must not add auth latency or CORS
-  // headers to ordinary marketing pages.
-  if (!pathname.startsWith("/api") && !pathname.startsWith("/dashboard")) {
-    return NextResponse.next();
+    if (url.pathname === "/" || url.pathname === "") {
+      url.pathname = `/shop/${shopId}`;
+      return NextResponse.rewrite(url);
+    }
   }
 
   const res = NextResponse.next();
@@ -114,8 +101,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Broad matcher so tenant hosts rewrite on every page path (including
-  // /sitemap.xml and /robots.txt — don't exclude by file extension). Static
-  // assets and the PWA files stay out of middleware entirely.
-  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|manifest\\.webmanifest|sw\\.js).*)"],
+  matcher: ["/api/:path*", "/dashboard/:path*", "/"],
 };
