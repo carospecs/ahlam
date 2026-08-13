@@ -1,3 +1,8 @@
+// ⚠️ STALE — DO NOT RUN. Mirrors a REMOVED pricing algorithm (ASKING_TO_SOLD /
+// MIN_COMPS / trimmedMedian chunked ladder). The live system is the per-part
+// appraiser judge (web/src/lib/price-judge.ts, docs/pricing-prompt.md); its
+// eval harness is scripts/pricing-eval.mjs. Kept only as historical reference.
+//
 // Verify the pricing ladder's new rungs:
 //   • Rung 3 (discounted active asking) actually returns data for parts where the
 //     grounded SOLD search came back "no comps" (headlight, bumper, engine).

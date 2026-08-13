@@ -2,6 +2,8 @@ import { cache } from "react";
 import { supabaseAdmin } from "@/lib/supabase";
 import { normalizeGrade } from "@/lib/grade";
 import { effectiveWarranty, warrantyLabel } from "@/lib/warranty";
+import { classifyPowertrain } from "@/lib/powertrain";
+import { evFitLines, type EvFitLine } from "@/lib/ev-interchange";
 
 // Shared read layer for the public shop surfaces: the apex storefront
 // (/shop/[id]), the part page (/p/[id]), and the Ultimate personal websites
@@ -117,6 +119,23 @@ export function fmtFit(fit: any): string {
       .join(", ");
   }
   return "";
+}
+
+/** Curated "Also fits" lines for a listing (EV interchange v1). Only fires when
+ *  the listing's primary fitment entry resolves to a BEV whose part is in our
+ *  hand-checked dataset (lib/ev-interchange) — everything else returns [].
+ *  Pure static-data lookup: no AI, no DB, never throws. */
+export function evAlsoFits(fitment: any, partName: string): EvFitLine[] {
+  try {
+    const f = Array.isArray(fitment) ? fitment[0] : null;
+    if (!f || typeof f !== "object" || !f.make || !f.model || !partName) return [];
+    const year = Number(f.yearStart || f.yearEnd);
+    if (!Number.isFinite(year)) return [];
+    if (classifyPowertrain({ make: String(f.make), model: String(f.model) }).type !== "bev") return [];
+    return evFitLines({ make: String(f.make), model: String(f.model), year, partName }).slice(0, 4);
+  } catch {
+    return [];
+  }
 }
 
 /** Listing row → the part shape the storefront and site pages render. */
@@ -235,6 +254,7 @@ export const getListingDetail = cache(async (id: string): Promise<any | null> =>
       grade: normalizeGrade(c.condition),
       price: (l.price_usd ?? c.suggestedPriceUsd ?? 0) as number,
       fitment: fmtFit(c.fitment),
+      alsoFits: evAlsoFits(c.fitment, (c.partName || c.part_name || "") as string),
       category: (c.partCategory || c.part_category || "") as string,
       description: (c.description || "") as string,
       conditionNotes: (c.conditionNotes || "") as string,

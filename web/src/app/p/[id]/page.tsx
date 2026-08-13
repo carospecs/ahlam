@@ -98,6 +98,20 @@ export default async function ListingPage({ params }: Params) {
           <div>
             <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{l.part}</h1>
             {l.fitment && <div style={{ marginTop: 6, fontSize: 14.5, color: "var(--muted)" }}>Fits {l.fitment}</div>}
+            {/* Curated EV interchange (lib/ev-interchange) — only present on BEV
+                parts our hand-checked dataset covers; caveats render inline. */}
+            {Array.isArray(l.alsoFits) && l.alsoFits.length > 0 && (
+              <div style={{ marginTop: 4, fontSize: 13, color: "var(--muted)", lineHeight: 1.55 }}>
+                Also fits:{" "}
+                {l.alsoFits.map((a: { label: string; caveat?: string }, i: number) => (
+                  <span key={i}>
+                    {i > 0 && " · "}
+                    {a.label}
+                    {a.caveat && <span style={{ opacity: 0.8 }}> ({a.caveat})</span>}
+                  </span>
+                ))}
+              </div>
+            )}
 
             <div style={{ marginTop: 16, fontSize: 30, fontWeight: 800, color: "var(--success)" }}>${Number(l.price).toLocaleString()}</div>
 

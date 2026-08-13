@@ -62,12 +62,14 @@ export async function readMarketComps(keys: string[]): Promise<Record<string, Ca
 export async function writeMarketComps(
   vehicleId: string,
   spec: string,
-  rows: { part: MarketPricedPart; grade: string }[],
+  // partId (canonical slug[:side]) keys the cache row when provided so naming
+  // drift can't cause misses; part_name stays the human display name.
+  rows: { part: MarketPricedPart; grade: string; partId?: string }[],
 ): Promise<void> {
   const upserts = rows
     .filter(({ part }) => part.usedPartPriceUsd != null && part.compCount > 0 && part.confidence !== "low")
-    .map(({ part, grade }) => ({
-      comp_key: compKey(vehicleId, spec, part.name, grade),
+    .map(({ part, grade, partId }) => ({
+      comp_key: compKey(vehicleId, spec, partId ?? part.name, grade),
       vehicle: vehicleId,
       part_name: part.name,
       grade: grade || "B",

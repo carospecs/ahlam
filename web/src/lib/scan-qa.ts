@@ -9,6 +9,8 @@
 // stage (Stage 5), which locks a single vehicle color; there's nothing reliable to check
 // until that ships.
 
+import { canonicalizePart } from "./part-catalog";
+
 export type QaFlag = { level: "warn" | "info"; message: string };
 
 // Structural subset of a scanned part — only the fields QA reads. `condition` is typed
@@ -110,6 +112,36 @@ export function runScanQa(parts: QaPart[], wholeCarUsd?: number | null, photoCol
   //    mix DIFFERENT vehicles. Either way, a human should confirm before it lists.
   const cc = colorConflict(photoColors);
   if (cc) flags.push({ level: "warn", message: `Photos disagree on body color (${cc[0]} vs ${cc[1]}) — verify every photo is the SAME vehicle.` });
+
+  // 7. Wreck with clean mechanicals: some part shows STRONG collision force, yet a
+  //    mechanical part still carries an optimistic grade and a full price. The
+  //    impact-face pass (lib/damage-zones applyImpactFaceDamage) normally condemns
+  //    these; this is the last-line net for the cases it can't see (face origin
+  //    graded B by the model, damage only in a photo the part wasn't boxed in).
+  const STRONG = /crush|caved|collision|impact|torn|frame|airbag/i;
+  const MECHANICAL = /^(engine\b|transmission\b|transaxle\b|radiator\b|condenser|compressor|alternator|starter|drive unit|fuel tank)/i;
+  const wrecked = parts.some((p) => p.condition === "C" && STRONG.test(`${p.conditionNotes ?? ""} ${p.description ?? ""}`));
+  if (wrecked) {
+    const cleanMech = parts.filter(
+      (p) => MECHANICAL.test(p.partName.trim()) && p.condition !== "C" && (p.suggestedPriceUsd || 0) > 0 && !STRONG.test(p.conditionNotes ?? ""),
+    );
+    if (cleanMech.length) {
+      flags.push({
+        level: "warn",
+        message: `This vehicle shows collision damage, but these mechanical parts are still graded clean at full price — inspect before listing: ${names(cleanMech)}.`,
+      });
+    }
+  }
+
+  // 8. Off-catalog part names — the drift alarm for the canonical vocabulary
+  //    (lib/part-catalog). The vision prompt's catalog is GENERATED from the
+  //    same data, so in steady state everything resolves; a name that doesn't
+  //    means the model free-styled (allowed for uncommon parts, worth a look)
+  //    or the prompt/catalog regressed. Info-level: it gates nothing.
+  const offCatalog = parts.filter((p) => !canonicalizePart(p.partName));
+  if (offCatalog.length) {
+    flags.push({ level: "info", message: `Not in the standard part catalog (name won't cache-match across scans) — check the name: ${names(offCatalog)}.` });
+  }
 
   return flags;
 }

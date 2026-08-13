@@ -18,7 +18,7 @@ import { runQaAgent, hasWarnCases, applyQaEdit, type QaAgentResolution } from "@
 import { classifyPowertrain, ensurePowertrainParts } from "@/lib/powertrain";
 import { redactImage, redactImageToDataUrl, type PiiBox } from "@/lib/redact";
 import { groundDescriptions } from "@/lib/describe-ground";
-import { propagateImpactDamage } from "@/lib/damage-zones";
+import { propagateImpactDamage, applyImpactFaceDamage } from "@/lib/damage-zones";
 
 interface UploadedPhoto { url: string; name: string; file: File; piiRegions?: PiiBox[] }
 
@@ -552,15 +552,21 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
       // silently absent. Only runs with some vehicle identity to hang them on.
       const powertrain = classifyPowertrain(agg?.vinInfo ?? { make: agg?.make, model: agg?.model, trim: agg?.trim });
       const awd = /\b(awd|4wd|4x4|all.?wheel)\b/i.test(`${agg?.vinInfo?.driveType ?? ""} ${agg?.drivetrain ?? ""}`);
-      const finalParts = agg
-        ? ensurePowertrainParts(deduped, powertrain.type, (e) => ({
-            partName: e.partName, partCategory: e.partCategory, fitment: [] as VehicleFit[],
-            condition: "B" as const,
-            conditionNotes: "Inferred from the vehicle's powertrain type — not visible in the photos; verify it is present and intact before listing.",
-            description: e.description, suggestedPriceUsd: null, confidence: "low" as const,
-            inferred: true, _id: newId(), _aiPrice: null,
-          }), { awd }).parts
-        : deduped;
+      // FRONT/REAR IMPACT INFERENCE runs on the FINAL list — after the inferred
+      // powertrain parts are appended — so a front-smashed car's engine/trans/
+      // radiator (observed OR inferred) get condemned to verify-first Grade C
+      // instead of shipping clean at full price (lib/damage-zones).
+      const finalParts = applyImpactFaceDamage(
+        agg
+          ? ensurePowertrainParts(deduped, powertrain.type, (e) => ({
+              partName: e.partName, partCategory: e.partCategory, fitment: [] as VehicleFit[],
+              condition: "B" as const,
+              conditionNotes: "Inferred from the vehicle's powertrain type — not visible in the photos; verify it is present and intact before listing.",
+              description: e.description, suggestedPriceUsd: null, confidence: "low" as const,
+              inferred: true, _id: newId(), _aiPrice: null,
+            }), { awd }).parts
+          : deduped,
+      );
 
       // Prefer the AI's explicit vehicle estimate (incl. whole-car price + mileage);
       // fall back to fitment-derived identity if the model didn't return one. (agg was
@@ -584,12 +590,17 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
       // the pass that gives code-generated inferred powertrain parts their first
       // price, so they land priced at first render — never blank.
       setScanStage("pricing");
+      // The judge prices per part WITH the photo it was detected in (completeness
+      // + condition live in the image, not the text). Map each part's redacted
+      // display URL back to its photo index; dataUrls[i] aligns with photos[i].
+      const photoIndexByDisplay = new Map(photos.map((p, i) => [display(p.url), i]));
       const priced = agg
         ? await repriceForVin(
             myToken,
             resolvedVin || agg.vin || null,
             finalParts,
             { year: agg.year, make: agg.make, model: agg.model, trim: agg.trim, engine: agg.engine },
+            { dataUrls, indexOf: (p) => (p.photoUrl != null ? photoIndexByDisplay.get(p.photoUrl) : undefined) },
           )
         : null;
       if (!isScanRun(myToken, slot)) return; // cancelled / superseded while pricing
@@ -625,6 +636,10 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
     vin: string | null,
     current: AIPart[],
     vehicleId?: { year?: string; make?: string; model?: string; trim?: string | null; engine?: string | null },
+    // Scan photos for the per-part appraiser: the same AI-ready data URLs the
+    // catalog pass used, plus a part→photo-index resolver (docs/pricing-prompt.md:
+    // the photo carries the completeness/condition read the text misses).
+    photoCtx?: { dataUrls: string[]; indexOf: (p: AIPart) => number | undefined },
   ): Promise<AIPart[] | null> {
     try {
       const res = await fetch("/api/reprice", {
@@ -634,11 +649,30 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
         // judgment call (~10–30s); only zero-comp stragglers hit the slower
         // grounded fallback. Past 150s the vision prices render instead.
         signal: AbortSignal.timeout(150_000),
-        body: JSON.stringify({ vin: vin || undefined, vehicle: vehicleId, parts: current.map((p) => ({ name: p.partName, grade: p.condition, inferred: p.inferred || undefined })) }),
+        body: JSON.stringify({
+          vin: vin || undefined,
+          vehicle: vehicleId,
+          // PROGRESSIVE PHASE 1: don't block first render on the slow grounded
+          // web-search tier — zero-comp parts come back named in deferredParts
+          // and get priced by the background follow-up below.
+          skipGrounded: true,
+          ...(photoCtx ? { photos: photoCtx.dataUrls } : {}),
+          parts: current.map((p) => ({
+            name: p.partName,
+            grade: p.condition,
+            inferred: p.inferred || undefined,
+            ...(photoCtx ? { photoIndex: photoCtx.indexOf(p) } : {}),
+            ...(p.conditionNotes?.trim() ? { conditionNotes: p.conditionNotes } : {}),
+          })),
+        }),
       });
       const j = await res.json();
       if (!isScanRun(token, slot)) return null; // a newer scan superseded this one
       if (!j?.ok || !Array.isArray(j.parts)) return null;
+      // PHASE 2 (fire-and-forget): the server deferred these zero-comp parts;
+      // research them on the slow grounded tier and patch prices in when ready.
+      const deferred: string[] = Array.isArray(j.deferredParts) ? j.deferredParts.filter((n: unknown): n is string => typeof n === "string") : [];
+      if (deferred.length) void groundedFollowup(token, vin, vehicleId, current, deferred);
       const pricedBy: "claude-market" | "claude" | "gemini" | undefined =
         j.pricedBy === "claude-market" || j.pricedBy === "claude" || j.pricedBy === "gemini" ? j.pricedBy : undefined;
       const byName = new Map<string, { suggestedPriceUsd: number | null; usedPartPriceUsd: number | null; suggestedPriceLowUsd?: number | null; suggestedPriceHighUsd?: number | null; confidence?: "high" | "medium" | "low"; compCount?: number; sources?: string[] }>();
@@ -660,6 +694,64 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
     } catch {
       return null; // network/parse error or timeout — vision prices render
     }
+  }
+
+  // PHASE 2 of the progressive reprice: the zero-comp parts phase 1 deferred get
+  // the grounded web-search pass off the critical path — results render first,
+  // these prices patch in a minute later. Never overwrites a price the seller
+  // already edited (suggestedPriceUsd !== _aiPrice means a human touched it).
+  async function groundedFollowup(
+    token: number,
+    vin: string | null,
+    vehicleId: { year?: string; make?: string; model?: string; trim?: string | null; engine?: string | null } | undefined,
+    current: AIPart[],
+    names: string[],
+  ): Promise<void> {
+    try {
+      const wanted = new Set(names.map((n) => n.toLowerCase().trim()));
+      const subset = current.filter((p) => wanted.has(p.partName.toLowerCase().trim()));
+      if (!subset.length) return;
+      const res = await fetch("/api/reprice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(90_000), // grounded budget (45s) + headroom
+        body: JSON.stringify({
+          vin: vin || undefined,
+          vehicle: vehicleId,
+          groundedOnly: true,
+          parts: subset.map((p) => ({
+            name: p.partName,
+            grade: p.condition,
+            inferred: p.inferred || undefined,
+            ...(p.conditionNotes?.trim() ? { conditionNotes: p.conditionNotes } : {}),
+          })),
+        }),
+      });
+      const j = await res.json();
+      if (!isScanRun(token, slot)) return; // superseded while researching
+      if (!j?.ok || !Array.isArray(j.parts)) return;
+      const rows = new Map<string, { suggestedPriceUsd: number | null; usedPartPriceUsd: number | null; suggestedPriceLowUsd?: number | null; suggestedPriceHighUsd?: number | null; confidence?: "high" | "medium" | "low"; compCount?: number; sources?: string[] }>();
+      for (const r of j.parts) if (r && typeof r.name === "string") rows.set(r.name.toLowerCase().trim(), r);
+      setParts((prev) => reconcilePairPrices(prev.map((p) => {
+        const key = p.partName.toLowerCase().trim();
+        if (!wanted.has(key)) return p;
+        const r = rows.get(key);
+        if (!r || typeof r.usedPartPriceUsd !== "number" || r.usedPartPriceUsd <= 0) return p;
+        const untouched = p.suggestedPriceUsd == null || p.suggestedPriceUsd === p._aiPrice;
+        if (!untouched) return p;
+        return {
+          ...p,
+          usedPartPriceUsd: r.usedPartPriceUsd,
+          suggestedPriceUsd: r.suggestedPriceUsd,
+          _aiPrice: r.suggestedPriceUsd ?? p._aiPrice,
+          suggestedPriceLowUsd: r.suggestedPriceLowUsd ?? p.suggestedPriceLowUsd,
+          suggestedPriceHighUsd: r.suggestedPriceHighUsd ?? p.suggestedPriceHighUsd,
+          pricingInsight: r.confidence
+            ? { source: "market" as const, confidence: r.confidence, similarCount: r.compCount ?? 0, pricedBy: "claude-market" as const, sources: r.sources ?? [] }
+            : p.pricingInsight,
+        };
+      })));
+    } catch { /* background upgrade only — phase-1 prices stand */ }
   }
 
   // One QA flag row for the report card: short headline (count instead of the part

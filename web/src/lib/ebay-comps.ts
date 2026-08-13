@@ -8,7 +8,9 @@
 // returns ACTIVE/ASKING listings; how much asking overshoots is the judge's call
 // from the supply in front of it (not a flat rule). Every function here fails soft:
 // a config/auth/network problem returns null and the caller skips the comps tier.
-// (No lib imports on purpose — keeps this loadable by the plain-node tests.)
+// (Only dependency-light lib imports on purpose — part-catalog imports nothing
+// beyond part-assemblies, so this file stays loadable by the plain-node tests.)
+import { canonicalizePart } from "./part-catalog";
 
 const ENV = (process.env.EBAY_ENV || "production").toLowerCase() === "sandbox" ? "sandbox" : "production";
 const API = ENV === "sandbox" ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
@@ -23,6 +25,12 @@ export type Comp = {
   price: number;
   title: string;
   condition: string;      // eBay condition label ("Used", "For parts or not working", …)
+  // Judge-facing listing metadata (docs: pricing-prompt.md — shipping-vs-pickup
+  // and listing date are part of what the judge must weigh; a $326 pickup-only
+  // tailgate is not the same number as a $326 shipped one). Optional so the
+  // plain-node tests and older callers keep working.
+  shipping?: string | null;  // "free shipping" | "+$150 shipping" | "calculated shipping" | "local pickup only"
+  listedAt?: string | null;  // ISO date (YYYY-MM-DD) the listing was created, when eBay returns it
 };
 
 // ── App token (client credentials), cached in-module until near expiry ────────
@@ -67,7 +75,7 @@ export function compQuery(fitment: { year?: string | number | null; make?: strin
 const CLEARLY_BROKEN = /\b(for\s+parts|not\s+working|parts\s+only)\b/i;
 
 export function cleanComps(
-  raw: { price: number; title: string; condition?: string }[],
+  raw: { price: number; title: string; condition?: string; shipping?: string | null; listedAt?: string | null }[],
   cap = 12,
 ): Comp[] {
   const seen = new Set<string>();
@@ -81,9 +89,141 @@ export function cleanComps(
     const key = `${title.toLowerCase().replace(/\s+/g, " ").slice(0, 60)}|${Math.round(r.price)}`;
     if (seen.has(key)) continue; // exact repeat (eBay artifact) — real supply still shows as distinct listings
     seen.add(key);
-    out.push({ price: Math.round(r.price), title, condition: r.condition || "Used" });
+    out.push({ price: Math.round(r.price), title, condition: r.condition || "Used", shipping: r.shipping ?? null, listedAt: r.listedAt ?? null });
     if (out.length >= cap) break;
   }
+  return out;
+}
+
+// ── OEM / aftermarket classification (pure, unit-tested) ──────────────────────
+// Aftermarket reproductions listed against used-OEM pulls undercut the true
+// value of an original part — the single comp-quality problem Andy called out.
+// This is a deterministic TITLE heuristic, not a filter: retrieval never drops
+// a listing over it (the wide-net rule stands). The judge receives the label
+// on each listing line and is instructed to anchor on used-OEM comps and
+// treat aftermarket prices as a floor, with the title outranking the label.
+//
+// Rule order is deliberate, first hit wins, and deliberately conservative:
+// a bare fitment range ("Fits 2018-2022 …") is COMMON on used-OEM pulls and
+// must never classify on its own.
+export type CompClass = "oem" | "aftermarket" | "unknown";
+
+// Reproduction/replacement brands that dominate aftermarket auto-parts
+// listings. Word-boundary matched; a brand hit wins even when the title also
+// says "OEM replacement" — that phrasing is itself an aftermarket tell.
+const AFTERMARKET_BRANDS =
+  /\b(tyc|depo|anzo|spyder|spec-?d|akkon|vland|alpharex|eagle eyes|dorman|sherman|keystone|k-?metal|pacific best|brock|evan-?fischer|garage-?pro|diy solutions|action crash|headlights? depot|karparts ?360|perde|marketon|jp auto|carlights360|auto dynasty|topline|winjet|lkq new)\b/i;
+
+const AFTERMARKET_PHRASES = [
+  /\baftermarket\b/i,
+  /\bcapa(?:-| )?(?:certified)?\b/i,
+  /\breproduction\b/i,
+  /\bOE[- ]?style\b/i,
+  /\b(?:replacement|compatible)\s+(?:for|with)\b/i,
+  /\bhalogen\s+type\b/i,
+];
+
+// "Headlight For Toyota Camry 2018-2024" is reproduction phrasing — OEM pulls
+// lead with year-make-model ("2018 Toyota Camry Headlight OEM 42K"), they
+// don't sell "for" a vehicle. Allows a few make/model words between the
+// preposition and the year range. NEVER classifies on its own: a pull whose
+// title also carries OEM evidence (part number, "OEM", mileage) is excused.
+const FITMENT_FOR = /\b(?:fits?|for)\s+(?:[A-Za-z][\w.&'-]*\s+){0,3}(?:19|20)\d{2}\s?[-–]\s?(?:(?:19|20)?\d{2})\b/i;
+
+// Salvage pulls cite mileage; reproductions never do.
+const MILEAGE_LANGUAGE = /\b\d{1,3}\s?k\b|\bmiles?\b/i;
+
+const OEM_SIGNALS = [
+  /\boem\b/i,
+  /\bgenuine\b/i,
+  /\bfactory\b/i,
+  /\boriginal\b(?!\s+style)/i,
+  /\bused\s+(?:pull|take[- ]?off|removed)\b/i,
+  /\btake[- ]?off\b/i,
+  /\bdonor\b/i,
+  // OEM part-number tokens: "52119-06E20", "8T4Z-17D957-AA", and unhyphenated
+  // runs like Mercedes "A2059066902" / "205750240028" or GM's bare 8-digit.
+  // The leading lookahead refuses year-range shapes ("2018-2024") so an
+  // all-caps fitment span never reads as a part number.
+  /\b(?!(?:19|20)\d{2}\s?[-–])(?=[A-Z0-9-]*\d)[A-Z0-9]{2,5}[-–][A-Z0-9]{4,7}(?:[-–][A-Z0-9]{1,4})?\b/,
+  /\b[A-Z]?\d{8,13}\b/,
+];
+
+// "New take-off" is OEM language (a new part pulled from a new vehicle), not
+// reproduction language — it must survive the new-on-Used rule below.
+const TAKEOFF = /\btake[- ]?offs?\b|\btakeoffs?\b/i;
+
+export function classifyComp(title: string, condition?: string): CompClass {
+  const t = (title || "").trim();
+  if (!t) return "unknown";
+  if (AFTERMARKET_BRANDS.test(t)) return "aftermarket";
+  if (AFTERMARKET_PHRASES.some((re) => re.test(t))) return "aftermarket";
+  const oemEvidence = OEM_SIGNALS.some((re) => re.test(t)) || MILEAGE_LANGUAGE.test(t);
+  if (FITMENT_FOR.test(t) && !oemEvidence) return "aftermarket";
+  // A title shouting "new"/"brand new" on a Used-condition listing is a
+  // reproduction sold through the used pipeline, not a yard pull ("new
+  // take-off" excepted — that's an OEM part off a new vehicle).
+  if (/\b(?:brand new|new)\b/i.test(t) && !TAKEOFF.test(t) && !oemEvidence && (condition || "").toLowerCase().includes("used")) return "aftermarket";
+  // Mileage counts as OEM evidence in its own right: only a pulled part has miles.
+  if (oemEvidence) return "oem";
+  return "unknown";
+}
+
+// ── Query variants (pure, unit-tested) ────────────────────────────────────────
+
+// Parts eBay lists BOTH as stripped shells/sub-components and as complete
+// assemblies. Verified live 2026-07-17: "2018 TESLA Model X Driver Side Front
+// Door" best-match = 12/12 shells + motors + glass, zero complete doors; adding
+// "assembly" surfaces a complete door as hit #1. Retrieval widening ONLY —
+// never a fitment filter; the judge still reads every title.
+const ASSEMBLY_CLASS =
+  /\b(door|seat|liftgate|lift\s?gate|tailgate|tail\s?gate|hatch|trunk\s?lid|deck\s?lid|decklid|bumper|mirror|axle|engine|transmission|transaxle|transfer\s?case|differential|steering\s?column|console|headlight|head\s?lamp|taillight|tail\s?light|tail\s?lamp|strut|hub)\b/i;
+
+export function isAssemblyClass(partName: string): boolean {
+  return ASSEMBLY_CLASS.test(partName);
+}
+
+// Priority-ordered variants for one part: [assembly/primary?, generation?, generic].
+// Order matters — it is the interleave priority (scarce assembly comps first).
+//
+// Catalog-known parts query with THEIR OWN phrasings (part-catalog
+// ebayQueryTerms) — this is what stops a complete bumper assembly from
+// querying "front bumper cover assembly" and mixing shell comps into the
+// pool. The side word is dropped from catalog queries on purpose: retrieval
+// stays wide, the judge reads sides from the titles. Off-catalog names keep
+// the original ASSEMBLY_CLASS behavior unchanged.
+export function compQueryVariants(
+  fitment: { year?: string | number | null; make?: string | null; model?: string | null },
+  partName: string,
+  gen?: { from: number; to: number } | null,
+): string[] {
+  const c = canonicalizePart(partName);
+  const out: string[] = [];
+  if (c) {
+    const terms = c.entry.ebayQueryTerms;
+    const primary = terms[0];
+    const generic = terms[terms.length - 1];
+    out.push(compQuery(fitment, primary));
+    if (gen && fitment.make && fitment.model && gen.from !== gen.to)
+      out.push([`${gen.from}-${gen.to}`, fitment.make, fitment.model, generic].join(" ").replace(/\s+/g, " ").trim());
+    if (generic !== primary) out.push(compQuery(fitment, generic));
+    return [...new Set(out)];
+  }
+  const generic = compQuery(fitment, partName);
+  if (isAssemblyClass(partName) && !/\bassembly\b/i.test(partName)) out.push(`${generic} assembly`);
+  if (gen && fitment.make && fitment.model && gen.from !== gen.to)
+    out.push([`${gen.from}-${gen.to}`, fitment.make, fitment.model, partName].join(" ").replace(/\s+/g, " ").trim());
+  out.push(generic);
+  return [...new Set(out)];
+}
+
+// Round-robin [a0,b0,c0,a1,b1,c1,…] so best-match shell flooding in one pool
+// can't starve the others at the cap. cleanComps preserves order, so interleave
+// order decides exactly which comps survive the final cap.
+export function interleave<T>(pools: T[][]): T[] {
+  const out: T[] = [];
+  for (let i = 0; pools.some((p) => i < p.length); i++)
+    for (const p of pools) if (i < p.length) out.push(p[i]);
   return out;
 }
 
@@ -105,29 +245,87 @@ async function searchOne(token: string, query: string): Promise<Comp[]> {
       signal: AbortSignal.timeout(8_000),
     });
     if (!r.ok) return [];
-    const j = (await r.json()) as { itemSummaries?: { title?: string; price?: { value?: string }; condition?: string }[] };
+    const j = (await r.json()) as {
+      itemSummaries?: {
+        title?: string;
+        price?: { value?: string };
+        condition?: string;
+        itemCreationDate?: string;
+        shippingOptions?: { shippingCostType?: string; shippingCost?: { value?: string } }[];
+      }[];
+    };
+    // Shipping label: buyers (and the judge) treat a pickup-only price and a
+    // shipped price as different numbers. No shippingOptions on a Browse
+    // summary almost always means seller-arranged local pickup only.
+    const shippingLabel = (s: { shippingOptions?: { shippingCostType?: string; shippingCost?: { value?: string } }[] }): string => {
+      const o = s.shippingOptions?.[0];
+      if (!o) return "local pickup only";
+      const v = Number(o.shippingCost?.value ?? NaN);
+      if (Number.isFinite(v)) return v === 0 ? "free shipping" : `+$${Math.round(v)} shipping`;
+      return o.shippingCostType === "CALCULATED" ? "calculated shipping" : "shipping unknown";
+    };
     const raw = (j.itemSummaries ?? []).map((s) => ({
       price: Number(s.price?.value ?? NaN),
       title: s.title ?? "",
       condition: s.condition,
+      shipping: shippingLabel(s),
+      listedAt: typeof s.itemCreationDate === "string" ? s.itemCreationDate.slice(0, 10) : null,
     }));
-    return cleanComps(raw);
+    return cleanComps(raw, 24); // per-variant pool stays wide; the merged pool takes the final cap
   } catch {
     return [];
   }
 }
 
-// Fetch comps for every part IN PARALLEL. Returns null when eBay itself is
-// unavailable (unconfigured / auth failure) so the caller can skip the comps
-// tier entirely instead of treating every part as zero-comp.
+const MERGED_CAP = 18;        // final per-part pool: 3 variants round-robin → ≥6 slots each pre-dedupe
+const PART_CONCURRENCY = 16;  // ≤16 parts in flight × ≤3 variants = ≤48 concurrent Browse calls
+
+// Tiny width limiter — variants tripled the query count; don't fire 240 at once.
+async function allLimit<T>(limit: number, tasks: (() => Promise<T>)[]): Promise<T[]> {
+  const out = new Array<T>(tasks.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+      while (next < tasks.length) {
+        const i = next++;
+        out[i] = await tasks[i]();
+      }
+    }),
+  );
+  return out;
+}
+
+// Sibling-model retrieval hints (EV interchange): a part shared across models
+// (Model 3 ↔ Model Y drive unit) sells under BOTH names, so each sibling adds
+// one query variant. Widening ONLY — the judge reads every title and decides
+// fit, exactly like the generation variant. Pure and unit-tested.
+export type SiblingHint = { make: string; model: string; from: number; to: number };
+const MAX_SIBLING_VARIANTS = 2; // per part, on top of the ≤3 base variants
+
+export function siblingQueries(partName: string, hints: SiblingHint[] | undefined | null): string[] {
+  if (!hints?.length) return [];
+  return hints
+    .slice(0, MAX_SIBLING_VARIANTS)
+    .map((h) => [h.from !== h.to ? `${h.from}-${h.to}` : String(h.from), h.make, h.model, partName].join(" ").replace(/\s+/g, " ").trim());
+}
+
+// Fetch comps for every part IN PARALLEL (width-limited), up to three query
+// variants per part (+ up to two sibling-model variants from EV interchange)
+// merged into one pool. Returns null when eBay itself is unavailable
+// (unconfigured / auth failure) so the caller can skip the comps tier entirely
+// instead of treating every part as zero-comp.
 export async function fetchCompsForParts(
   fitment: { year?: string | number | null; make?: string | null; model?: string | null },
   partNames: string[],
+  gen?: { from: number; to: number } | null,
+  hintsFor?: (partName: string) => SiblingHint[],
 ): Promise<Record<string, Comp[]> | null> {
   const token = await appToken();
   if (!token) return null;
-  const results = await Promise.all(
-    partNames.map(async (name) => [name, await searchOne(token, compQuery(fitment, name))] as const),
-  );
-  return Object.fromEntries(results);
+  const tasks = partNames.map((name) => async () => {
+    const queries = [...new Set([...compQueryVariants(fitment, name, gen), ...siblingQueries(name, hintsFor?.(name))])];
+    const pools = await Promise.all(queries.map((q) => searchOne(token, q)));
+    return [name, cleanComps(interleave(pools), MERGED_CAP)] as const;
+  });
+  return Object.fromEntries(await allLimit(PART_CONCURRENCY, tasks));
 }
