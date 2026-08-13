@@ -219,11 +219,31 @@ test("non-assembly parts stay single-variant", () => {
 const silverado = { year: 2019, make: "Chevrolet", model: "Silverado 1500" };
 
 test("assembly part + gen → 3 variants in priority order [assembly, gen, generic]", () => {
+  // Catalog-known part: queries use the entry's own phrasings, side word
+  // dropped (retrieval stays wide; the judge reads sides from titles).
   const qs = compQueryVariants(silverado, "Driver Side Front Door", { from: 2019, to: 2023 });
   assert.deepEqual(qs, [
-    "2019 Chevrolet Silverado 1500 Driver Side Front Door assembly",
-    "2019-2023 Chevrolet Silverado 1500 Driver Side Front Door",
-    "2019 Chevrolet Silverado 1500 Driver Side Front Door",
+    "2019 Chevrolet Silverado 1500 Front Door assembly",
+    "2019-2023 Chevrolet Silverado 1500 Front Door",
+    "2019 Chevrolet Silverado 1500 Front Door",
+  ]);
+});
+
+test("bumper assemblies query as assemblies, never as 'cover assembly'", () => {
+  // The V3 naming bug this push exists to kill: a complete front bumper used
+  // to query "Front Bumper Cover assembly", mixing shell comps into the pool.
+  const qs = compQueryVariants(silverado, "Front Bumper", null);
+  assert.deepEqual(qs, [
+    "2019 Chevrolet Silverado 1500 Front Bumper Assembly",
+    "2019 Chevrolet Silverado 1500 Front Bumper",
+  ]);
+  // Legacy scans that still say "Front Bumper Cover" mean the complete bumper
+  // and query the same way.
+  assert.deepEqual(compQueryVariants(silverado, "Front Bumper Cover", null), qs);
+  // An off-catalog name keeps the original ASSEMBLY_CLASS behavior untouched.
+  assert.deepEqual(compQueryVariants(silverado, "Blend Door Actuator Bracket", null), [
+    "2019 Chevrolet Silverado 1500 Blend Door Actuator Bracket assembly",
+    "2019 Chevrolet Silverado 1500 Blend Door Actuator Bracket",
   ]);
 });
 

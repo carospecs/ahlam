@@ -8,7 +8,9 @@
 // returns ACTIVE/ASKING listings; how much asking overshoots is the judge's call
 // from the supply in front of it (not a flat rule). Every function here fails soft:
 // a config/auth/network problem returns null and the caller skips the comps tier.
-// (No lib imports on purpose — keeps this loadable by the plain-node tests.)
+// (Only dependency-light lib imports on purpose — part-catalog imports nothing
+// beyond part-assemblies, so this file stays loadable by the plain-node tests.)
+import { canonicalizePart } from "./part-catalog";
 
 const ENV = (process.env.EBAY_ENV || "production").toLowerCase() === "sandbox" ? "sandbox" : "production";
 const API = ENV === "sandbox" ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
@@ -181,15 +183,33 @@ export function isAssemblyClass(partName: string): boolean {
   return ASSEMBLY_CLASS.test(partName);
 }
 
-// Priority-ordered variants for one part: [assembly?, generation?, generic].
+// Priority-ordered variants for one part: [assembly/primary?, generation?, generic].
 // Order matters — it is the interleave priority (scarce assembly comps first).
+//
+// Catalog-known parts query with THEIR OWN phrasings (part-catalog
+// ebayQueryTerms) — this is what stops a complete bumper assembly from
+// querying "front bumper cover assembly" and mixing shell comps into the
+// pool. The side word is dropped from catalog queries on purpose: retrieval
+// stays wide, the judge reads sides from the titles. Off-catalog names keep
+// the original ASSEMBLY_CLASS behavior unchanged.
 export function compQueryVariants(
   fitment: { year?: string | number | null; make?: string | null; model?: string | null },
   partName: string,
   gen?: { from: number; to: number } | null,
 ): string[] {
-  const generic = compQuery(fitment, partName);
+  const c = canonicalizePart(partName);
   const out: string[] = [];
+  if (c) {
+    const terms = c.entry.ebayQueryTerms;
+    const primary = terms[0];
+    const generic = terms[terms.length - 1];
+    out.push(compQuery(fitment, primary));
+    if (gen && fitment.make && fitment.model && gen.from !== gen.to)
+      out.push([`${gen.from}-${gen.to}`, fitment.make, fitment.model, generic].join(" ").replace(/\s+/g, " ").trim());
+    if (generic !== primary) out.push(compQuery(fitment, generic));
+    return [...new Set(out)];
+  }
+  const generic = compQuery(fitment, partName);
   if (isAssemblyClass(partName) && !/\bassembly\b/i.test(partName)) out.push(`${generic} assembly`);
   if (gen && fitment.make && fitment.model && gen.from !== gen.to)
     out.push([`${gen.from}-${gen.to}`, fitment.make, fitment.model, partName].join(" ").replace(/\s+/g, " ").trim());
