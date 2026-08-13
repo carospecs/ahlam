@@ -17,6 +17,7 @@ import { marketPriceParts, type MarketConfidence } from "@/lib/market-pricing";
 import { fetchCompsForParts } from "@/lib/ebay-comps";
 import { evRetrievalHints } from "@/lib/ev-interchange";
 import { priceParts, type JudgeInputPart } from "@/lib/price-judge";
+import { canonicalPartId, canonicalizePart } from "@/lib/part-catalog";
 import { resolveGeneration } from "@/lib/generations";
 import { compKey, readMarketComps, writeMarketComps } from "@/lib/market-cache";
 import { isSanePrice } from "@/lib/price-bands";
@@ -39,7 +40,19 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS });
 }
 
-type InPart = { name: string; grade: string; inferred?: boolean; photoIndex?: number; conditionNotes?: string };
+type InPart = {
+  name: string;
+  grade: string;
+  inferred?: boolean;
+  photoIndex?: number;
+  conditionNotes?: string;
+  // Canonical catalog identity from the scan (part-catalog). When present it
+  // keys the comp cache and the judge rejoin instead of the name string —
+  // and it is the ONLY way to price a shell (whose display name deliberately
+  // aliases to the assembly entry).
+  partSlug?: string;
+  side?: "driver" | "passenger";
+};
 
 type RawPriced = { name?: string; usedPartPriceUsd?: unknown; usedPartPriceLowUsd?: unknown; usedPartPriceHighUsd?: unknown };
 
@@ -168,11 +181,34 @@ export async function POST(req: Request) {
   const gradeOf = (p: InPart): ConditionGrade =>
     (["A", "B", "C"] as const).includes(p.grade as ConditionGrade) ? (p.grade as ConditionGrade) : "B";
 
+  // Stable part ids: client slug > canonical catalog id > the name string
+  // itself (off-catalog fallback — behavior identical to before). Computed
+  // once with a collision guard: if two DIFFERENT input names land on one pid
+  // (e.g. a scan that somehow lists "Front Bumper" and "Front Bumper Cover"),
+  // the later one keeps its name key so neither price overwrites the other.
+  const pidByNameKey = new Map<string, string>();
+  {
+    const claimed = new Map<string, string>(); // pid → nameKey that owns it
+    for (const p of parts) {
+      const nk = nameKey(p.name);
+      if (pidByNameKey.has(nk)) continue; // exact-duplicate names share a pid by design
+      const raw = p.partSlug
+        ? (p.side ? `${p.partSlug}:${p.side}` : p.partSlug)
+        : canonicalPartId(p.name) ?? nk;
+      const owner = claimed.get(raw);
+      const pid = owner && owner !== nk ? nk : raw;
+      if (pid !== raw) console.log(JSON.stringify({ tag: "reprice-pid-collision", vehicle: body.vin ?? null, pid: raw, names: [owner, nk] }));
+      claimed.set(pid, nk);
+      pidByNameKey.set(nk, pid);
+    }
+  }
+  const pidOf = (p: InPart): string => pidByNameKey.get(nameKey(p.name))!;
+
   const photos = Array.isArray(body.photos) ? body.photos.filter((s): s is string => typeof s === "string").slice(0, 24) : [];
 
   type Meta = { confidence: MarketConfidence; compCount: number; sources: string[]; needsReview?: boolean; note?: string };
-  const byName = new Map<string, Priced>();     // winning price rows, keyed by part name
-  const metaByName = new Map<string, Meta>();   // market-evidence metadata where a market tier priced
+  const byPid = new Map<string, Priced>();      // winning price rows, keyed by stable part id
+  const metaByPid = new Map<string, Meta>();    // market-evidence metadata where a market tier priced
   let fullRaw: RawPriced[] | null = null;       // full-list tier result — enables positional name-drift fallback
   let pricedBy: "claude-market" | "claude" | "gemini" = "gemini";
   let deferredParts: string[] | null = null;    // skipGrounded: zero-comp parts the client should follow up on
@@ -183,16 +219,18 @@ export async function POST(req: Request) {
   if (marketOn) {
     // Tier 0 — cache (48h TTL): a near-term rescan prices in seconds, same numbers.
     const tCache = Date.now();
-    const cached = await readMarketComps(parts.map((p) => compKey(id, spec, p.name, gradeOf(p))));
+    // Cache keys are the stable pid (slug[:side]) — naming drift between
+    // scans of the same car can no longer miss the 48h cache.
+    const cached = await readMarketComps(parts.map((p) => compKey(id, spec, pidOf(p), gradeOf(p))));
     tm.cacheMs = Date.now() - tCache;
     const researchable: InPart[] = [];
     for (const p of parts) {
-      const hit = cached[compKey(id, spec, p.name, gradeOf(p))];
+      const hit = cached[compKey(id, spec, pidOf(p), gradeOf(p))];
       if (gradeOf(p) === "C") continue; // no research spend; gradeAdjustUsed nulls it anyway
       if (hit) {
         counts.cached++;
-        byName.set(nameKey(p.name), { mid: hit.price_usd, lo: hit.low_usd, hi: hit.high_usd });
-        metaByName.set(nameKey(p.name), { confidence: hit.confidence, compCount: hit.comp_count, sources: hit.sources });
+        byPid.set(pidOf(p), { mid: hit.price_usd, lo: hit.low_usd, hi: hit.high_usd });
+        metaByPid.set(pidOf(p), { confidence: hit.confidence, compCount: hit.comp_count, sources: hit.sources });
       } else {
         researchable.push(p);
       }
@@ -204,20 +242,21 @@ export async function POST(req: Request) {
     // Parts with zero usable comps route to the grounded-search fallback on the
     // strong model, concurrently, so the slow path never blocks the fast majority.
     if (researchable.length) {
-      const gradeByName = new Map(researchable.map((p) => [nameKey(p.name), gradeOf(p)]));
-      const written: { part: { name: string; usedPartPriceUsd: number | null; usedPartPriceLowUsd: number | null; usedPartPriceHighUsd: number | null; confidence: MarketConfidence; compCount: number; sourceDomains: string[] }; grade: string }[] = [];
-      const accept = (row: { name: string; usedPartPriceUsd: number | null; usedPartPriceLowUsd: number | null; usedPartPriceHighUsd: number | null; confidence: MarketConfidence; compCount: number; sourceDomains: string[]; needsReview?: boolean; note?: string }) => {
-        const key = nameKey(row.name);
-        if (!gradeByName.has(key)) return; // echo drift to an unknown name — ignore
+      const gradeByPid = new Map(researchable.map((p) => [pidOf(p), gradeOf(p)]));
+      const written: { part: { name: string; usedPartPriceUsd: number | null; usedPartPriceLowUsd: number | null; usedPartPriceHighUsd: number | null; confidence: MarketConfidence; compCount: number; sourceDomains: string[] }; grade: string; partId?: string }[] = [];
+      // Rows arrive keyed two ways: the judge echoes part_id (already a pid),
+      // the grounded tier echoes the part NAME — callers pass the right key.
+      const accept = (key: string, row: { name: string; usedPartPriceUsd: number | null; usedPartPriceLowUsd: number | null; usedPartPriceHighUsd: number | null; confidence: MarketConfidence; compCount: number; sourceDomains: string[]; needsReview?: boolean; note?: string }) => {
+        if (!gradeByPid.has(key)) return; // drift to an unknown id — ignore (logged by callers where relevant)
         // Sanity check runs AFTER the estimate and only FLAGS (pricing-prompt.md:
         // no bands/caps anywhere the model can see, and no silent drops — an
         // implausible price routes to human review instead of vanishing).
         const insane = row.usedPartPriceUsd != null && !isSanePrice(row.usedPartPriceUsd, row.name);
         const needsReview = !!row.needsReview || insane;
-        byName.set(key, { mid: row.usedPartPriceUsd, lo: row.usedPartPriceLowUsd, hi: row.usedPartPriceHighUsd });
-        metaByName.set(key, { confidence: row.confidence, compCount: row.compCount, sources: row.sourceDomains, ...(needsReview ? { needsReview: true } : {}), ...(row.note ? { note: row.note } : {}) });
+        byPid.set(key, { mid: row.usedPartPriceUsd, lo: row.usedPartPriceLowUsd, hi: row.usedPartPriceHighUsd });
+        metaByPid.set(key, { confidence: row.confidence, compCount: row.compCount, sources: row.sourceDomains, ...(needsReview ? { needsReview: true } : {}), ...(row.note ? { note: row.note } : {}) });
         // A review-flagged price must not pin the 48h cache.
-        if (!needsReview) written.push({ part: row, grade: gradeByName.get(key)! });
+        if (!needsReview) written.push({ part: row, grade: gradeByPid.get(key)!, partId: key });
       };
 
       const fitment = { year: v.year, make: v.make, model: v.model, trim: v.trim, engine: v.engine };
@@ -238,9 +277,15 @@ export async function POST(req: Request) {
         const withComps = body.groundedOnly ? [] : researchable.filter((p) => (comps[p.name] ?? []).length > 0);
         const zeroComp = body.groundedOnly ? researchable : researchable.filter((p) => (comps[p.name] ?? []).length === 0);
         counts.zeroComp = zeroComp.length;
+        // part_id is the stable pid; nameByPid translates judge echoes back to
+        // the caller's name for comps lookups and cache writes.
+        const nameByPid = new Map(researchable.map((p) => [pidOf(p), p.name]));
         const judgeInput: JudgeInputPart[] = withComps.map((p) => ({
-          part_id: p.name,
+          part_id: pidOf(p),
           name: p.name,
+          // Explicit client slug wins; otherwise the catalog read (legacy names
+          // resolve to the assembly — the correct default for on-car parts).
+          partSlug: p.partSlug ?? canonicalizePart(p.name)?.entry.slug ?? null,
           grade: gradeOf(p),
           conditionNotes: p.conditionNotes ?? null,
           fitment,
@@ -261,33 +306,39 @@ export async function POST(req: Request) {
         if (body.skipGrounded && zeroComp.length) deferredParts = zeroComp.map((p) => p.name);
         counts.judged = judged?.length ?? 0;
         for (const r of judged ?? []) {
+          const name = nameByPid.get(r.part_id);
+          if (!name) { console.log(JSON.stringify({ tag: "reprice-unmatched-part-id", vehicle: id, part_id: r.part_id })); continue; }
           // Null estimate = the judge declined to price (junk pool / cannot
           // identify). The part keeps its vision price downstream, but the
           // review flag still surfaces so the yard prices it by hand.
           if (r.estimate == null) {
-            metaByName.set(nameKey(r.part_id), { confidence: "low", compCount: comps[r.part_id]?.length ?? 0, sources: ["ebay.com"], needsReview: true, ...(r.note ? { note: r.note } : {}) });
+            metaByPid.set(r.part_id, { confidence: "low", compCount: comps[name]?.length ?? 0, sources: ["ebay.com"], needsReview: true, ...(r.note ? { note: r.note } : {}) });
             continue;
           }
-          accept({
-            name: r.part_id,
+          accept(r.part_id, {
+            name,
             usedPartPriceUsd: r.estimate,
             usedPartPriceLowUsd: r.low,
             usedPartPriceHighUsd: r.high,
             confidence: r.confidence,
-            compCount: comps[r.part_id]?.length ?? 0,
+            compCount: comps[name]?.length ?? 0,
             sourceDomains: ["ebay.com"],
             needsReview: r.needsReview,
             note: r.note,
           });
         }
-        for (const r of fallback ?? []) accept(r);
+        // The grounded tier echoes names, not pids — translate before accepting.
+        for (const r of fallback ?? []) {
+          const key = pidByNameKey.get(nameKey(r.name));
+          if (key) accept(key, r);
+        }
         if ((judged && judged.length) || (fallback && fallback.length)) pricedBy = "claude-market";
       } else {
         // eBay itself unavailable (creds/auth/network) — don't treat every part as
         // zero-comp and stampede the slow fallback; the memory tier below handles it.
       }
       if (written.length) void writeMarketComps(id, spec, written); // best-effort, evidence-backed rows only
-    } else if (byName.size) {
+    } else if (byPid.size) {
       pricedBy = "claude-market"; // fully served from cache
     }
   }
@@ -304,15 +355,17 @@ export async function POST(req: Request) {
       if (claude) { parsed = claude; pricedBy = "claude"; }
     }
     if (!parsed) { parsed = await geminiPriceParts(prompt); if (parsed) pricedBy = "gemini"; }
-    if (!parsed && byName.size === 0) {
+    if (!parsed && byPid.size === 0) {
       return NextResponse.json({ ok: false, error: "pricing unavailable" }, { status: 502, headers: CORS });
     }
     if (parsed) {
       fullRaw = parsed;
       for (const r of parsed) {
         if (typeof r?.name !== "string") continue;
-        const key = nameKey(r.name);
-        if (!byName.has(key)) byName.set(key, fromRaw(r)); // cache overlay wins
+        // Memory tiers echo names — translate to the pid when the name is one
+        // of ours (echo drift falls to the positional fallback below).
+        const key = pidByNameKey.get(nameKey(r.name)) ?? nameKey(r.name);
+        if (!byPid.has(key)) byPid.set(key, fromRaw(r)); // cache overlay wins
       }
     }
     tm.memoryMs = Date.now() - tMemory;
@@ -321,10 +374,10 @@ export async function POST(req: Request) {
   // Claude's price IS the price (class positioning removed 2026-07-03); only the
   // grade gate applies (A/B as-is, C unpriced) and the band renders as confidence.
   const out = parts.map((p, i) => {
-    const key = nameKey(p.name);
-    const priced = byName.get(key) ?? (fullRaw ? fromRaw(fullRaw[i]) : { mid: null, lo: null, hi: null });
+    const key = pidOf(p);
+    const priced = byPid.get(key) ?? (fullRaw ? fromRaw(fullRaw[i]) : { mid: null, lo: null, hi: null });
     const grade = gradeOf(p);
-    const meta = metaByName.get(key);
+    const meta = metaByPid.get(key);
     return {
       name: p.name,
       usedPartPriceUsd: priced.mid,
@@ -343,7 +396,7 @@ export async function POST(req: Request) {
     };
   });
 
-  for (const m of metaByName.values()) if (m.needsReview) counts.reviewFlagged++;
+  for (const m of metaByPid.values()) if (m.needsReview) counts.reviewFlagged++;
   const timings = {
     totalMs: Date.now() - t0,
     ...tm,
