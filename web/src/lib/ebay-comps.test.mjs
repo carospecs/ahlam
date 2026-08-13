@@ -49,7 +49,7 @@ if (!process.env.__EBAY_COMPS_TEST_CHILD) {
 
 const assert = (await import("node:assert/strict")).default;
 const { compQuery, cleanComps, isAssemblyClass, compQueryVariants, interleave, siblingQueries, classifyComp } = await import("./ebay-comps.ts");
-const { sanitizeJudgedRow } = await import("./price-judge.ts");
+const { sanitizeJudgedRow, buildJudgeUserText } = await import("./price-judge.ts");
 const { dropGenericWhenPositioned } = await import("./part-enrich.ts");
 
 let passed = 0;
@@ -349,6 +349,48 @@ test("classifyComp: year ranges never read as part numbers", () => {
   // "2018-2024" must not satisfy the OEM part-number pattern.
   assert.equal(classifyComp("2018-2024 Toyota Camry Front Bumper", "Used"), "unknown");
   assert.equal(classifyComp("", "Used"), "unknown");
+});
+
+// ── buildJudgeUserText: OEM tags + shell-aware INCLUDED block ────────────────
+
+const judgePart = (over = {}) => ({
+  part_id: "front-bumper-assembly",
+  name: "Front Bumper",
+  grade: "B",
+  fitment: { year: 2018, make: "Toyota", model: "Camry" },
+  comps: [],
+  ...over,
+});
+
+test("judge listing lines carry the OEM/aftermarket tag, omit unknown", () => {
+  const { marketData } = buildJudgeUserText(judgePart({
+    comps: [
+      { price: 199, title: "2018-2024 TOYOTA CAMRY FRONT BUMPER COVER OEM", condition: "Used", shipping: "free shipping", listedAt: "2026-01-15" },
+      { price: 276, title: "Front Bumper Cover Black Toyota Camry 2018 2019 2020 CAPA", condition: "Used", shipping: null, listedAt: null },
+      { price: 150, title: "2018-2020 Toyota Camry Hood Panel Silver", condition: "Used", shipping: null, listedAt: null },
+    ],
+  }));
+  assert.ok(marketData.includes("[Used; free shipping; listed 2026-01-15; OEM]"));
+  assert.ok(marketData.includes("CAPA [Used; shipping unknown; aftermarket]"));
+  assert.ok(marketData.includes("Hood Panel Silver [Used; shipping unknown]")); // unknown → no tag
+  assert.ok(marketData.includes("an OEM or aftermarket tag"));
+});
+
+test("assembly parts keep the complete-assembly INCLUDED block", () => {
+  const { header } = buildJudgeUserText(judgePart());
+  assert.ok(header.includes("This part is sold as a complete assembly as pulled from the vehicle."));
+  assert.ok(header.includes("Attached components: bumper cover, reinforcement bar"));
+  assert.ok(!header.includes("BARE SHELL"));
+});
+
+test("shell slugs invert the INCLUDED block", () => {
+  const { header } = buildJudgeUserText(judgePart({ part_id: "front-bumper-cover", partSlug: "front-bumper-cover", name: "Front Bumper Cover" }));
+  assert.ok(header.includes("This part is a BARE SHELL (Front Bumper Cover) — not a complete assembly."));
+  assert.ok(header.includes("NOT included (sold with the complete assembly, absent here): bumper cover, reinforcement bar"));
+  assert.ok(!header.includes("sold as a complete assembly as pulled"));
+  // Without the slug, the same display name reads as the assembly (legacy alias, by design).
+  const { header: legacy } = buildJudgeUserText(judgePart({ name: "Front Bumper Cover" }));
+  assert.ok(legacy.includes("sold as a complete assembly as pulled"));
 });
 
 console.log(`  ${passed} passed`);

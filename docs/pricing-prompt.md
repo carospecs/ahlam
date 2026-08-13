@@ -71,7 +71,14 @@ that are not comparable must be named and set aside. Common contamination in thi
   and say so explicitly.
 - Sub-components or accessories sold under a similar name. A tailgate handle is not a tailgate.
 - Parts marked for parts only, damaged, core, or salvage when yours is not, or the reverse.
-- Aftermarket reproductions priced against your OEM part.
+- Aftermarket reproductions priced against your OEM part. Listing lines may carry an [OEM] or
+  [aftermarket] tag our code derived from the title; trust the title over the tag when they
+  disagree. Anchor your number on used-OEM listings. A new aftermarket listing is not a comp
+  for a used OEM part — it tells you the buyer's cheapest alternative, so treat the cheapest
+  credible aftermarket price as a floor reference on commodity cosmetic parts, never as
+  something to average in. On parts where OEM quality matters (lighting with brackets and
+  ballasts, sensors, anything color-keyed or VIN-coded), a used OEM part properly lists above
+  a new reproduction.
 - Wrong generation, wrong trim, or fitment that does not actually overlap.
 - Prices that include freight versus prices for local pickup only. These are not the same
   number and cannot be averaged together.
@@ -155,8 +162,12 @@ Variant details: {engine ...| unknown}
 OEM part number: unknown
 
 INCLUDED
+{complete-assembly (default):}
 This part is sold as a complete assembly as pulled from the vehicle.
 Attached components: {part-assemblies default, "verify against the photos" | "not mapped for this part type — judge from the photos and part name"}
+{OR, when the part catalog marks this part a bare SHELL:}
+This part is a BARE SHELL ({display name}) — not a complete assembly. Do not price it against complete-assembly comps.
+NOT included (sold with the complete assembly, absent here): {part-assemblies includes}
 Sometimes pulled or sold separately (check the photos): {mayBeAbsent?}
 What moves price for this part type: {priceDrivers?}
 Shipping burden class: {freight?}
@@ -171,13 +182,14 @@ PHOTOS
 [image block]
 
 MARKET DATA
-- ${price} — {full eBay title, never truncated or interpreted by code} [{condition}; {shipping}; listed {date}]
+- ${price} — {full eBay title, never truncated or interpreted by code} [{condition}; {shipping}; listed {date}; {OEM|aftermarket}?]
 ...
 (or "(no listings retrieved)")
 
 Each listing includes title, price, condition as stated by the seller, shipping cost or
-pickup-only status, and date. Some of these will not be comparable. Identifying which is
-part of your job.
+pickup-only status, date, and — where our code could tell from the title — an OEM or
+aftermarket tag (absent when unknown; the tag is a heuristic, verify it against the title
+yourself). Some of these will not be comparable. Identifying which is part of your job.
 ```
 
 Completeness defaults come from `web/src/lib/part-assemblies.ts` (`resolveAssembly`);

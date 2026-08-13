@@ -18,8 +18,10 @@
 // Calls run in parallel (width-limited) and each is fail-soft: a failed part
 // simply falls through the ladder, exactly like a failed chunk used to.
 import { getAnthropic } from "./anthropic";
-import type { Comp } from "./ebay-comps";
-import { resolveAssembly } from "./assembly-resolve";
+import { classifyComp, type Comp } from "./ebay-comps";
+import { resolveAssembly, resolveCatalog } from "./assembly-resolve";
+import { CATALOG_BY_SLUG } from "./part-catalog";
+import { PART_ASSEMBLIES } from "./part-assemblies";
 
 export type JudgeConfidence = "high" | "medium" | "low";
 
@@ -126,7 +128,14 @@ that are not comparable must be named and set aside. Common contamination in thi
   and say so explicitly.
 - Sub-components or accessories sold under a similar name. A tailgate handle is not a tailgate.
 - Parts marked for parts only, damaged, core, or salvage when yours is not, or the reverse.
-- Aftermarket reproductions priced against your OEM part.
+- Aftermarket reproductions priced against your OEM part. Listing lines may carry an [OEM] or
+  [aftermarket] tag our code derived from the title; trust the title over the tag when they
+  disagree. Anchor your number on used-OEM listings. A new aftermarket listing is not a comp
+  for a used OEM part — it tells you the buyer's cheapest alternative, so treat the cheapest
+  credible aftermarket price as a floor reference on commodity cosmetic parts, never as
+  something to average in. On parts where OEM quality matters (lighting with brackets and
+  ballasts, sensors, anything color-keyed or VIN-coded), a used OEM part properly lists above
+  a new reproduction.
 - Wrong generation, wrong trim, or fitment that does not actually overlap.
 - Prices that include freight versus prices for local pickup only. These are not the same
   number and cannot be averaged together.
@@ -224,6 +233,10 @@ const JUDGE_SCHEMA = {
 export type JudgeInputPart = {
   part_id: string;
   name: string;
+  // Canonical catalog slug when the caller knows it. Required to price a
+  // SHELL correctly: a bumper shell's display name deliberately aliases to
+  // the assembly entry, so only the slug can say "this one is the bare cover".
+  partSlug?: string | null;
   grade: string; // A | B (C never reaches the judge)
   conditionNotes?: string | null; // vision-stage written assessment
   fitment: { year?: string | number | null; make?: string | null; model?: string | null; trim?: string | null; engine?: string | null };
@@ -232,11 +245,19 @@ export type JudgeInputPart = {
 };
 
 // One listing per line, full title preserved — the title is how the judge reads
-// completeness/configuration; code must not reduce or interpret it.
+// completeness/configuration; code must not reduce or interpret it. The one
+// annotation code adds is the OEM/aftermarket tag (classifyComp) — a label,
+// not a filter: the judge is told the title outranks the tag.
 function listingLines(comps: Comp[]): string {
   return comps
     .map((c) => {
-      const meta = [c.condition || "Used", c.shipping || "shipping unknown", c.listedAt ? `listed ${c.listedAt}` : null]
+      const cls = classifyComp(c.title, c.condition);
+      const meta = [
+        c.condition || "Used",
+        c.shipping || "shipping unknown",
+        c.listedAt ? `listed ${c.listedAt}` : null,
+        cls === "oem" ? "OEM" : cls === "aftermarket" ? "aftermarket" : null,
+      ]
         .filter(Boolean)
         .join("; ");
       return `- $${c.price} — ${c.title} [${meta}]`;
@@ -249,11 +270,23 @@ function listingLines(comps: Comp[]): string {
 // the photos override — the prompt tells the judge exactly that.
 export function buildJudgeUserText(p: JudgeInputPart): { header: string; marketData: string } {
   const fit = [p.fitment.year, p.fitment.make, p.fitment.model].filter(Boolean).join(" ");
-  const asm = resolveAssembly(p.name);
+  // Explicit slug wins (the only way to reach a shell entry whose display
+  // name aliases to the assembly); free text falls back to catalog-then-regex.
+  const entry = (p.partSlug ? CATALOG_BY_SLUG[p.partSlug] : undefined) ?? resolveCatalog(p.name)?.entry ?? null;
+  const asm = entry ? (entry.assemblyKey ? PART_ASSEMBLIES[entry.assemblyKey] ?? null : null) : resolveAssembly(p.name);
+  const isShell = entry?.saleUnit === "shell";
   const attached = asm
     ? `${asm.includes.join(", ")} (default for this part type — verify against the photos)`
     : "not mapped for this part type — judge from the photos and part name";
-  const mayBeAbsent = asm && asm.mayBeAbsent.length
+  // A shell entry inverts the INCLUDED block: what the assembly ships with is
+  // exactly what this part does NOT have — the judge must not price it
+  // against complete-assembly comps.
+  const included = isShell
+    ? `This part is a BARE SHELL (${entry.displayName}) — not a complete assembly. Do not price it against complete-assembly comps.\n` +
+      (asm ? `NOT included (sold with the complete assembly, absent here): ${asm.includes.join(", ")}` : `Included components: the bare part only`)
+    : `This part is sold as a complete assembly as pulled from the vehicle.\n` +
+      `Attached components: ${attached}`;
+  const mayBeAbsent = !isShell && asm && asm.mayBeAbsent.length
     ? `\nSometimes pulled or sold separately (check the photos): ${asm.mayBeAbsent.join(", ")}`
     : "";
   const drivers = asm && asm.priceDrivers.length
@@ -266,8 +299,7 @@ export function buildJudgeUserText(p: JudgeInputPart): { header: string; marketD
     `Variant details: ${p.fitment.engine ? `engine ${p.fitment.engine}` : "unknown"}\n` +
     `OEM part number: unknown\n\n` +
     `INCLUDED\n` +
-    `This part is sold as a complete assembly as pulled from the vehicle.\n` +
-    `Attached components: ${attached}${mayBeAbsent}${drivers}${freight}\n` +
+    `${included}${mayBeAbsent}${drivers}${freight}\n` +
     `Known missing or damaged components: ${p.conditionNotes ? "see condition assessment" : "none reported"}\n\n` +
     `CONDITION\n` +
     `Grade: ${p.grade}\n` +
@@ -278,8 +310,9 @@ export function buildJudgeUserText(p: JudgeInputPart): { header: string; marketD
     `MARKET DATA\n` +
     (p.comps.length ? listingLines(p.comps) : "(no listings retrieved)") +
     `\n\nEach listing includes title, price, condition as stated by the seller, shipping cost or ` +
-    `pickup-only status, and date. Some of these will not be comparable. Identifying which is ` +
-    `part of your job.`;
+    `pickup-only status, date, and — where our code could tell from the title — an OEM or ` +
+    `aftermarket tag (absent when unknown; the tag is a heuristic, verify it against the title ` +
+    `yourself). Some of these will not be comparable. Identifying which is part of your job.`;
   return { header, marketData };
 }
 
