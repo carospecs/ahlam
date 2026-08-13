@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { geocode } from "@/lib/geocode";
+import { validateSlug } from "@/lib/slug";
+import { effectivePlan } from "@/lib/plan-limits";
 
 export const runtime = "nodejs";
 
@@ -40,6 +42,21 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const patch: Record<string, any> = {};
   for (const k of EDITABLE) if (k in body) patch[k] = body[k];
+
+  // Slug (the shop's {slug}.ahlam.io address) is gated to plans that include
+  // the personal website, so it's handled apart from the EDITABLE whitelist.
+  if ("slug" in body) {
+    const slug = String(body.slug || "").toLowerCase().trim();
+    const { data: shopRow } = await db.from("shops").select("plan, trial_ends_at, subscription_status").eq("id", shopId).single();
+    const plan = effectivePlan(shopRow?.plan, shopRow?.trial_ends_at, shopRow?.subscription_status);
+    if (plan !== "ultimate" && plan !== "founder") {
+      return NextResponse.json({ error: "Your website address is part of the Ultimate plan." }, { status: 403 });
+    }
+    const v = validateSlug(slug);
+    if (!v.ok) return NextResponse.json({ error: v.reason }, { status: 400 });
+    patch.slug = slug;
+  }
+
   if (!Object.keys(patch).length) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
 
   // Default warranty is an int column; clamp to the allowed trade values.
@@ -61,6 +78,10 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { data, error } = await db.from("shops").update(patch).eq("id", shopId).select().single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    // 23505 = unique violation — someone else holds that slug.
+    if (error.code === "23505") return NextResponse.json({ error: "That address is taken." }, { status: 409 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json({ shop: data });
 }

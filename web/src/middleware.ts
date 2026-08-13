@@ -28,6 +28,22 @@ function corsMiddleware(req: NextRequest, res: NextResponse) {
   return res;
 }
 
+// {slug}.ahlam.io (or {slug}.localhost in dev) → the shop's personal website.
+// Returns the slug when the host is a tenant subdomain, else null. Reserved
+// labels (www, app, …) and multi-label hosts fall through to the main app;
+// *.vercel.app previews never match.
+function tenantSlug(req: NextRequest): string | null {
+  const host = (req.headers.get("host") || "").toLowerCase().split(":")[0];
+  let label: string | null = null;
+  if (host.endsWith(".ahlam.io")) label = host.slice(0, -".ahlam.io".length);
+  else if (host.endsWith(".localhost")) label = host.slice(0, -".localhost".length);
+  if (!label || label.includes(".")) return null;
+  // "demo" is reserved (no shop can claim it) but resolves to the built-in
+  // example site — the live preview of what the Ultimate plan buys.
+  if (label === "demo") return label;
+  return validateSlug(label).ok ? label : null;
+}
+
 export async function middleware(req: NextRequest) {
   // Shop subdomain routing: <slug>.ahlam.io -> /shop/<id>, transparently
   // (URL bar keeps showing the subdomain). See lib/shop-subdomains.ts.

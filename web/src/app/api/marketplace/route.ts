@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { normalizeGrade } from "@/lib/grade";
+import { effectiveWarranty, warrantyLabel } from "@/lib/warranty";
 
 const R = 3959; // Earth radius in miles
 
@@ -65,6 +66,7 @@ export async function GET(req: Request) {
     if (buyerLat !== null && buyerLng !== null && shopLat !== null && shopLng !== null) {
       distance = Math.round(haversine(buyerLat, buyerLng, shopLat, shopLng) * 10) / 10;
     }
+    const w = effectiveWarranty({ warrantyDays: c.warrantyDays, asIs: c.asIs }, shop?.default_warranty_days);
     return {
       id: l.id,
       part: c.partName || c.part_name || "Used Part",
@@ -87,6 +89,8 @@ export async function GET(req: Request) {
       driveTime: distance !== null ? driveTimeMinutes(distance) : null,
       note: c.conditionNotes || c.condition_notes || "",
       desc: c.description || "",
+      warrantyText: warrantyLabel(w.days, w.asIs),
+      asIs: w.asIs,
       confidence: c.confidence || "high",
       markets: l.marketplace_url ? ["Marketplace"] : [],
     };
@@ -182,12 +186,12 @@ function formatFit(fit: any): string {
 }
 
 const DEMO_PARTS = [
-  { id: "m1", part: "OEM Alternator", grade: "B", price: 95, fitment: "2013–2017 Honda Accord 2.4L", category: "Electrical", photoUrl: null, views: 64, sellerId: null, shopId: "demo-a", shopName: "Eastgate Auto Recyclers", location: "92805", distance: 3.2, driveTime: 5, note: "Bench-tested, holds charge", desc: "Pulled from a clean 2015 Accord. Tested good on the bench.", confidence: "high", markets: [] },
-  { id: "m2", part: "Tailgate Assembly", grade: "B", price: 410, fitment: "2009–2014 Ford F-150", category: "Body / Exterior", photoUrl: null, views: 188, sellerId: null, shopId: "demo-b", shopName: "Harbor Salvage", location: "90732", distance: 8.1, driveTime: 14, note: "No rust on inner lip", desc: "Solid tailgate, latch and handle work. Oxford White.", confidence: "high", markets: [] },
-  { id: "m3", part: "Front Bumper Cover", grade: "B", price: 160, fitment: "2016–2018 Toyota Camry", category: "Body / Exterior", photoUrl: null, views: 41, sellerId: null, shopId: "demo-a", shopName: "Eastgate Auto Recyclers", location: "92805", distance: 3.2, driveTime: 5, note: "Minor scuffs, all tabs intact", desc: "Factory bumper cover, fog brackets included.", confidence: "high", markets: [] },
-  { id: "m4", part: "Alloy Wheel (set of 4)", grade: "B", price: 280, fitment: "2015–2017 Subaru Outback", category: "Wheels / Tires", photoUrl: null, views: 97, sellerId: null, shopId: "demo-c", shopName: "Vega Used Parts", location: "90746", distance: 5.7, driveTime: 10, note: "17in, balanced, light curb rash", desc: "Four factory alloys, all straight and balanced.", confidence: "high", markets: [] },
-  { id: "m5", part: "Left Headlight Assembly", grade: "C", price: 35, fitment: "2014–2018 Nissan Altima", category: "Lighting", photoUrl: null, views: 22, sellerId: null, shopId: "demo-b", shopName: "Harbor Salvage", location: "90732", distance: 8.1, driveTime: 14, note: "Hazy lens, sold as core", desc: "Headlight core, lens is foggy. Good for a restore.", confidence: "medium", markets: [] },
-  { id: "m6", part: "Starter Motor", grade: "B", price: 70, fitment: "2012–2016 Chevy Cruze 1.4L", category: "Electrical", photoUrl: null, views: 53, sellerId: null, shopId: "demo-c", shopName: "Vega Used Parts", location: "90746", distance: 5.7, driveTime: 10, note: "Spins strong, clean teeth", desc: "Removed working. 30-day guarantee.", confidence: "high", markets: [] },
+  { id: "m1", warrantyText: "30-day warranty", asIs: false, part: "OEM Alternator", grade: "B", price: 95, fitment: "2013–2017 Honda Accord 2.4L", category: "Electrical", photoUrl: null, views: 64, sellerId: null, shopId: "demo-a", shopName: "Eastgate Auto Recyclers", location: "92805", distance: 3.2, driveTime: 5, note: "Bench-tested, holds charge", desc: "Pulled from a clean 2015 Accord. Tested good on the bench.", confidence: "high", markets: [] },
+  { id: "m2", warrantyText: "30-day warranty", asIs: false, part: "Tailgate Assembly", grade: "B", price: 410, fitment: "2009–2014 Ford F-150", category: "Body / Exterior", photoUrl: null, views: 188, sellerId: null, shopId: "demo-b", shopName: "Harbor Salvage", location: "90732", distance: 8.1, driveTime: 14, note: "No rust on inner lip", desc: "Solid tailgate, latch and handle work. Oxford White.", confidence: "high", markets: [] },
+  { id: "m3", warrantyText: "Sold as-is — no returns", asIs: true, part: "Front Bumper Cover", grade: "B", price: 160, fitment: "2016–2018 Toyota Camry", category: "Body / Exterior", photoUrl: null, views: 41, sellerId: null, shopId: "demo-a", shopName: "Eastgate Auto Recyclers", location: "92805", distance: 3.2, driveTime: 5, note: "Minor scuffs, all tabs intact", desc: "Factory bumper cover, fog brackets included.", confidence: "high", markets: [] },
+  { id: "m4", warrantyText: "30-day warranty", asIs: false, part: "Alloy Wheel (set of 4)", grade: "B", price: 280, fitment: "2015–2017 Subaru Outback", category: "Wheels / Tires", photoUrl: null, views: 97, sellerId: null, shopId: "demo-c", shopName: "Vega Used Parts", location: "90746", distance: 5.7, driveTime: 10, note: "17in, balanced, light curb rash", desc: "Four factory alloys, all straight and balanced.", confidence: "high", markets: [] },
+  { id: "m5", warrantyText: "Sold as-is — no returns", asIs: true, part: "Left Headlight Assembly", grade: "C", price: 35, fitment: "2014–2018 Nissan Altima", category: "Lighting", photoUrl: null, views: 22, sellerId: null, shopId: "demo-b", shopName: "Harbor Salvage", location: "90732", distance: 8.1, driveTime: 14, note: "Hazy lens, sold as core", desc: "Headlight core, lens is foggy. Good for a restore.", confidence: "medium", markets: [] },
+  { id: "m6", warrantyText: "30-day warranty", asIs: false, part: "Starter Motor", grade: "B", price: 70, fitment: "2012–2016 Chevy Cruze 1.4L", category: "Electrical", photoUrl: null, views: 53, sellerId: null, shopId: "demo-c", shopName: "Vega Used Parts", location: "90746", distance: 5.7, driveTime: 10, note: "Spins strong, clean teeth", desc: "Removed working. 30-day guarantee.", confidence: "high", markets: [] },
 ];
 
 const DEMO_VEHICLES = [

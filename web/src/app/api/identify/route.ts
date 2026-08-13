@@ -7,6 +7,7 @@ import { geminiGenerate } from "@/lib/gemini";
 import { decodeVin, normalizeVin, engineLabel, type VinInfo, type VinDecode } from "@/lib/vin";
 import { checkScanUsage, recordScanUsage, resolveShopPlan, limitMessage } from "@/lib/usage";
 import { applyVinEngine, stripSide } from "@/lib/part-enrich";
+import { canonicalizePart, resolveSaleUnit, visionCatalogSection, visionCenterList, visionLateralList, type Completeness } from "@/lib/part-catalog";
 import { markInferredParts } from "@/lib/inferred-parts";
 import { propagateImpactDamage } from "@/lib/damage-zones";
 import { applyDamageZones, type DamageZone } from "@/lib/damage-intersect";
@@ -98,6 +99,11 @@ export interface AIPartOutput {
   // converters, seat-belt restraints). The UI shows a warning in place of a
   // naked price so the seller confirms compliance before listing. (AHLAM-54)
   compliance?: ComplianceFlag;
+  // Canonical catalog identity (lib/part-catalog): the sale-unit entry's slug
+  // and the stable slug[:side] id. Additive — clients that don't know them
+  // ignore them; /api/reprice keys its cache and judge rejoin on partId.
+  partSlug?: string;
+  partId?: string;
 }
 
 export interface ComplianceFlag {
@@ -210,6 +216,7 @@ You MUST return ONLY a JSON object, no prose, with this shape:
       "usedPartPriceHighUsd": number | null,
       "confidence": "high" | "medium" | "low",
       "visiblyPresent": boolean,
+      "completeness": "complete" | "shell" | "unknown",
       "lowConfidenceFields": string[]
     }
   ],
@@ -230,14 +237,12 @@ MULTI-PART DETECTION:
 - Do NOT invent parts you cannot actually see. If something is not visible, simply omit it — never guess.
 - If only 1–2 parts are visible, return only 1–2 parts. Do not pad the list.
 
-PART CATALOG — only catalog parts from this list, using these exact names (add "Left"/"Right" only when the rules below apply). If a part is not visible, OMIT it:
-- Body: "Hood", "Front Bumper Cover", "Rear Bumper Cover", "Grille", "Front Fender", "Rear Quarter Panel", "Front Door", "Rear Door", "Trunk Lid", "Tailgate", "Liftgate", "Side Mirror", "Roof Panel"
-- Glass: "Windshield", "Back Glass", "Front Door Window", "Rear Door Window", "Quarter Glass"
-- Lighting: "Headlight Assembly", "Tail Light Assembly", "Fog Light"
-- Wheels: "Wheel / Rim" and "Tire" — these are ALWAYS two separate listings, never combined. A rim and the tire on it sell separately for more, so list each on its own line with its own price.
-- Mechanical: "Engine", "Transmission", "Radiator", "Alternator", "Starter", "Battery", "AC Compressor", "ABS Module", "Power Steering Pump", "Strut / Shock", "Control Arm", "Driveshaft", "Catalytic Converter", "Fuel Pump"
-- Interior: "Front Seat", "Rear Seat", "Seat Belt", "Steering Wheel", "Airbag", "Center Console", "Dashboard", "Instrument Cluster", "Glove Box", "Door Panel", "Sun Visor", "Rear View Mirror", "Shifter"
-- If you see a common, obviously-sellable part not on this list, you may include it, but prefer the catalog names.
+${visionCatalogSection()}
+
+COMPLETENESS — for EVERY part, report "completeness":
+- "complete": the part is mounted on the vehicle or clearly has its components attached. This is the default — parts pulled at a dismantling yard sell complete, as they came off the car.
+- "shell": ONLY when the part is visibly detached AND stripped — a bare bumper cover off the car, a gutted door shell, an engine long block on a stand with accessories removed, a housing-only headlight. Never mark a mounted part "shell".
+- "unknown": you genuinely cannot tell. Treated as complete downstream.
 
 MECE — each part is ONE distinct, separately-sold unit (mutually exclusive, collectively exhaustive). NEVER bundle parts that sell separately:
 - "Airbag" is its OWN listing — NEVER include it with or inside "Steering Wheel". List them as two separate parts.
@@ -286,9 +291,9 @@ LEFT / RIGHT SIDES — READ CAREFULLY (this is where mistakes happen):
    HOW THE SYSTEM USES THIS: when the car faces toward you, the driver's side (LEFT of the vehicle) appears on the RIGHT side of the image — the system automatically flips imageSide to get the correct vehicle side. So report vehicleFront accurately and report imageSide as literally where the part appears in the photo frame — the system handles the rest.
    DRIVER SIDE = LEFT side of the vehicle (as the driver sits in the car). PASSENGER SIDE = RIGHT side of the vehicle. In the US, the driver sits on the LEFT.
 2. "imageSide" (per part) — purely WHERE the part appears in the photo frame from your point of view: "left", "right", or "center". NOT the vehicle's left/right — just the image frame.
-3. Put NO "left"/"right"/"driver"/"passenger" word in "partName" — the system adds the correct side itself from "imageSide". "front"/"rear" ARE allowed in the name (e.g. "Front Bumper Cover").
-4. CENTER PARTS HAVE NO LEFT/RIGHT. These parts exist as a single centered unit and MUST use "imageSide": "center" — never left/right: Hood, Grille, Front Bumper Cover, Rear Bumper Cover, Roof Panel, Windshield, Back Glass, Trunk Lid, Tailgate, Liftgate, Radiator, Engine, Transmission, Dashboard, Center Console, Instrument Cluster, Steering Wheel, Battery, exhaust/muffler. A "Right Grille" or "Left Bumper Cover" is WRONG.
-5. SIDE PARTS that genuinely come in a left and a right: Fender, Door, Quarter Panel, Side Mirror, Headlight Assembly, Tail Light Assembly, Fog Light, door Windows, Front Seat, wheels. These MUST carry a side — set "imageSide" to "left" or "right", NEVER "center". A door/mirror/fender/headlight always belongs to one side; pick the side you see. The system turns your "imageSide" into the vehicle side and names the part accordingly — e.g. "Driver Side Front Door", "Passenger Side Rear Door", "Driver Side Mirror".
+3. Put NO "left"/"right"/"driver"/"passenger" word in "partName" — the system adds the correct side itself from "imageSide". "front"/"rear" ARE allowed in the name (e.g. "Front Bumper").
+4. CENTER PARTS HAVE NO LEFT/RIGHT. These parts exist as a single centered unit and MUST use "imageSide": "center" — never left/right: ${visionCenterList()}, exhaust/muffler. A "Right Grille" or "Left Bumper" is WRONG.
+5. SIDE PARTS that genuinely come in a left and a right: ${visionLateralList()}, Front Seat. These MUST carry a side — set "imageSide" to "left" or "right", NEVER "center". A door/mirror/fender/headlight always belongs to one side; pick the side you see. The system turns your "imageSide" into the vehicle side and names the part accordingly — e.g. "Driver Side Front Door", "Passenger Side Rear Door", "Driver Side Mirror".
 6. NO DUPLICATES / NO GENERICS: never output a bare "Door"/"Front Door"/"Rear Door"/"Mirror" without its side, and never list the same physical part twice (e.g. don't return both "Rear Door" and "Rear Right Door" — that's one part, "Rear Right Door"). Each side part appears at most once per side.
 7. NEVER CONTRADICT YOURSELF: the side you describe MUST match the part's actual side. In "description"/"conditionNotes", name a part's side as "driver side" or "passenger side" (US convention: driver = LEFT of the vehicle, passenger = RIGHT) — do NOT use bare "left"/"right" for a part's side. If you truly can't tell the side of a side-part, still give your best single guess and set "confidence":"low" — do NOT fall back to a generic no-side name.
 8. DOOR COMPONENTS — match the door: a door's window, glass, and door panel MUST carry the SAME position (front/rear) AND side as the door they belong to, so the system can name them "Driver Side Front Door Window", "Driver Side Front Door Panel", "Passenger Side Rear Door Window". NEVER report a bare "Door Panel" or "Door Window" without its front/rear position. The same applies to "front"/"rear": if it's the front door's panel, it is the "Front" door panel.
@@ -512,7 +517,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
       return NextResponse.json(busyResult("empty completion"), { status: 503 });
     }
 
-    type RawPart = Partial<AIPartOutput> & { imageSide?: ImageSide; visiblyPresent?: boolean };
+    type RawPart = Partial<AIPartOutput> & { imageSide?: ImageSide; visiblyPresent?: boolean; completeness?: string };
     const cleaned = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
     const parsed = JSON.parse(cleaned) as {
       vehicleFront?: VehicleFront;
@@ -627,7 +632,22 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
         if (p.imageSide === "left" || p.imageSide === "right") side = p.imageSide === "left" ? "Left" : "Right";
         else { const m = /\b(left|right)\b/i.exec(p.partName ?? ""); if (m) side = (m[1][0].toUpperCase() + m[1].slice(1).toLowerCase()) as "Left" | "Right"; }
       }
-      const partName = applySide(baseName, side);
+      // ── CANONICAL SALE UNIT (lib/part-catalog) ──────────────────────────────
+      // Vision reported the observable part + a completeness signal; the
+      // catalog picks the entry a price will attach to (complete/unknown →
+      // the assembly, "shell" → the stripped counterpart). Off-catalog names
+      // pass through untouched — fail-soft, identical to pre-catalog behavior.
+      const completeness: Completeness =
+        p.completeness === "shell" || p.completeness === "complete" ? p.completeness : "unknown";
+      const saleUnit = resolveSaleUnit(baseName, completeness);
+      const canonicalBase = saleUnit ? saleUnit.displayName : baseName;
+      const partName = applySide(canonicalBase, side);
+      const partSlug = saleUnit?.slug;
+      const partId = saleUnit
+        ? saleUnit.sidedness !== "center" && side
+          ? `${saleUnit.slug}:${side === "Left" ? "driver" : "passenger"}`
+          : saleUnit.slug
+        : undefined;
 
       const lowFields = new Set<keyof AIPartOutput>(p.lowConfidenceFields ?? []);
       const sideUnknown = !center && !side && isLateralPart(baseName);
@@ -642,6 +662,7 @@ async function handlePOST(req: Request): Promise<NextResponse<AIResult>> {
 
       return {
         partName,
+        ...(partSlug ? { partSlug, partId } : {}),
         partCategory: p.partCategory ?? "Uncategorized",
         box: validBox((p as { box?: unknown }).box),
         fitment: Array.isArray(p.fitment) ? p.fitment : [],
@@ -806,6 +827,10 @@ function lateralSide(front: VehicleFront, imageSide?: ImageSide): "Left" | "Righ
 
 const LATERAL_PART = /\b(door|mirror|fender|quarter|headlight|head light|tail ?light|fog|window|rocker|wheel|rim|tire|tyre)\b/i;
 function isLateralPart(name: string): boolean {
+  // Catalog verdict wins (fixes e.g. "Rear View Mirror" reading as a side
+  // part); the regex remains for off-catalog names.
+  const c = canonicalizePart(name);
+  if (c) return c.entry.sidedness === "lateral";
   return LATERAL_PART.test(name);
 }
 
@@ -959,6 +984,8 @@ function reconcileWheelSpecs(parts: AIPartOutput[]): void {
 // Single, centered parts that physically have no left/right variant.
 const CENTER_PART = /\b(hood|bonnet|grille|grill|bumper|roof|windshield|windscreen|back ?glass|rear ?glass|trunk ?lid|tailgate|liftgate|deck ?lid|radiator|engine|transmission|gearbox|torque converter|driveshaft|drive shaft|dash(board)?|center console|instrument cluster|steering wheel|battery|alternator|starter|abs module|abs unit|ac compressor|a\/c compressor|power steering pump|fuel pump|intercooler|turbo(charger)?|supercharger|serpentine belt|timing belt|timing chain|throttle body|mass airflow sensor|maf sensor|exhaust|muffler|catalytic|converter|oxygen sensor|o2 sensor|ignition coil|spark plug|distributor|ecm|ecu|pcm|wiring harness|fuse box|relay|heater core|blower motor|condenser|evaporator|motor mount|transmission mount|clutch|flywheel|differential|transfer case|valve cover|oil pan|intake manifold|exhaust manifold|water pump|thermostat|radiator fan|cooling fan|fan clutch)\b/i;
 function isCenterPart(name: string): boolean {
+  const c = canonicalizePart(name);
+  if (c) return c.entry.sidedness === "center";
   return CENTER_PART.test(name) && !LATERAL_PART.test(name);
 }
 

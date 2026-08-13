@@ -153,6 +153,130 @@ const ZONE_NOTE =
 //
 // Pure (no input mutation — returns new objects for changed parts, same refs for the
 // rest) and idempotent (re-running over its own output changes nothing).
+// ─── FRONT/REAR IMPACT → BEHIND-THE-IMPACT INFERENCE ────────────────────────────
+// The adjacency map above models SIDE impacts (the lengthwise panel chain). A
+// frontal or rear hit is different: the force runs INTO the car, through parts the
+// photos can't even show — a crushed front end means the radiator, condenser, and
+// often the engine/transmission took load, yet the scan ships them clean because
+// nothing "adjacent" in the panel sense was damaged (center origins are skipped
+// above, by design). This pass adds the missing axis:
+//
+//   1. FACE DETECTION — a collision-damaged face part (front bumper/hood/grille;
+//      rear bumper/tailgate/trunk lid) establishes an impact FACE.
+//   2. BEHIND-THE-IMPACT — on a STRONG hit (crush/caved/collision/impact language,
+//      not a mere dent), every mechanical part behind that face — observed OR
+//      inferred — is condemned to Grade C: assume affected until a human verifies.
+//      Grade C deliberately blocks pricing/research; the yard inspects, regrades,
+//      and only then lists. (The founder's rule: front smashed → assume engine
+//      and transmission are messed up too.)
+//   3. FACE SPREAD — the face's other body parts (both sides' fenders/headlights,
+//      hood, grille, bumper) get the softer zone treatment (A→B, unpriced, note),
+//      fixing the center-origin blind spot where a crushed bumper dragged nothing.
+//
+// Run this AFTER ensurePowertrainParts so inferred engines/battery packs are
+// covered — they are appended after the per-photo damage passes and were
+// previously hardcoded Grade B regardless of the wreck in the photos.
+
+export type ImpactFace = "front" | "rear";
+
+// Face parts, by base name (side stripped). Matching one of these — collision-
+// damaged — is what establishes the face.
+const FACE_ORIGIN: Record<ImpactFace, RegExp> = {
+  front: /^(front bumper( cover)?|front bumper assembly|hood|grille|radiator support|front end|headlight( assembly)?|head ?lamp( assembly)?)$/i,
+  rear: /^(rear bumper( cover)?|rear bumper assembly|trunk lid|deck ?lid|tail ?gate|lift ?gate|hatch|rear body panel|tail ?light( assembly)?|tail ?lamp( assembly)?)$/i,
+};
+
+// Body parts in the face's crumple zone (targets of the softer spread). Superset
+// of the origins plus the corner panels the force reaches on either side.
+const FACE_SPREAD: Record<ImpactFace, RegExp> = {
+  front: /^(front bumper( cover)?|front bumper assembly|hood|grille|radiator support|front end|headlight( assembly)?|head ?lamp( assembly)?|front fender|fender|windshield)$/i,
+  rear: /^(rear bumper( cover)?|rear bumper assembly|trunk lid|deck ?lid|tail ?gate|lift ?gate|hatch|rear body panel|tail ?light( assembly)?|tail ?lamp( assembly)?|rear quarter panel|quarter panel|rear window|back glass)$/i,
+};
+
+// Mechanical parts BEHIND each face — matched by prefix so enriched names
+// ("Engine — 2.5L I4 (VIN-confirmed)") still hit. EV note: the front drive unit
+// sits in the front crumple path; the floor-mounted battery pack is deliberately
+// NOT condemned by a front hit (mid-mounted, protected) — a severe rear hit does
+// reach the rear drive unit and charge port.
+const BEHIND: Record<ImpactFace, RegExp> = {
+  front:
+    /^(engine\b|transmission\b|transaxle\b|radiator\b|(a\/?c |air ?conditioning )?condenser|intercooler|(a\/?c |air ?conditioning )?compressor|alternator|starter( motor)?|cooling fan|radiator fan|fan (assembly|shroud)|power steering pump|water pump|turbocharger|supercharger|front drive unit)/i,
+  rear: /^(fuel tank|rear drive unit|charge port|rear bumper reinforcement|muffler|exhaust)/i,
+};
+
+// A STRONG hit — the language that justifies condemning unseen mechanicals. A
+// dented or cracked face panel does not; crushed/caved/collision force does.
+const STRONG_COLLISION = /crush|caved|collision|impact|torn|missing|frame|airbag/i;
+
+const behindNote = (face: ImpactFace) =>
+  ` Behind the ${face} impact — collision force typically reaches this part. Assume affected until inspected; regrade after verification.`;
+const faceNote = (face: ImpactFace) =>
+  ` In the ${face} impact's crumple zone — verify condition before pricing.`;
+
+// APPLY FRONT/REAR IMPACT-FACE DAMAGE across the FINAL part list (after inferred
+// powertrain parts are appended). Pure and idempotent, same contract as
+// propagateImpactDamage: unchanged parts keep their references.
+export function applyImpactFaceDamage<T extends Part>(parts: T[]): T[] {
+  if (!Array.isArray(parts) || parts.length === 0) return parts;
+
+  const bases = parts.map((p) => baseKey(p.partName));
+
+  // Detect each face and whether any of its origins shows STRONG collision force.
+  const faces = new Map<ImpactFace, { strong: boolean }>();
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (!isImpactOrigin(p)) continue;
+    for (const face of ["front", "rear"] as const) {
+      if (!FACE_ORIGIN[face].test(bases[i])) continue;
+      const strong =
+        STRONG_COLLISION.test(`${p.conditionNotes ?? ""} ${p.description ?? ""}`) ||
+        (!!p.damageCode && /^CR\b/i.test(p.damageCode.trim()));
+      const prev = faces.get(face);
+      faces.set(face, { strong: (prev?.strong ?? false) || strong });
+    }
+  }
+  if (faces.size === 0) return parts;
+
+  return parts.map((p, idx) => {
+    if (isImpactOrigin(p)) return p; // origins are already Grade C — untouched
+    for (const [face, { strong }] of faces) {
+      // 2) Mechanicals behind a STRONG hit → Grade C, unpriced, verify-first.
+      if (strong && BEHIND[face].test(bases[idx]) && (p.condition === "A" || p.condition === "B")) {
+        const note = behindNote(face);
+        const prevNotes = p.conditionNotes ?? "";
+        const flags = new Set(p.lowConfidenceFields ?? []);
+        flags.add("condition");
+        flags.add("suggestedPriceUsd");
+        return {
+          ...p,
+          condition: "C" as const,
+          suggestedPriceUsd: null,
+          confidence: "low" as const,
+          conditionNotes: prevNotes.includes(note.trim()) ? prevNotes : `${prevNotes}${note}`.replace(/^\s+/, ""),
+          lowConfidenceFields: [...flags],
+        };
+      }
+      // 3) The face's other body parts → the softer zone treatment.
+      if (FACE_SPREAD[face].test(bases[idx]) && (p.condition === "A" || p.condition === "B")) {
+        const note = faceNote(face);
+        const prevNotes = p.conditionNotes ?? "";
+        const flags = new Set(p.lowConfidenceFields ?? []);
+        flags.add("condition");
+        flags.add("suggestedPriceUsd");
+        return {
+          ...p,
+          condition: (p.condition === "A" ? "B" : p.condition) as T["condition"],
+          suggestedPriceUsd: null,
+          confidence: "low" as const,
+          conditionNotes: prevNotes.includes(note.trim()) ? prevNotes : `${prevNotes}${note}`.replace(/^\s+/, ""),
+          lowConfidenceFields: [...flags],
+        };
+      }
+    }
+    return p;
+  });
+}
+
 export function propagateImpactDamage<T extends Part>(parts: T[]): T[] {
   if (!Array.isArray(parts) || parts.length === 0) return parts;
 

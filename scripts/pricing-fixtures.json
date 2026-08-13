@@ -1,0 +1,203 @@
+{
+  "_README": "Fixture vehicles for the V3 pricing eval (scripts/pricing-eval.mjs). Diverse by design: economy/truck/SUV/luxury/EV, old & new. camry-2018, f150-2016 and crv-2015 carry the part lists from web/scripts/ab-price-test.mjs verbatim for continuity with the earlier A/B data. Each vehicle mixes assembly-class parts (door/tailgate/headlight — exercises query variants + shell logic), mechanical parts, and one deliberately awkward part. Grades A/B only (C never reaches the judge). Reference truth lives in scripts/pricing-reference.cache.json (andyOverride wins when set).",
+  "vehicles": [
+    {
+      "slug": "camry-2018",
+      "segment": "economy",
+      "fitment": { "year": 2018, "make": "Toyota", "model": "Camry", "trim": "SE", "engine": "2.5L I4" },
+      "parts": [
+        { "name": "Front Bumper Cover", "grade": "B" },
+        { "name": "Headlight Assembly", "grade": "A" },
+        { "name": "Trunk Lid", "grade": "B" },
+        { "name": "Front Door", "grade": "A" },
+        { "name": "Side Mirror", "grade": "A" },
+        { "name": "Grille", "grade": "B" },
+        { "name": "Radiator", "grade": "A" },
+        { "name": "Alternator", "grade": "A" },
+        { "name": "Starter Motor", "grade": "A" },
+        { "name": "Tail Light", "grade": "A" }
+      ]
+    },
+    {
+      "slug": "civic-2013",
+      "segment": "economy",
+      "fitment": { "year": 2013, "make": "Honda", "model": "Civic", "trim": "LX", "engine": "1.8L I4" },
+      "parts": [
+        { "name": "Driver Side Front Door", "grade": "B", "conditionNotes": "light scratch on lower edge, glass and regulator intact" },
+        { "name": "Front Bumper Cover", "grade": "B" },
+        { "name": "Headlight Assembly", "grade": "A" },
+        { "name": "Hood", "grade": "A" },
+        { "name": "Side Mirror", "grade": "A" },
+        { "name": "Radiator", "grade": "A" },
+        { "name": "Alternator", "grade": "A" },
+        { "name": "Instrument Cluster", "grade": "A" }
+      ]
+    },
+    {
+      "slug": "corolla-2008",
+      "segment": "economy",
+      "fitment": { "year": 2008, "make": "Toyota", "model": "Corolla", "trim": "CE", "engine": "1.8L I4" },
+      "parts": [
+        { "name": "Driver Side Front Door", "grade": "B" },
+        { "name": "Hood", "grade": "B", "conditionNotes": "faded clear coat, no dents" },
+        { "name": "Headlight Assembly", "grade": "B" },
+        { "name": "Side Mirror", "grade": "A" },
+        { "name": "Alternator", "grade": "A" },
+        { "name": "Radiator", "grade": "A" },
+        { "name": "Tail Light", "grade": "A" },
+        { "name": "Trunk Lid", "grade": "B" },
+        { "name": "Power Steering Pump", "grade": "A" }
+      ]
+    },
+    {
+      "slug": "f150-2016",
+      "segment": "truck",
+      "fitment": { "year": 2016, "make": "Ford", "model": "F-150", "trim": "XLT", "engine": "5.0L V8" },
+      "parts": [
+        { "name": "Tailgate", "grade": "A", "conditionNotes": "backup camera present, step intact" },
+        { "name": "Front Bumper", "grade": "B" },
+        { "name": "Headlight Assembly", "grade": "A" },
+        { "name": "Front Door", "grade": "A" },
+        { "name": "Side Mirror", "grade": "A" },
+        { "name": "Grille", "grade": "A" },
+        { "name": "Radiator", "grade": "A" },
+        { "name": "Alternator", "grade": "A" },
+        { "name": "Fender", "grade": "B" },
+        { "name": "Tail Light", "grade": "A" }
+      ]
+    },
+    {
+      "slug": "silverado-2021",
+      "segment": "truck",
+      "fitment": { "year": 2021, "make": "Chevrolet", "model": "Silverado 1500", "trim": "LT", "engine": "5.3L V8" },
+      "parts": [
+        { "name": "Tailgate", "grade": "A" },
+        { "name": "Front Bumper", "grade": "B" },
+        { "name": "Driver Side Front Door", "grade": "A" },
+        { "name": "Headlight Assembly", "grade": "A" },
+        { "name": "Side Mirror", "grade": "A", "conditionNotes": "power fold, camera in glass" },
+        { "name": "Grille", "grade": "A" },
+        { "name": "Fender", "grade": "A" },
+        { "name": "Rear Axle", "grade": "B" },
+        { "name": "Tail Light", "grade": "A" },
+        { "name": "Radiator", "grade": "A" }
+      ]
+    },
+    {
+      "slug": "ram1500-2015",
+      "segment": "truck",
+      "fitment": { "year": 2015, "make": "Ram", "model": "1500", "trim": "Big Horn", "engine": "5.7L V8" },
+      "parts": [
+        { "name": "Tailgate", "grade": "B" },
+        { "name": "Front Bumper", "grade": "B" },
+        { "name": "Grille", "grade": "A" },
+        { "name": "Headlight Assembly", "grade": "A" },
+        { "name": "Driver Side Front Door", "grade": "B" },
+        { "name": "Side Mirror", "grade": "A" },
+        { "name": "Fender", "grade": "B" },
+        { "name": "Radiator", "grade": "A" },
+        { "name": "Transfer Case", "grade": "A" },
+        { "name": "Tail Light", "grade": "A" }
+      ]
+    },
+    {
+      "slug": "crv-2015",
+      "segment": "suv",
+      "fitment": { "year": 2015, "make": "Honda", "model": "CR-V", "trim": "EX", "engine": "2.4L I4" },
+      "parts": [
+        { "name": "Front Bumper Cover", "grade": "B" },
+        { "name": "Headlight Assembly", "grade": "A" },
+        { "name": "Liftgate", "grade": "A" },
+        { "name": "Front Door", "grade": "A" },
+        { "name": "Side Mirror", "grade": "A" },
+        { "name": "Grille", "grade": "A" },
+        { "name": "Radiator", "grade": "A" },
+        { "name": "Alternator", "grade": "A" },
+        { "name": "Fender", "grade": "B" },
+        { "name": "Tail Light", "grade": "A" }
+      ]
+    },
+    {
+      "slug": "wrangler-2019",
+      "segment": "suv",
+      "fitment": { "year": 2019, "make": "Jeep", "model": "Wrangler", "trim": "Sport", "engine": "3.6L V6" },
+      "parts": [
+        { "name": "Front Bumper", "grade": "A" },
+        { "name": "Hood", "grade": "A" },
+        { "name": "Driver Side Front Door", "grade": "A", "conditionNotes": "complete removable door with mirror and glass" },
+        { "name": "Grille", "grade": "A" },
+        { "name": "Headlight Assembly", "grade": "A" },
+        { "name": "Fender", "grade": "A" },
+        { "name": "Tail Light", "grade": "A" },
+        { "name": "Steering Column", "grade": "A" },
+        { "name": "Hard Top", "grade": "B", "conditionNotes": "3-piece Freedom Top, small scuff on rear section" }
+      ]
+    },
+    {
+      "slug": "x5-2019",
+      "segment": "luxury",
+      "fitment": { "year": 2019, "make": "BMW", "model": "X5", "trim": "xDrive40i", "engine": "3.0L I6 Turbo" },
+      "parts": [
+        { "name": "Front Bumper Cover", "grade": "B" },
+        { "name": "Headlight Assembly", "grade": "A", "conditionNotes": "adaptive LED, no cracked tabs" },
+        { "name": "Liftgate", "grade": "A" },
+        { "name": "Driver Side Front Door", "grade": "A" },
+        { "name": "Side Mirror", "grade": "A" },
+        { "name": "Grille", "grade": "A" },
+        { "name": "Radiator", "grade": "A" },
+        { "name": "Air Suspension Compressor", "grade": "A" },
+        { "name": "Fender", "grade": "B" },
+        { "name": "Tail Light", "grade": "A" }
+      ]
+    },
+    {
+      "slug": "c300-2017",
+      "segment": "luxury",
+      "fitment": { "year": 2017, "make": "Mercedes-Benz", "model": "C300", "trim": "W205", "engine": "2.0L I4 Turbo" },
+      "parts": [
+        { "name": "Front Bumper Cover", "grade": "B" },
+        { "name": "Headlight Assembly", "grade": "A" },
+        { "name": "Trunk Lid", "grade": "A" },
+        { "name": "Driver Side Front Door", "grade": "B" },
+        { "name": "Side Mirror", "grade": "A" },
+        { "name": "Grille", "grade": "A" },
+        { "name": "Radiator", "grade": "A" },
+        { "name": "Alternator", "grade": "A" },
+        { "name": "Infotainment Display Screen", "grade": "A" },
+        { "name": "Fender", "grade": "B" }
+      ]
+    },
+    {
+      "slug": "model3-2020",
+      "segment": "ev",
+      "fitment": { "year": 2020, "make": "Tesla", "model": "Model 3", "trim": "Long Range", "engine": "Dual Motor AWD" },
+      "parts": [
+        { "name": "Front Bumper Cover", "grade": "B" },
+        { "name": "Headlight Assembly", "grade": "A" },
+        { "name": "Trunk Lid", "grade": "A" },
+        { "name": "Driver Side Front Door", "grade": "A" },
+        { "name": "Side Mirror", "grade": "A" },
+        { "name": "Fender", "grade": "A" },
+        { "name": "Tail Light", "grade": "A" },
+        { "name": "Battery Pack", "grade": "B", "conditionNotes": "complete pack, unknown state of health, no visible case damage" },
+        { "name": "Center Display Screen", "grade": "A" }
+      ]
+    },
+    {
+      "slug": "mache-2022",
+      "segment": "ev",
+      "fitment": { "year": 2022, "make": "Ford", "model": "Mustang Mach-E", "trim": "Premium", "engine": "Dual Motor AWD" },
+      "parts": [
+        { "name": "Front Bumper Cover", "grade": "A" },
+        { "name": "Headlight Assembly", "grade": "A" },
+        { "name": "Liftgate", "grade": "A" },
+        { "name": "Driver Side Front Door", "grade": "A" },
+        { "name": "Side Mirror", "grade": "A" },
+        { "name": "Fender", "grade": "B" },
+        { "name": "Tail Light", "grade": "A" },
+        { "name": "Rear Drive Unit", "grade": "A" },
+        { "name": "Charge Port Assembly", "grade": "A" }
+      ]
+    }
+  ]
+}

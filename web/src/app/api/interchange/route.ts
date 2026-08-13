@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase-server";
 import { normalizeGrade } from "@/lib/grade";
 import { geminiGenerate } from "@/lib/gemini";
+import { classifyPowertrain } from "@/lib/powertrain";
+import { evFamilyFromPartName, evFitLines, evInterchangeFor } from "@/lib/ev-interchange";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -91,6 +93,50 @@ interface InterchangeResult {
    *  verify-manually fallback instead of a hard error (INT-1). */
   lowConfidence?: boolean;
   degraded?: boolean;
+  /** "curated-ev" when the answer came from our hand-checked EV dataset
+   *  (lib/ev-interchange) instead of the AI. */
+  source?: string;
+}
+
+// Curated EV interchange (lib/ev-interchange): if the vehicle is a BEV and the
+// part maps to a curated family with groups for this exact application, answer
+// from the dataset — instant, free, editorially accountable. Returns null when
+// the curated data can't answer, and the caller falls through to the AI path.
+function curatedEvResult(part: string, make: string, model: string, year: string, variant: string): InterchangeResult | null {
+  const pt = classifyPowertrain({ make, model, trim: variant, fuelType: variant });
+  if (pt.type !== "bev") return null;
+  const family = evFamilyFromPartName(part);
+  if (!family) return null;
+  const groups = evInterchangeFor({ make, model, year, family });
+  if (groups.length === 0) return null;
+
+  const lines = evFitLines({ make, model, year, partName: part });
+  const confMap = { verified: "high", probable: "medium", "check-part-number": "low" } as const;
+  const uniq = (xs: string[]) => Array.from(new Set(xs.filter(Boolean)));
+
+  return {
+    part,
+    vehicle: [year, make, model, variant].filter(Boolean).join(" "),
+    summary:
+      `Curated EV interchange: ${groups.map((g) => g.label).join("; ")}. ` +
+      "Hand-checked platform data — not an AI guess — but always confirm the part number stamped on the part.",
+    compatibleVehicles: lines.map((l) => ({
+      make: l.make,
+      model: l.model,
+      years: l.yearStart === l.yearEnd ? String(l.yearStart) : `${l.yearStart}-${l.yearEnd}`,
+      ...(l.caveat ? { note: l.caveat } : {}),
+    })),
+    bestSuggestions: lines.slice(0, 5).map((l) => ({
+      label: l.label,
+      partNumber: "",
+      confidence: confMap[l.confidence],
+      reason: l.caveat || "Same OEM part family across this platform.",
+    })),
+    oemNumbers: uniq(groups.flatMap((g) => g.partNumberFamilies || [])),
+    aftermarket: [],
+    cautions: uniq(groups.flatMap((g) => [...(g.constraints || []), ...(g.notes ? [g.notes] : [])])),
+    source: "curated-ev",
+  };
 }
 
 // Service-role client (bypasses RLS) for the interchange cache + catalog.
@@ -237,6 +283,33 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ ok: false, error: "Sign in to use interchange." }, { status: 401 });
 
+  let body: { part?: string; make?: string; model?: string; year?: string | number; variant?: string };
+  try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: "Bad request" }, { status: 400 }); }
+
+  const part = String(body.part ?? "").trim();
+  const make = String(body.make ?? "").trim();
+  const model = String(body.model ?? "").trim();
+  const year = String(body.year ?? "").trim();
+  const variant = String(body.variant ?? "").trim();
+
+  if (!part) return NextResponse.json({ ok: false, error: "Pick or type a part." }, { status: 400 });
+  if (!make && !model) return NextResponse.json({ ok: false, error: "Add at least a brand (make)." }, { status: 400 });
+
+  // Curated EV answers cost nothing (no AI call), so they bypass the paid-plan
+  // gate below — the 402 stays in place for the AI path only.
+  try {
+    const curated = curatedEvResult(part, make, model, year, variant);
+    if (curated) {
+      const lookupVehicles = [
+        { make, model },
+        ...curated.compatibleVehicles.map((v) => ({ make: v.make, model: v.model })),
+      ].filter((v) => v.make);
+      let marketMatches: MarketMatch[] = [];
+      try { marketMatches = await findMarketMatches(curated.part, lookupVehicles); } catch { marketMatches = []; }
+      return NextResponse.json({ ok: true, cached: false, degraded: false, result: { ...curated, marketMatches } });
+    }
+  } catch { /* curated path is best-effort — fall through to the AI path */ }
+
   // An expired free month can't run the AI interchange assistant.
   try {
     const { resolveShopPlan } = await import("@/lib/usage");
@@ -249,18 +322,6 @@ export async function POST(req: Request) {
       );
     }
   } catch { /* fail-open */ }
-
-  let body: { part?: string; make?: string; model?: string; year?: string | number; variant?: string };
-  try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: "Bad request" }, { status: 400 }); }
-
-  const part = String(body.part ?? "").trim();
-  const make = String(body.make ?? "").trim();
-  const model = String(body.model ?? "").trim();
-  const year = String(body.year ?? "").trim();
-  const variant = String(body.variant ?? "").trim();
-
-  if (!part) return NextResponse.json({ ok: false, error: "Pick or type a part." }, { status: 400 });
-  if (!make && !model) return NextResponse.json({ ok: false, error: "Add at least a brand (make)." }, { status: 400 });
 
   try {
     const ckey = cacheKey(part, make, model, year, variant);

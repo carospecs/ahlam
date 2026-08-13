@@ -1,12 +1,14 @@
 "use client";
 
 import React from "react";
-import { CreditCard, Mail, Trash2, LoaderCircle, Check, Plus, Shield, Crown, Eye, PencilLine, ImagePlus, Info, Banknote, ShieldCheck, ExternalLink } from "lucide-react";
+import { CreditCard, Mail, Trash2, LoaderCircle, Check, Plus, Shield, Crown, Eye, PencilLine, ImagePlus, Info, Banknote, ShieldCheck, ExternalLink, Globe } from "lucide-react";
 import { Card } from "../UI";
 import { useData, csToast } from "../Dashboard";
 import { AddressAutocomplete, ZipField } from "../AddressAutocomplete";
 import { PricingPlans } from "../PricingPlans";
 import { WARRANTY_DAYS } from "@/lib/warranty";
+import { effectivePlan } from "@/lib/plan-limits";
+import { slugify, validateSlug, siteOrigin } from "@/lib/slug";
 import { normalizeImageFile } from "@/lib/image";
 
 function reloadData() { (window as any).csReloadData?.(); }
@@ -92,13 +94,18 @@ function VerificationCard({ canManage }: { canManage: boolean }) {
   );
 }
 
-export function ShopProfile(_: ViewProps) {
+export function ShopProfile({ go }: ViewProps) {
   const { user } = useData();
   const canEdit = user?.role === "owner" || user?.role === "editor";
   const [form, setForm] = React.useState<any>(null);
-  const [shopMeta, setShopMeta] = React.useState<{ id: string | null; verified: boolean }>({ id: null, verified: false });
+  const [shopMeta, setShopMeta] = React.useState<{ id: string | null; verified: boolean; slug: string | null; plan: string | null; trial_ends_at: string | null; subscription_status: string | null }>({ id: null, verified: false, slug: null, plan: null, trial_ends_at: null, subscription_status: null });
   const [busy, setBusy] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
+  // Snapshot of the last saved form, so edits (hours, about, …) that haven't
+  // been saved yet get a visible prompt instead of silently dying when the
+  // user navigates away without scrolling down to the save button.
+  const savedFormRef = React.useRef<string>("");
+  const dirty = form ? JSON.stringify(form) !== savedFormRef.current : false;
   const [logoUrl, setLogoUrl] = React.useState<string | null>(null);
   const [coverUrl, setCoverUrl] = React.useState<string | null>(null);
   const [uploading, setUploading] = React.useState<"logo" | "cover" | null>(null);
@@ -110,14 +117,16 @@ export function ShopProfile(_: ViewProps) {
       const s = d.shop || {};
       setLogoUrl(s.logo_url || null);
       setCoverUrl(s.cover_url || null);
-      setShopMeta({ id: s.id || null, verified: !!s.verified });
-      setForm({
+      setShopMeta({ id: s.id || null, verified: !!s.verified, slug: s.slug || null, plan: s.plan || null, trial_ends_at: s.trial_ends_at || null, subscription_status: s.subscription_status || null });
+      const loaded = {
         name: s.name || "", location: s.location || "", business_phone: s.business_phone || "",
         zip_code: s.zip_code || "",
         email: s.email || "", website: s.website || "", description: s.description || "", hours: s.hours || "",
         default_warranty_days: typeof s.default_warranty_days === "number" ? s.default_warranty_days : 30,
         returns_policy: s.returns_policy || "",
-      });
+      };
+      savedFormRef.current = JSON.stringify(loaded);
+      setForm(loaded);
     });
   }, []);
 
@@ -152,6 +161,7 @@ export function ShopProfile(_: ViewProps) {
     const d = await r.json();
     setBusy(false);
     if (!r.ok) { csToast(d.error || "Could not save"); return; }
+    savedFormRef.current = JSON.stringify(form);
     setSaved(true); setTimeout(() => setSaved(false), 2000);
     csToast("Shop profile saved");
   }
@@ -288,6 +298,15 @@ export function ShopProfile(_: ViewProps) {
         ) : (
           <div style={{ fontSize: 13, color: "var(--muted)" }}>Only owners and editors can change the shop profile.</div>
         )}
+
+        {/* Edits anywhere in this long form (hours especially) are easy to
+            lose — surface a sticky save prompt the moment anything is dirty. */}
+        {canEdit && dirty && !busy && (
+          <div style={{ position: "sticky", bottom: 14, zIndex: 5, display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 13, border: "1px solid var(--line)", background: "var(--surface)", boxShadow: "0 10px 30px -12px rgba(0,0,0,0.45)" }}>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>You have unsaved changes.</span>
+            <button type="submit" style={{ ...saveBtn, padding: "9px 18px" }}>Save now</button>
+          </div>
+        )}
       </form>
 
       {/* ------------------------- Storefront preview ------------------------ */}
@@ -337,6 +356,8 @@ export function ShopProfile(_: ViewProps) {
           </div>
         </Card>
 
+        <WebsiteCard shopMeta={shopMeta} shopName={form.name || ""} canEdit={canEdit} go={go} />
+
         <Card>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
             <div style={{ fontSize: 13.5, fontWeight: 700 }}>Profile completeness</div>
@@ -357,6 +378,121 @@ export function ShopProfile(_: ViewProps) {
     </div>
   );
 }
+// ---------------------------------------------------------------------------
+// Your website — the Ultimate plan's personal site ({slug}.ahlam.io). The shop
+// claims its address here; the site itself is generated from the profile and
+// inventory they already keep, nothing else to manage.
+// ---------------------------------------------------------------------------
+function WebsiteCard({ shopMeta, shopName, canEdit, go }: {
+  shopMeta: { slug: string | null; plan: string | null; trial_ends_at: string | null; subscription_status: string | null };
+  shopName: string;
+  canEdit: boolean;
+  go: (id: string) => void;
+}) {
+  const plan = effectivePlan(shopMeta.plan, shopMeta.trial_ends_at, shopMeta.subscription_status);
+  const qualifies = plan === "ultimate" || plan === "founder";
+  const [slug, setSlug] = React.useState<string>("");
+  const [savedSlug, setSavedSlug] = React.useState<string | null>(null);
+  const [check, setCheck] = React.useState<{ state: "idle" | "checking" | "ok" | "bad"; reason?: string }>({ state: "idle" });
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    setSavedSlug(shopMeta.slug);
+    setSlug(shopMeta.slug || slugify(shopName));
+    // Suggest from the shop name only until a slug is claimed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopMeta.slug, shopName ? "named" : "unnamed"]);
+
+  // Debounced live availability check while typing.
+  React.useEffect(() => {
+    if (!qualifies || !slug || slug === savedSlug) { setCheck({ state: "idle" }); return; }
+    const v = validateSlug(slug);
+    if (!v.ok) { setCheck({ state: "bad", reason: v.reason }); return; }
+    setCheck({ state: "checking" });
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/shop/slug-check?slug=${encodeURIComponent(slug)}`);
+        const d = await r.json();
+        setCheck(d.available ? { state: "ok" } : { state: "bad", reason: d.reason || "That address is taken." });
+      } catch { setCheck({ state: "idle" }); }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [slug, savedSlug, qualifies]);
+
+  async function save() {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/shop", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug }) });
+      const d = await r.json();
+      if (!r.ok) { csToast(d.error || "Could not save"); setBusy(false); return; }
+      setSavedSlug(slug);
+      setCheck({ state: "idle" });
+      csToast("Your website address is live");
+    } catch { csToast("Network error — try again"); }
+    setBusy(false);
+  }
+
+  if (!qualifies) {
+    return (
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700 }}>
+          <Globe size={15} color="var(--sand)" /> Your own website
+        </div>
+        <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "var(--muted)", lineHeight: 1.6 }}>
+          On the Ultimate plan we build and host a professional website for your business — your inventory,
+          hours, and reviews on your own address, updated automatically as you list and sell.
+        </p>
+        <button type="button" onClick={() => go("billing")} style={{ marginTop: 12, padding: "9px 16px", borderRadius: 10, border: "1px solid var(--accent)", background: "transparent", color: "var(--accent)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          See Ultimate
+        </button>
+      </Card>
+    );
+  }
+
+  const dirty = slug !== (savedSlug || "");
+  return (
+    <Card>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700 }}>
+        <Globe size={15} color="var(--sand)" /> Your website
+      </div>
+      <p style={{ margin: "8px 0 12px", fontSize: 12.5, color: "var(--muted)", lineHeight: 1.6 }}>
+        Included with your plan. Your inventory, hours, and reviews publish here automatically — sold parts
+        move to &ldquo;Recently sold&rdquo; on their own.
+      </p>
+      <div style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", background: "var(--surface2)" }}>
+        <input
+          value={slug}
+          onChange={(e) => setSlug(e.target.value.toLowerCase())}
+          disabled={!canEdit}
+          placeholder="your-shop-name"
+          style={{ flex: 1, minWidth: 0, padding: "10px 12px", border: "none", background: "transparent", color: "var(--foreground)", fontSize: 13.5, fontWeight: 600, outline: "none", fontFamily: "var(--font-mono)" }}
+        />
+        <span style={{ padding: "10px 12px", fontSize: 12.5, color: "var(--muted)", fontWeight: 600, borderLeft: "1px solid var(--line)", whiteSpace: "nowrap" }}>.ahlam.io</span>
+      </div>
+      {dirty && check.state === "bad" && <div style={{ marginTop: 8, fontSize: 12, color: "var(--danger)", fontWeight: 600 }}>{check.reason}</div>}
+      {dirty && check.state === "ok" && <div style={{ marginTop: 8, fontSize: 12, color: "var(--success)", fontWeight: 600 }}>Available</div>}
+      {dirty && savedSlug && (
+        <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5 }}>
+          Changing your address breaks links and search results pointing at the old one.
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
+        {canEdit && dirty && (
+          <button type="button" onClick={save} disabled={busy || check.state !== "ok"} style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: busy || check.state !== "ok" ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            {busy ? <LoaderCircle size={14} style={{ animation: "spin 0.8s linear infinite" }} /> : null}
+            {savedSlug ? "Change address" : "Claim address"}
+          </button>
+        )}
+        {savedSlug && (
+          <a href={siteOrigin(savedSlug)} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: "var(--accent)", textDecoration: "none" }}>
+            View my site <ExternalLink size={13} />
+          </a>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Team & roles
 // ---------------------------------------------------------------------------
@@ -385,7 +521,9 @@ export function TeamRoles(_: ViewProps) {
     const d = await r.json();
     setBusy(false);
     if (!r.ok) { csToast(d.error || "Could not invite"); return; }
-    setEmail(""); csToast(`Invite sent to ${email}`); load();
+    setEmail("");
+    csToast(d.emailSent ? `Invite emailed to ${email}` : `Invite saved — email couldn't be sent, share the sign-up link with them directly`);
+    load();
   }
 
   async function changeRole(memberId: string, newRole: string) {

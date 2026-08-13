@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "sh -c 'fail=0; for f in src/lib/*.test.mjs; do node \"$f\" || fail=1; done; exit $fail'"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
