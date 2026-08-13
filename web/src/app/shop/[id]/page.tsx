@@ -4,7 +4,8 @@ import { PublicHeader } from "@/components/PublicHeader";
 import { MessageSeller } from "@/components/MessageSeller";
 import { ReportBusiness } from "@/components/ReportBusiness";
 import { DealAgent } from "@/components/DealAgent";
-import { normalizeGrade } from "@/lib/grade";
+import { getShopById, getShopInventory } from "@/lib/shop-site";
+import { hasPersonalSite, siteOrigin } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,12 @@ export default async function ShopStorefront({ params }: Params) {
       <PublicHeader />
       {/* Header / cover */}
       <div className="grain" style={{ borderBottom: "1px solid var(--line)" }}>
+        {shop.cover_url && (
+          <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 24px 0" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={shop.cover_url} alt="" style={{ width: "100%", height: 220, objectFit: "cover", borderRadius: 16, border: "1px solid var(--line)", display: "block" }} />
+          </div>
+        )}
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
             {shop.logo_url ? (

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { sendMail } from "@/lib/mailer";
+
+export const runtime = "nodejs";
 
 async function ctx() {
   const supabase = await supabaseServer();
@@ -56,7 +59,33 @@ export async function POST(req: NextRequest) {
     { onConflict: "shop_id,email" }
   );
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+
+  // The invite row alone is invisible to the invitee — email them the join
+  // link. Claiming is automatic: signing up with this address joins the shop
+  // (see /api/onboarding step 1). Awaited so serverless doesn't drop it;
+  // sendMail never throws, so a mail hiccup can't fail the invite itself.
+  const { data: shop } = await db.from("shops").select("name").eq("id", shopId).maybeSingle();
+  const shopName = (shop as { name?: string } | null)?.name || "an Ahlam shop";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ahlam.io";
+  const emailSent = await sendMail({
+    to: email.toLowerCase().trim(),
+    replyTo: user.email || undefined,
+    subject: `You're invited to join ${shopName} on Ahlam`,
+    text: [
+      `${user.email || "A teammate"} invited you to join ${shopName} on Ahlam as ${r === "owner" ? "an owner" : `a${r === "editor" ? "n editor" : " viewer"}`}.`,
+      "",
+      "Ahlam is the tool the shop uses to photograph parts, grade them with AI, and post listings everywhere they sell.",
+      "",
+      "To accept, create your account with this email address:",
+      `${siteUrl}/?signup=1`,
+      "",
+      `Sign up as ${email.toLowerCase().trim()} and you'll join ${shopName} automatically — no code needed.`,
+      "",
+      "If you weren't expecting this, you can ignore this email.",
+    ].join("\n"),
+  });
+
+  return NextResponse.json({ ok: true, emailSent });
 }
 
 // Change a member's role.

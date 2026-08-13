@@ -51,6 +51,23 @@ export function AccountSettings({ go }: { go: (id: string) => void; onVehicle?: 
       id: user.id, display_name: name, phone, bio,
       is_online: showOnline,
     });
+    // Carry the About text over to the shop profile so it shows on the public
+    // storefront's "About your shop" too — but never overwrite an About the
+    // shop already wrote for itself.
+    if (bio.trim()) {
+      try {
+        const r = await fetch("/api/shop");
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.shop && !d.shop.description?.trim()) {
+          const p = await fetch("/api/shop", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ description: bio.trim() }),
+          });
+          if (p.ok) csToast("Also added to your shop profile's About section");
+        }
+      } catch { /* profile itself saved; the carry-over is best-effort */ }
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
