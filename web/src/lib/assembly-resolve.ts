@@ -7,6 +7,7 @@
 // then ordered name matchers. Returns null for anything that isn't a mapped
 // assembly type — the judge then prices without a completeness default.
 import { PART_ASSEMBLIES, type PartAssembly } from "./part-assemblies";
+import { canonicalizePart, type CanonicalPart } from "./part-catalog";
 
 // Listing/detection names that are components OF an assembly, not the assembly.
 // "belt" also catches seat belts and window belt moldings.
@@ -42,7 +43,19 @@ export function resolveAssembly(partName: string): PartAssembly | null {
   const name = (partName || "").trim();
   if (!name) return null;
   if (/steering\s?wheel/i.test(name)) return null;
+  // Guards run BEFORE the catalog too: a "Front Door Window Regulator" must
+  // never alias-match its parent assembly.
   if (DOOR_PANEL.test(name) || SUB_COMPONENT.test(name)) return null;
+  // Catalog first — the canonical vocabulary wins; the regex chain remains
+  // as the fallback for off-catalog free text.
+  const c = canonicalizePart(name);
+  if (c) return c.entry.assemblyKey ? PART_ASSEMBLIES[c.entry.assemblyKey] ?? null : null;
   for (const [re, key] of MATCHERS) if (re.test(name)) return PART_ASSEMBLIES[key] ?? null;
   return null;
+}
+
+// Convenience re-export so judge-layer callers get the full catalog read
+// (sale unit, shell links) alongside the assembly data, from one import.
+export function resolveCatalog(partName: string): CanonicalPart | null {
+  return canonicalizePart(partName);
 }
