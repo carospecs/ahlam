@@ -60,13 +60,15 @@ export async function POST(req: NextRequest) {
   }
 
   const status = action === "approve" ? "approved" : "rejected";
-  const { error: uErr } = await db.from("verification_requests").update({ status }).eq("id", requestId);
+  const { error: uErr } = await db.from("verification_requests")
+    .update({ status, reviewed_at: new Date().toISOString() })
+    .eq("id", requestId);
   if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
 
   if (action === "approve") {
     const { error: sErr } = await db
       .from("shops")
-      .update({ verified: true, verification_method: (request as any).method })
+      .update({ verified: true, verified_at: new Date().toISOString(), verification_method: (request as any).method })
       .eq("id", (request as any).shop_id);
     if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
   }

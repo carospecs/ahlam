@@ -101,6 +101,11 @@ export function ShopProfile({ go }: ViewProps) {
   const [shopMeta, setShopMeta] = React.useState<{ id: string | null; verified: boolean; slug: string | null; plan: string | null; trial_ends_at: string | null; subscription_status: string | null }>({ id: null, verified: false, slug: null, plan: null, trial_ends_at: null, subscription_status: null });
   const [busy, setBusy] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
+  // Snapshot of the last saved form, so edits (hours, about, …) that haven't
+  // been saved yet get a visible prompt instead of silently dying when the
+  // user navigates away without scrolling down to the save button.
+  const savedFormRef = React.useRef<string>("");
+  const dirty = form ? JSON.stringify(form) !== savedFormRef.current : false;
   const [logoUrl, setLogoUrl] = React.useState<string | null>(null);
   const [coverUrl, setCoverUrl] = React.useState<string | null>(null);
   const [uploading, setUploading] = React.useState<"logo" | "cover" | null>(null);
@@ -113,13 +118,15 @@ export function ShopProfile({ go }: ViewProps) {
       setLogoUrl(s.logo_url || null);
       setCoverUrl(s.cover_url || null);
       setShopMeta({ id: s.id || null, verified: !!s.verified, slug: s.slug || null, plan: s.plan || null, trial_ends_at: s.trial_ends_at || null, subscription_status: s.subscription_status || null });
-      setForm({
+      const loaded = {
         name: s.name || "", location: s.location || "", business_phone: s.business_phone || "",
         zip_code: s.zip_code || "",
         email: s.email || "", website: s.website || "", description: s.description || "", hours: s.hours || "",
         default_warranty_days: typeof s.default_warranty_days === "number" ? s.default_warranty_days : 30,
         returns_policy: s.returns_policy || "",
-      });
+      };
+      savedFormRef.current = JSON.stringify(loaded);
+      setForm(loaded);
     });
   }, []);
 
@@ -154,6 +161,7 @@ export function ShopProfile({ go }: ViewProps) {
     const d = await r.json();
     setBusy(false);
     if (!r.ok) { csToast(d.error || "Could not save"); return; }
+    savedFormRef.current = JSON.stringify(form);
     setSaved(true); setTimeout(() => setSaved(false), 2000);
     csToast("Shop profile saved");
   }
@@ -289,6 +297,15 @@ export function ShopProfile({ go }: ViewProps) {
           </button>
         ) : (
           <div style={{ fontSize: 13, color: "var(--muted)" }}>Only owners and editors can change the shop profile.</div>
+        )}
+
+        {/* Edits anywhere in this long form (hours especially) are easy to
+            lose — surface a sticky save prompt the moment anything is dirty. */}
+        {canEdit && dirty && !busy && (
+          <div style={{ position: "sticky", bottom: 14, zIndex: 5, display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 13, border: "1px solid var(--line)", background: "var(--surface)", boxShadow: "0 10px 30px -12px rgba(0,0,0,0.45)" }}>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>You have unsaved changes.</span>
+            <button type="submit" style={{ ...saveBtn, padding: "9px 18px" }}>Save now</button>
+          </div>
         )}
       </form>
 
@@ -504,7 +521,9 @@ export function TeamRoles(_: ViewProps) {
     const d = await r.json();
     setBusy(false);
     if (!r.ok) { csToast(d.error || "Could not invite"); return; }
-    setEmail(""); csToast(`Invite sent to ${email}`); load();
+    setEmail("");
+    csToast(d.emailSent ? `Invite emailed to ${email}` : `Invite saved — email couldn't be sent, share the sign-up link with them directly`);
+    load();
   }
 
   async function changeRole(memberId: string, newRole: string) {
