@@ -9,6 +9,8 @@
 // stage (Stage 5), which locks a single vehicle color; there's nothing reliable to check
 // until that ships.
 
+import { canonicalizePart } from "./part-catalog";
+
 export type QaFlag = { level: "warn" | "info"; message: string };
 
 // Structural subset of a scanned part — only the fields QA reads. `condition` is typed
@@ -129,6 +131,16 @@ export function runScanQa(parts: QaPart[], wholeCarUsd?: number | null, photoCol
         message: `This vehicle shows collision damage, but these mechanical parts are still graded clean at full price — inspect before listing: ${names(cleanMech)}.`,
       });
     }
+  }
+
+  // 8. Off-catalog part names — the drift alarm for the canonical vocabulary
+  //    (lib/part-catalog). The vision prompt's catalog is GENERATED from the
+  //    same data, so in steady state everything resolves; a name that doesn't
+  //    means the model free-styled (allowed for uncommon parts, worth a look)
+  //    or the prompt/catalog regressed. Info-level: it gates nothing.
+  const offCatalog = parts.filter((p) => !canonicalizePart(p.partName));
+  if (offCatalog.length) {
+    flags.push({ level: "info", message: `Not in the standard part catalog (name won't cache-match across scans) — check the name: ${names(offCatalog)}.` });
   }
 
   return flags;

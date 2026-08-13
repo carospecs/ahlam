@@ -46,6 +46,7 @@ if (!process.env.__QA_AGENT_TEST_CHILD) {
 
 const assert = (await import("node:assert/strict")).default;
 const { swapSideWords, applyQaEdit, hasWarnCases } = await import("./qa-agent.ts");
+const { runScanQa } = await import("./scan-qa.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -133,6 +134,20 @@ test("conflicting photo colors → warn case; same-family colors → none", () =
 test("a clean scan raises no cases", () => {
   const clean = { partName: "Hood", description: "Clean hood.", condition: "B", conditionNotes: "" };
   assert.equal(hasWarnCases([clean], ["gray"]), false);
+});
+
+// ── runScanQa check 8: off-catalog part names (part-catalog drift alarm) ─────
+
+test("off-catalog part names raise the info-level drift flag; catalog names don't", () => {
+  const mk = (partName) => ({ partName, description: "", condition: "B", conditionNotes: "", suggestedPriceUsd: 100 });
+  const flags = runScanQa([mk("Driver Side Front Door"), mk("Flux Capacitor Bracket")]);
+  const drift = flags.filter((f) => f.level === "info" && /part catalog/.test(f.message));
+  assert.equal(drift.length, 1);
+  assert.ok(drift[0].message.includes("Flux Capacitor Bracket"));
+  assert.ok(!drift[0].message.includes("Front Door"));
+  // Legacy and canonical names both resolve — no flag.
+  const clean = runScanQa([mk("Front Bumper Cover"), mk("Engine — 2.5L I4"), mk("Wheel / Rim")]);
+  assert.equal(clean.filter((f) => /part catalog/.test(f.message)).length, 0);
 });
 
 console.log(`qa-agent: ${passed} passed`);
