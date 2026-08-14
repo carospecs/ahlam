@@ -39,6 +39,7 @@ const COLS: Col[] = [
   ] },
   { h: "Resources", links: [
     { label: "Guides", href: "/guides" },
+    { label: "Shops", href: "/shops" },
     { label: "FAQ", href: "/#faq" },
     { label: "Sign in", href: "/?signin=1" },
   ] },

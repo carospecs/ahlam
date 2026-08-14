@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getShopBySlug, getShopInventory, getRecentlySold } from "@/lib/shop-site";
 import { siteOrigin } from "@/lib/slug";
+import * as shopProfiles from "@/lib/shop-static-profiles";
 import { SiteInventory } from "@/components/site/SiteInventory";
 import { ShopSiteFooter } from "@/components/site/ShopSiteFooter";
 
@@ -15,13 +16,41 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ahlam.io";
 
 type Params = { params: Promise<{ slug: string }> };
 
+// sameAs links (Google Business Profile, Yelp, Facebook, …) for the shop's
+// structured data. Statically maintained per shop until the DB grows a column.
+// Wildcard import + runtime checks so this compiles whether the profiles
+// module ships a per-shop same_as field, a SHOP_SAMEAS record, or neither.
+function sameAsFor(slug: string, shop: any): string[] | undefined {
+  const mod: any = shopProfiles;
+  const links =
+    (Array.isArray(shop?.same_as) && shop.same_as) ||
+    (Array.isArray(mod.SHOP_STATIC_PROFILES?.[slug]?.same_as) && mod.SHOP_STATIC_PROFILES[slug].same_as) ||
+    (Array.isArray(mod.SHOP_SAMEAS?.[slug]) && mod.SHOP_SAMEAS[slug]) ||
+    null;
+  return links && links.length ? links : undefined;
+}
+
+/** Two-letter state parsed from a "City, ST" location string — data-driven
+ *  only, no hardcoded fallback. */
+function stateFrom(location?: string | null): string | undefined {
+  return (location || "").match(/,\s*([A-Z]{2})\b/)?.[1];
+}
+
 export async function generateMetadata({ params }: Params) {
   const { slug } = await params;
   const shop = await getShopBySlug(slug);
   if (!shop) return {};
   const title = `${shop.name} — Used Auto Parts & Salvage${shop.location ? ` in ${shop.location}` : ""}`;
-  const description = (shop.description ||
+  const base = (shop.description ||
     `Quality used OEM auto parts from ${shop.name}${shop.location ? ` in ${shop.location}` : ""}. Browse live inventory — tested, graded, and honestly described.`).slice(0, 300);
+  // NAP tail (name/address/phone) so the meta description carries the local
+  // signals Google matches against "near me" queries.
+  const napAddress = [shop.address_line, [shop.location, shop.zip_code].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  const nap = [
+    napAddress ? `Located at ${napAddress}.` : "",
+    shop.business_phone ? `Call ${shop.business_phone}.` : "",
+  ].filter(Boolean).join(" ");
+  const description = nap ? `${base} ${nap}` : base;
   const origin = siteOrigin(shop.slug);
   const ogImage = shop.cover_url || shop.logo_url || undefined;
   return {
@@ -65,8 +94,11 @@ export default async function ShopSiteHome({ params }: Params) {
       "@type": "PostalAddress",
       streetAddress: shop.address_line || undefined,
       addressLocality: shop.location || undefined,
+      addressRegion: stateFrom(shop.location),
       postalCode: shop.zip_code || undefined,
+      addressCountry: "US",
     } : undefined,
+    sameAs: sameAsFor(slug, shop),
     geo: shop.lat && shop.lng ? { "@type": "GeoCoordinates", latitude: shop.lat, longitude: shop.lng } : undefined,
     openingHours: shop.hours || undefined,
     aggregateRating: ratingCount > 0 ? {

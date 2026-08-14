@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { PublicHeader } from "@/components/PublicHeader";
 import { ShopHeader, ShopFooterCredit } from "@/components/ShopHeader";
 import { ShopSite } from "@/components/ShopSite";
-import { SHOP_SUBDOMAINS } from "@/lib/shop-subdomains";
+import { SHOP_SUBDOMAINS, slugForShopId } from "@/lib/shop-subdomains";
 import { MessageSeller } from "@/components/MessageSeller";
 import { ReportBusiness } from "@/components/ReportBusiness";
 import { DealAgent } from "@/components/DealAgent";
@@ -24,15 +24,21 @@ export async function generateMetadata({ params }: Params) {
   const { id } = await params;
   const host = (await headers()).get("host") || "";
   const onOwnSubdomain = Object.keys(SHOP_SUBDOMAINS).some((slug) => host.startsWith(`${slug}.`));
-  try {
-    const db = supabaseAdmin();
-    const { data: shop } = await db.from("shops").select("name, location, description").eq("id", id).single();
-    if (shop) {
-      const desc = shop.description || `Used parts & vehicles from ${shop.name}${shop.location ? ` in ${shop.location}` : ""}.`;
-      return { title: onOwnSubdomain ? shop.name : `${shop.name} · Ahlam`, description: desc };
-    }
-  } catch {}
-  return { title: onOwnSubdomain ? "Shop" : "Shop · Ahlam" };
+  // Shops with a subdomain canonicalize onto it so ahlam.io/shop/<uuid> and
+  // <slug>.ahlam.io consolidate rank on the subdomain instead of splitting it.
+  const slug = slugForShopId(id);
+  const canonical = slug ? siteOrigin(slug) : `${SITE_URL}/shop/${id}`;
+  const shop = await getShopById(id);
+  if (!shop) return { title: onOwnSubdomain ? "Shop" : "Shop · Ahlam" };
+  const title = onOwnSubdomain ? shop.name : `${shop.name} · Ahlam`;
+  const description = shop.description || `Used parts & vehicles from ${shop.name}${shop.location ? ` in ${shop.location}` : ""}.`;
+  const ogImage = shop.cover_url || shop.logo_url || undefined;
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: { title, description, url: canonical, type: "website", images: ogImage ? [{ url: ogImage }] : undefined },
+  };
 }
 
 function fmtFit(fit: any): string {
