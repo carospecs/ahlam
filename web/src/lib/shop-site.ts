@@ -1,5 +1,7 @@
 import { cache } from "react";
 import { supabaseAdmin } from "@/lib/supabase";
+import { SHOP_SUBDOMAINS } from "@/lib/shop-subdomains";
+import { SHOP_STATIC_PROFILES, staticShopRow } from "@/lib/shop-static-profiles";
 import { normalizeGrade } from "@/lib/grade";
 import { effectiveWarranty, warrantyLabel } from "@/lib/warranty";
 import { classifyPowertrain } from "@/lib/powertrain";
@@ -92,17 +94,33 @@ export const getShopById = cache(async (id: string): Promise<any | null> => {
   }
 });
 
+/** Resolve a personal-site slug to a public shop row. Resolution chain:
+ *  1. the reserved demo slug → DEMO_SHOP;
+ *  2. DB lookup on shops.slug — preferred once the slug migration lands. Any
+ *     pinned static profile (lib/shop-static-profiles) is merged OVER the row:
+ *     static wins deliberately for NAP consistency across directories;
+ *  3. pre-migration (42703) or no slug match: the static subdomain map →
+ *     getShopById (itself 42703-tolerant), again overlaid with the pin;
+ *  4. DB unreachable/empty but a pin exists: render the pin alone rather than
+ *     404 the site. */
 export const getShopBySlug = cache(async (slug: string): Promise<any | null> => {
   if (slug === DEMO_SHOP.slug) return DEMO_SHOP;
+  const pinned = SHOP_STATIC_PROFILES[slug];
   try {
     const db = supabaseAdmin();
-    // Pre-migration (no slug column) this errors and returns null — every
-    // personal site 404s until the migration lands, which is correct.
     const { data } = await db.from("shops").select(SHOP_PUBLIC_COLUMNS).ilike("slug", slug).single();
-    return data || null;
+    if (data) return pinned ? { ...data, ...pinned } : data;
+    // No match — either the slug column doesn't exist yet (42703) or no shop
+    // has claimed this slug. Fall through to the static subdomain map.
+    const shopId = SHOP_SUBDOMAINS[slug];
+    if (shopId) {
+      const row = await getShopById(shopId);
+      if (row) return { ...row, ...(pinned || {}), slug };
+    }
   } catch {
-    return null;
+    // DB unreachable — fall through to the pin if we have one.
   }
+  return staticShopRow(slug);
 });
 
 export function fmtFit(fit: any): string {

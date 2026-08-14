@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { PublicHeader } from "@/components/PublicHeader";
 import { type Grade } from "@/lib/grade";
 import { getListingDetail, partSeoTitle } from "@/lib/shop-site";
+import { slugForShopId } from "@/lib/shop-subdomains";
+import { siteOrigin } from "@/lib/slug";
 
 // Public, no-auth, indexable page for a SINGLE part listing — the destination
 // Google/Facebook send shoppers to from the product feed, and the SEO landing the
@@ -39,14 +41,18 @@ export async function generateMetadata({ params }: Params) {
   const title = `${seoTitle(l)} | Ahlam`;
   const description =
     (l.description || `${l.part} for sale — ${GRADE_LABEL[l.grade as Grade]}, $${l.price}. ${l.fitment ? `Fits ${l.fitment}. ` : ""}From ${l.shopName} on Ahlam.`).slice(0, 300);
+  // When the shop has its own subdomain, the part's canonical home is the copy
+  // on that subdomain — consolidates rank there instead of splitting with apex.
+  const shopSlug = l.shopId ? slugForShopId(l.shopId) : null;
+  const canonical = shopSlug ? `${siteOrigin(shopSlug)}/p/${l.id}` : `${SITE_URL}/p/${l.id}`;
   return {
     title,
     description,
-    alternates: { canonical: `${SITE_URL}/p/${l.id}` },
+    alternates: { canonical },
     openGraph: {
       title,
       description,
-      url: `${SITE_URL}/p/${l.id}`,
+      url: canonical,
       images: l.photoUrl ? [{ url: l.photoUrl }] : undefined,
       type: "website",
     },

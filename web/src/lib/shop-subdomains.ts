@@ -16,3 +16,13 @@ export const SHOP_SUBDOMAINS: Record<string, string> = {
   aandbautosalvage: "555bb92c-64a2-4092-a1fd-0024cedaed6b",
   elapacheautowrecking: "749da208-9fa9-466a-a6d0-eca31cde97aa",
 };
+
+// Reverse map (shop id -> slug), built once at module scope for O(1) lookups.
+const SLUG_BY_SHOP_ID: Record<string, string> = Object.fromEntries(
+  Object.entries(SHOP_SUBDOMAINS).map(([slug, id]) => [id, slug]),
+);
+
+/** Reverse lookup: shop UUID -> its static subdomain slug, or null. */
+export function slugForShopId(id: string): string | null {
+  return SLUG_BY_SHOP_ID[id] ?? null;
+}
