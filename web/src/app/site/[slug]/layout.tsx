@@ -9,6 +9,13 @@ import { ShopSiteHeader } from "@/components/site/ShopSiteHeader";
 
 export const dynamic = "force-dynamic";
 
+// Google Search Console ownership for the {slug}.ahlam.io properties (holder:
+// andygar1019@gmail.com). Rendered on every personal-site page so new shop
+// subdomains can be claimed in GSC without another deploy.
+export const metadata = {
+  verification: { google: "d7ekD5fYyQHPfvXMHDQBPqTLA5oCggMUBjEDfjar_ic" },
+};
+
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ahlam.io";
 
 export default async function ShopSiteLayout({
