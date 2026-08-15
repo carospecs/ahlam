@@ -137,6 +137,28 @@ function deriveVehicle(parts: AIPart[]): { label: string; sub: string } | null {
   return { label: `${best.make} ${best.model}`, sub: [years, `matched on ${best.n} part${best.n > 1 ? "s" : ""}`].filter(Boolean).join(" · ") };
 }
 
+// Keep the whole-car listing usable when the seller changes from Parts to Whole
+// (or Both). The scan returns rich part descriptions, but vehicleDesc is a
+// separate field and older scan responses did not populate it. Build a concise,
+// honest summary from confirmed vehicle data and the visible parts instead of
+// sending `description: null` to /api/listings.
+function buildVehicleDescription(
+  vehicle: ScanSession["vehicle"],
+  parts: AIPart[],
+  mileage: string | null,
+  color: string,
+): string {
+  const identity = [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(" ").trim();
+  const details = [vehicle?.body, color, mileage ? `${mileage} mi` : ""].filter(Boolean).join(" · ");
+  const names = [...new Set(parts.map((p) => p.partName.trim()).filter(Boolean))].slice(0, 8);
+  const lines = [
+    identity ? `${identity}${details ? ` (${details})` : ""}.` : "Vehicle photographed and reviewed for parts.",
+    names.length ? `Visible/recoverable parts include ${names.join(", ")}.` : "Photos show the vehicle as-is; inspect it in person before purchase.",
+    "Used vehicle sold as-is. Review the photos and confirm condition, title, mileage, and pickup details with the seller.",
+  ];
+  return lines.join(" ");
+}
+
 // Group parts logically and keep Left/Right pairs adjacent so the review list is
 // scannable (front → sides → rear → glass → lighting → wheels → mechanical → interior).
 const AREA_ORDER: RegExp[] = [
@@ -584,6 +606,13 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
         setCarPrice("");
         setMileage(null);
       }
+      // Always keep a whole-car description in sync with the scan. This matters
+      // when the seller switches from Parts to Whole/Both after reviewing results.
+      const scannedVehicle = agg
+        ? { label: agg.label, sub: agg.sub || "identified by AI", make: agg.make, model: agg.model, year: agg.year, body: agg.body, trim: agg.trim, engine: agg.engine, drivetrain: agg.drivetrain, vinInfo: agg.vinInfo }
+        : deriveVehicle(finalParts);
+      const scannedDescription = buildVehicleDescription(scannedVehicle, finalParts, agg?.mileage || null, agg?.color || "");
+      setVehicleDesc((current) => current.trim() || scannedDescription);
       // ── BLOCKING PRICE PASS — Claude prices every scan (falls back to Gemini
       // server-side). The first prices the seller sees come from here; the vision
       // prices already on finalParts render only if this fails or times out. Also
@@ -885,6 +914,7 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
       const idxOf = new Map(imagePhotos.map((p, i) => [p.url, i]));
       const heroIndex = mainPhoto && idxOf.has(mainPhoto) ? idxOf.get(mainPhoto)! : 0;
 
+      const fallbackVehicleDescription = buildVehicleDescription(vehicle, parts, mileage, vehicleColor);
       const payload = {
         sellMode,
         carPrice,
@@ -892,7 +922,7 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
         draft,
         images,
         heroIndex,
-        vehicle: { make: vehicle?.make, model: vehicle?.model, year: vehicle?.year, body: vehicle?.body, trim: vehicleTrim.trim() || undefined, color: vehicleColor.trim() || undefined, vin: vin.trim() || undefined, stockNumber: stockNumber.trim() || undefined, title: vehicleTitle.trim() || undefined, description: vehicleDesc.trim() || undefined, photos: photos.length },
+        vehicle: { make: vehicle?.make, model: vehicle?.model, year: vehicle?.year, body: vehicle?.body, trim: vehicleTrim.trim() || undefined, color: vehicleColor.trim() || undefined, vin: vin.trim() || undefined, stockNumber: stockNumber.trim() || undefined, title: vehicleTitle.trim() || undefined, description: vehicleDesc.trim() || fallbackVehicleDescription, photos: photos.length },
         // Strip client-only fields (blob URL + local ids); keep a photoIndex so
         // each part links to the photo it was scanned from.
         parts: parts
@@ -1278,10 +1308,29 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
             );
           })()}
 
+          {/* One obvious place to edit the actual whole-car post. Previously the
+              scan saved this field but never rendered it, which made switching
+              from Parts to Whole feel like the description disappeared. */}
           <Card pad={18} style={{ display: "grid", gap: 12 }}>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>How do you want to sell this?</div>
-              <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>You can change this anytime.</div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>Vehicle listing</div>
+              <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 3 }}>This is the title and description buyers will see if you post the whole car.</div>
+            </div>
+            <label style={{ display: "grid", gap: 5 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Title</span>
+              <input value={vehicleTitle} onChange={(e) => setVehicleTitle(e.target.value)} placeholder={vehicle ? `${vehicle.year || ""} ${vehicle.make || ""} ${vehicle.model || ""}`.trim() || "Vehicle for sale" : "Vehicle for sale"} style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 14, padding: "10px 12px", borderRadius: 10, fontFamily: "var(--font-sans)" }} />
+            </label>
+            <label style={{ display: "grid", gap: 5 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Description</span>
+              <textarea value={vehicleDesc} onChange={(e) => setVehicleDesc(e.target.value)} rows={4} placeholder="Describe the vehicle, damage, title status, and pickup details" style={{ border: "1px solid var(--line)", outline: "none", background: "var(--surface2)", color: "var(--foreground)", fontSize: 14, padding: "10px 12px", borderRadius: 10, fontFamily: "var(--font-sans)", resize: "vertical", lineHeight: 1.5 }} />
+            </label>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.45 }}>Tip: be clear about title status, whether it runs, visible damage, and whether buyers can pick it up or need transport.</div>
+          </Card>
+
+          <Card pad={18} style={{ display: "grid", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>What are you posting?</div>
+              <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>Choose one. You can change this before saving.</div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }} className="cs-sellmode">
               {["parts", "whole", "both"].map((mode) => {
@@ -1695,8 +1744,8 @@ function Step({ n, label, on, done }: { n: number; label: string; on: boolean; d
 function ModePicker({ onPick }: { onPick: (m: "ai" | "manualCar" | "manualPart") => void }) {
   const tiles = [
     { id: "ai", icon: Sparkles, title: "Scan with AI", desc: "Upload photos and AI finds the car, every part, condition, and prices.", fast: true },
-    { id: "manualCar", icon: Car, title: "List a car manually", desc: "Type it in yourself. Photos optional. AI can help write & price." },
-    { id: "manualPart", icon: Wrench, title: "List a part manually", desc: "Post a single part (e.g. an engine). Photos optional." },
+    { id: "manualCar", icon: Car, title: "List a car manually", desc: "Type it in yourself. Photos optional. AI can help write & price.", fast: false },
+    { id: "manualPart", icon: Wrench, title: "List a part manually", desc: "Post a single part (e.g. an engine). Photos optional.", fast: false },
   ] as const;
   return (
     <div style={{ maxWidth: 880, margin: "0 auto", display: "grid", gap: 16 }}>
