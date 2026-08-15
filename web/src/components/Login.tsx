@@ -189,6 +189,12 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
         });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { setError(d.error || "Couldn't start the reset. Try again."); setBusy(false); return; }
+        if (d.delivery === "link") {
+          setMode("signin");
+          setNotice("We sent a password reset email. Open the link in that email to choose a new password.");
+          setBusy(false);
+          return;
+        }
         setMode("resetCode");
         setPassword(""); setConfirmPassword("");
         setNotice(`If an account exists for ${email}, a reset code is on its way.`);
