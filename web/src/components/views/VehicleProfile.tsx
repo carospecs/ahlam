@@ -249,7 +249,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
               <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{mode.desc}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>Sell as:</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>Post as:</span>
               <div style={{ display: "inline-flex", gap: 4, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 10, padding: 3 }}>
                 {(["parts", "whole", "both"] as const).map((m) => {
                   const on = pendingMode === m;
@@ -266,8 +266,11 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
                 disabled={savingMode || pendingMode === sellMode}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: "none", background: pendingMode === sellMode ? "var(--surface2)" : "var(--accent)", color: pendingMode === sellMode ? "var(--muted)" : "#fff", fontSize: 12.5, fontWeight: 700, cursor: pendingMode === sellMode ? "default" : "pointer", opacity: savingMode ? 0.6 : 1 }}
               >
-                <Check size={13} /> {savingMode ? "Saving…" : "Submit"}
+                <Check size={13} /> {savingMode ? "Saving…" : "Save posting type"}
               </button>
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.45, marginTop: 5 }}>
+              Parts only shows the individual parts. Whole car shows one vehicle listing. Car + parts keeps both. Your title, description, photos, and VIN stay saved when you switch.
             </div>
             <h2 style={{ margin: "12px 0 0", fontSize: 24, fontWeight: 800 }}>{v.year} {v.make} {v.model} {v.trim}</h2>
             <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 4 }}>{v.body} · {v.color} · {v.mileage}</div>
