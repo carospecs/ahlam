@@ -1,51 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Space_Grotesk, Space_Mono, Fraunces, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
-
-const sans = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-sans",
-  display: "swap",
-});
-
-// Brand display face — headlines, wordmark, names. Space Grotesk gives a distinct,
-// technical wordmark (intentionally different from the typical geometric sans).
-const display = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-display",
-  display: "swap",
-});
-
-// Editorial serif for large marketing display headings (landing + guides only,
-// applied via the .cs-display class so the app/dashboard keep the Poppins brand).
-const serif = Fraunces({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  style: ["normal", "italic"],
-  variable: "--font-serif",
-  display: "swap",
-});
-
-// Brand marketing display face — a contemporary grotesque with real character.
-// Deliberately NOT a Times-like serif, to give the landing page its own identity
-// distinct from finance-template look-alikes. Drives .cs-display on the landing.
-const brand = Bricolage_Grotesque({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-brand",
-  display: "swap",
-});
-
-// Brand detail face — labels, badges, contacts, numerals.
-const mono = Space_Mono({
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  variable: "--font-mono",
-  display: "swap",
-});
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ahlam.io";
 
@@ -77,7 +32,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${sans.variable} ${display.variable} ${serif.variable} ${brand.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* Apply the saved theme before paint to avoid a flash of the wrong theme. */}
         <script
