@@ -38,10 +38,10 @@ const SECTIONS: LegalSection[] = [
     ],
     bullets: [
       "It receives one listing (title, price, description, and photos) from your Ahlam account when you click to post.",
-      "It downloads that listing's photos and fills the new-post form on the marketplace you opened (Facebook Marketplace, OfferUp, or Craigslist).",
+      "It downloads that listing's photos and fills supported browser forms, including Facebook Marketplace and a regular eBay draft. OfferUp uses its official mobile-app handoff.",
       "It never submits a post for you. You review every listing and click Publish yourself.",
       "It stores the staged listing only briefly, in your browser, and clears it after filling the form.",
-      "It does not send your data to Ahlam's servers or to any third party. The only place the data goes is the marketplace form you are posting to.",
+      "It does not send the staged listing to a separate Ahlam service. The listing only goes to the marketplace flow you explicitly chose.",
     ],
   },
   {

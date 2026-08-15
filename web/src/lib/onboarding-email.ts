@@ -23,7 +23,7 @@ The short version:
 1. Snap photos of a part (and the VIN plate if you can see it).
 2. Let the scan run. Ahlam reads the VIN, identifies the part, and fills in a listing with a suggested price from real market comps.
 3. Review the card. Check the part name and the price. You're the expert; change anything that looks off.
-4. Post it. One click to eBay, or copy-and-post to Facebook and OfferUp. (Craigslist, Car-Part.com, and DoorDash delivery are coming soon.)
+4. Post it. Use the connected eBay option, fill a regular eBay draft or Facebook form with the extension, and hand OfferUp to its phone app. (Craigslist, Car-Part.com, and DoorDash delivery are coming soon.)
 
 That's it. That's the whole loop.
 
@@ -33,7 +33,7 @@ When you get to posting, the magic moment is sending one part to eBay and Facebo
 
 Two quick things:
 - The price Ahlam suggests is a smart starting point you review, not a fixed number. Trust your gut and adjust.
-- Want to post to Facebook or OfferUp with the fields filled in for you on your computer? Install the free Ahlam Auto-Poster (one-time, about 30 seconds). It fills the form; you always review and click Publish yourself. The link is in the app under Export & posting.
+- Want fewer steps? Install the free Ahlam Auto-Poster (one time, about 30 seconds). It fills Facebook and regular eBay drafts on your computer and prepares the OfferUp phone handoff. You always review and publish. The link is under Export & posting.
 
 Hit reply if anything is confusing. A real person reads these.
 
@@ -47,7 +47,7 @@ Hola ${name},
 
 Bienvenido a Ahlam. Ya está todo configurado. Hoy solo importa una cosa: publicar una pieza real. Toma unos 15 minutos.
 
-En corto: toma fotos de una pieza (y de la placa del VIN), deja correr el escaneo, revisa el nombre y el precio sugerido, y publícala con un clic a eBay o copiando a Facebook y OfferUp. (Craigslist, Car-Part.com y la entrega con DoorDash llegan pronto.)
+En corto: toma fotos de una pieza (y de la placa del VIN), deja correr el escaneo, revisa el nombre y el precio sugerido, y prepara eBay, Facebook y OfferUp desde Exportar y publicar. OfferUp continua en la app del telefono. (Craigslist, Car-Part.com y la entrega con DoorDash llegan pronto.)
 
 Empieza aquí: ${appUrl}
 

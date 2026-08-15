@@ -2,8 +2,17 @@
 // selected marketplaces open at once now, so there's no "open next" step — each
 // tab just reports it was filled and reminds the seller to review and Publish.
 // We never advance or submit on our own.
-window.ahlamShowResult = async function (channel, text, ok) {
-  try { chrome.runtime.sendMessage({ type: "ahlam-filled", channel }); } catch {}
+window.ahlamShowResult = async function (channel, text, ok, detail) {
+  try {
+    chrome.runtime.sendMessage({
+      type: "ahlam-result",
+      channel,
+      ok: !!ok,
+      state: ok ? "ready" : "needs_help",
+      message: text,
+      detail: detail || null,
+    });
+  } catch {}
 
   const old = document.getElementById("__ahlam_banner");
   if (old) old.remove();

@@ -10,6 +10,16 @@ document.addEventListener("DOMContentLoaded", () => {
   try { document.documentElement.setAttribute("data-ahlam-autopost", "1"); } catch {}
 });
 
+function reply(payload) {
+  window.postMessage({ __ahlamAutopostReply: true, ...payload }, "*");
+}
+
+// Relay live per-market status changes back into the Ahlam page. This closes the
+// loop that previously left the website stuck on “fill in progress” forever.
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type === "ahlam-queue-update") reply({ kind: "queueStatus", queue: msg.queue || null });
+});
+
 window.addEventListener("message", (event) => {
   if (event.source !== window) return;
   const d = event.data;
@@ -17,7 +27,7 @@ window.addEventListener("message", (event) => {
 
   if (d.kind === "ping") {
     // Let the page confirm we're alive.
-    window.postMessage({ __ahlamAutopostReply: true, installed: true }, "*");
+    reply({ installed: true });
     return;
   }
   if (d.kind === "load" && d.listing) {
@@ -25,7 +35,7 @@ window.addEventListener("message", (event) => {
     chrome.runtime.sendMessage(
       { type: "ahlam-load", listing: d.listing },
       (resp) => {
-        window.postMessage({ __ahlamAutopostReply: true, loaded: !!resp?.ok, photos: resp?.photos || 0 }, "*");
+        reply({ loaded: !!resp?.ok, photos: resp?.photos || 0, error: resp?.error || null });
       }
     );
     return;
@@ -34,7 +44,7 @@ window.addEventListener("message", (event) => {
     chrome.runtime.sendMessage(
       { type: "ahlam-stage", channel: d.channel || "facebook", listing: d.listing },
       (resp) => {
-        window.postMessage({ __ahlamAutopostReply: true, staged: !!resp?.ok, photos: resp?.photos || 0 }, "*");
+        reply({ staged: !!resp?.ok, photos: resp?.photos || 0, queue: resp?.queue || null, error: resp?.error || null });
       }
     );
   }
@@ -43,7 +53,7 @@ window.addEventListener("message", (event) => {
     chrome.runtime.sendMessage(
       { type: "ahlam-stage-queue", listing: d.listing, channels: d.channels },
       (resp) => {
-        window.postMessage({ __ahlamAutopostReply: true, queued: !!resp?.ok, channels: resp?.channels || [] }, "*");
+        reply({ queued: !!resp?.ok, channels: resp?.channels || [], queue: resp?.queue || null, error: resp?.error || null });
       }
     );
   }

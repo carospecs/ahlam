@@ -27,8 +27,9 @@ import { EXTENSION_URL } from "@/lib/extension";
 // render as "Coming soon" and can't be picked yet.
 type PrepareChannel = { key: string; name: string; icon: typeof Share2; color: string; url: string; note: string; soon?: boolean };
 const PREPARE_CHANNELS: PrepareChannel[] = [
-  { key: "facebook", name: "Facebook Marketplace", icon: Share2, color: "#1877f2", url: "https://www.facebook.com/marketplace/create/item", note: "No posting API — we copy your text, save the photos, and open the form to paste & drag in. For bulk, use the Facebook catalog CSV below." },
-  { key: "offerup", name: "OfferUp", icon: Tag, color: "var(--accent)", url: "https://offerup.com/post/", note: "Copies text and saves your photos so you just paste & drag them in." },
+  { key: "ebay", name: "eBay regular account", icon: ShoppingBag, color: "#3665f3", url: "https://www.ebay.com/sl/prelist/suggest", note: "Use your normal eBay account. The extension creates and fills a regular draft; no Ahlam business-policy connection required." },
+  { key: "facebook", name: "Facebook Marketplace", icon: Share2, color: "#1877f2", url: "https://www.facebook.com/marketplace/create/item", note: "The browser extension fills the form and attaches compatible photos. You review and publish." },
+  { key: "offerup", name: "OfferUp", icon: Tag, color: "var(--accent)", url: "https://offerup.com/getapp", note: "OfferUp uses its mobile app for personal listings. Ahlam prepares the text and photos for a phone handoff." },
   { key: "craigslist", name: "Craigslist", icon: Globe, color: "var(--success)", url: "https://post.craigslist.org/", note: "In development — Craigslist posting is coming soon.", soon: true },
 ];
 const LIVE_CHANNELS = PREPARE_CHANNELS.filter((c) => !c.soon);
@@ -64,7 +65,7 @@ function ExtensionPromo({ compact }: { compact?: boolean }) {
     <div style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: compact ? 12 : 12.5, color: "var(--muted)", lineHeight: 1.5, background: "var(--accent-tint)", border: "1px solid color-mix(in srgb, var(--accent) 26%, transparent)", borderRadius: 10, padding: compact ? "9px 12px" : "11px 14px" }}>
       <Info size={15} color="var(--accent)" style={{ flexShrink: 0, marginTop: 1 }} />
       <span>
-        <strong style={{ color: "var(--foreground)" }}>Install the Ahlam Auto-Poster extension</strong> and we open Facebook Marketplace and OfferUp with the form already filled. You just review and hit Publish.{" "}
+        <strong style={{ color: "var(--foreground)" }}>Install the Ahlam Auto-Poster extension</strong> to fill Facebook and a regular eBay draft automatically. OfferUp uses a prepared mobile-app handoff. You review and publish.{" "}
         <a href={EXTENSION_URL} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 700, textDecoration: "none" }}>Get it from the Chrome Web Store</a>
       </span>
     </div>
@@ -558,6 +559,9 @@ function PrepareMenu({ channels, onPick }: { channels: typeof PREPARE_CHANNELS; 
 }
 
 type PrepareState = { channel: typeof PREPARE_CHANNELS[number]; kind: "part" | "car"; entity: any; photos: string[]; prefix: string };
+type CrossPostState = "preparing" | "opening" | "ready" | "needs_help" | "phone_handoff";
+type CrossPostStatus = { state: CrossPostState; message?: string; detail?: unknown; updatedAt?: number };
+type CrossPostQueue = { channels?: string[]; statuses?: Record<string, CrossPostStatus> };
 
 // Labelled input row for the editable post card. Flags empty values so the
 // seller can see what's missing before posting.
@@ -641,7 +645,7 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   }
 
   // Editable copy of the post fields, seeded from the listing/vehicle.
-  const [f, setF] = React.useState<Record<string, string>>(() => isCar ? {
+  const [f, setF] = React.useState<Record<string, string>>((): Record<string, string> => isCar ? {
     title: entity.title || `${entity.year || ""} ${entity.make || ""} ${entity.model || ""}${entity.trim ? ` ${entity.trim}` : ""}`.trim(),
     price: entity.askingPrice ? String(entity.askingPrice) : "",
     mileage: entity.mileage || "",
@@ -666,6 +670,8 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   const toggleAsIs = () => { setAsIs((p) => !p); setDirty(true); };
   const [saving, setSaving] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
+  const [runStarted, setRunStarted] = React.useState(false);
+  const [postStatuses, setPostStatuses] = React.useState<Record<string, CrossPostStatus>>({});
   // Which no-API marketplaces to open & fill (extension flow). Seeded with the
   // channel the seller entered from; they can tick on the others. Channels the
   // plan doesn't include (Growth is eBay-only) can't be selected.
@@ -686,6 +692,35 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   const text = isCar
     ? buildVehicleText({ ...entity, description: f.description, askingPrice: Number(f.price) || 0, mileage: f.mileage, title: f.title } as any, shop)
     : buildListingText({ ...entity, part: f.part, fitment: f.fitment, grade: f.grade, note: f.note, desc: f.description, price: Number(f.price) || 0, warrantyDays, asIs } as any, shop);
+
+  const readinessMissing = [
+    !(isCar ? f.title : f.part)?.trim() && (isCar ? "Title" : "Part name"),
+    (!f.price || Number(f.price) <= 0) && "Price",
+    valid.length === 0 && "Photo",
+    partPhotoMissing && "Close-up photo of the actual part",
+    !(f.description || (!isCar && f.note) || "").trim() && "Description or condition note",
+    (!isCar && !f.fitment?.trim()) && "Vehicle fitment",
+  ].filter(Boolean) as string[];
+
+  function ensureReady() {
+    if (!readinessMissing.length) return true;
+    setEditOpen(true);
+    csToast(`Add ${readinessMissing[0].toLowerCase()} before posting`);
+    return false;
+  }
+
+  React.useEffect(() => {
+    function onExtensionMessage(event: MessageEvent) {
+      if (event.source !== window || !event.data?.__ahlamAutopostReply) return;
+      const queue = event.data.queue as CrossPostQueue | null;
+      if (queue?.statuses) setPostStatuses(queue.statuses);
+      if (event.data.queued === false) {
+        setPostStatuses(Object.fromEntries([...selected].map((key) => [key, { state: "needs_help", message: event.data.error || "The extension couldn't start. Reload it and try again." }])));
+      }
+    }
+    window.addEventListener("message", onExtensionMessage);
+    return () => window.removeEventListener("message", onExtensionMessage);
+  }, [selected]);
 
   async function saveFields() {
     setSaving(true);
@@ -720,6 +755,8 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
     // (With the extension installed, the primary button calls
     // confirmAndOpenSelected instead — opens every chosen marketplace and fills
     // each. This path is the no-extension fallback: share / copy-and-open.)
+
+    if (!ensureReady()) return;
 
     // 1) Plan gate: the plan may not include this channel (Growth is eBay-only).
     if (lockedChannel(planId, (channel as any).key)) {
@@ -789,6 +826,7 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   async function confirmAndOpenSelected() {
     const channels = [...selected];
     if (!channels.length) { csToast("Pick at least one marketplace"); return; }
+    if (!ensureReady()) return;
     // Solo plan caps exports per month (20 cars / 100 parts). Meter this export
     // server-side; block when over quota. Fail-open on any network error.
     try {
@@ -799,10 +837,19 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
       if (m && m.allowed === false) { csToast(m.message || "Monthly export limit reached"); return; }
     } catch {}
     try { await navigator.clipboard?.writeText(text); } catch {}
+    setRunStarted(true);
+    setPostStatuses(Object.fromEntries(channels.map((key) => [key, key === "offerup"
+      ? { state: "phone_handoff", message: "OfferUp uses its mobile app. Your listing text is copied; continue on your phone." }
+      : { state: "preparing", message: "Preparing photos and opening the form…" }
+    ])));
     window.postMessage({ __ahlamAutopost: true, kind: "postAll", channels, listing: buildExtListing() }, "*");
-    setCopied(true);
-    csToast(channels.length > 1 ? `Opening ${channels.length} marketplaces and filling each` : `Opening ${channel.name} and filling it`);
+    csToast(channels.includes("offerup") ? "Listing prepared — browser forms will fill; OfferUp continues in its app" : "Opening marketplace forms and filling the listing");
   }
+
+  const chosenStatuses = [...selected].map((key) => ({ key, status: postStatuses[key] })).filter((row) => row.status);
+  const stillWorking = chosenStatuses.some((row) => row.status.state === "preparing" || row.status.state === "opening");
+  const completed = runStarted && chosenStatuses.length === selected.size && !stillWorking;
+  const startDisabled = ext && (selected.size === 0 || readinessMissing.length > 0 || runStarted);
 
   return (
     <Portal><div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 18 }}>
@@ -883,19 +930,43 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
                   const locked = lockedChannel(planId, c.key);
                   return (
                     <button key={c.key} onClick={() => toggleSel(c.key)} title={locked ? LOCKED_CHANNEL_MSG : undefined} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 12px", borderRadius: 999, border: `1.5px solid ${on ? c.color : "var(--line)"}`, background: on ? `color-mix(in srgb, ${c.color} 14%, transparent)` : "transparent", color: "var(--foreground)", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: locked ? 0.45 : 1 }}>
-                      <c.icon size={14} color={c.color} /> {c.name.replace(" Marketplace", "")} {on ? "✓" : locked ? "· locked" : ""}
+                      <c.icon size={14} color={c.color} /> {c.name.replace(" Marketplace", "")} {c.key === "offerup" ? "· phone" : ""} {on ? "✓" : locked ? "· locked" : ""}
                     </button>
                   );
                 })}
               </div>
+              {chosenStatuses.length > 0 && (
+                <div style={{ display: "grid", gap: 6, marginTop: 2 }}>
+                  {chosenStatuses.map(({ key, status }) => {
+                    const market = LIVE_CHANNELS.find((c) => c.key === key);
+                    const good = status.state === "ready";
+                    const phone = status.state === "phone_handoff";
+                    return (
+                      <div key={key} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px", borderRadius: 9, background: "var(--surface2)", fontSize: 12, lineHeight: 1.4 }}>
+                        {status.state === "preparing" || status.state === "opening" ? <LoaderCircle size={14} className="spin" style={{ flexShrink: 0, marginTop: 1 }} /> : good ? <CircleCheck size={14} color="var(--success)" style={{ flexShrink: 0, marginTop: 1 }} /> : <Info size={14} color={phone ? "var(--accent)" : "var(--signal)"} style={{ flexShrink: 0, marginTop: 1 }} />}
+                        <span><b>{market?.name || key}:</b> {status.message || (good ? "Form filled — review and publish." : "Needs attention.")}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
-          <button onClick={ext ? confirmAndOpenSelected : confirmAndOpen} disabled={ext && selected.size === 0} style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 0", borderRadius: 11, border: "none", background: copied ? "var(--success)" : channel.color, color: "#fff", fontSize: 15, fontWeight: 700, cursor: ext && selected.size === 0 ? "not-allowed" : "pointer", opacity: ext && selected.size === 0 ? 0.6 : 1, boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
-            {copied
-              ? <><Check size={18} /> {ext ? "Opening tabs — fill in progress" : isMobileDevice() ? "Shared" : "Copied & opened"}</>
-              : <><ExternalLink size={18} /> {ext ? `Open & fill ${selected.size} marketplace${selected.size === 1 ? "" : "s"}` : isMobileDevice() ? `Share to ${channel.name}` : `Copy & post to ${channel.name}`}</>}
+          {readinessMissing.length > 0 && (
+            <button onClick={() => setEditOpen(true)} style={{ width: "100%", textAlign: "left", padding: "9px 11px", borderRadius: 9, border: "1px solid var(--signal)", background: "color-mix(in srgb, var(--signal) 10%, transparent)", color: "var(--foreground)", fontSize: 12.5, lineHeight: 1.45, cursor: "pointer" }}>
+              <b>Finish before posting:</b> {readinessMissing.join(" · ")}
+            </button>
+          )}
+          <button onClick={ext ? confirmAndOpenSelected : confirmAndOpen} disabled={startDisabled} style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 0", borderRadius: 11, border: "none", background: completed || copied ? "var(--success)" : channel.color, color: "#fff", fontSize: 15, fontWeight: 700, cursor: startDisabled ? "not-allowed" : "pointer", opacity: startDisabled && !completed ? 0.6 : 1, boxShadow: "0 4px 14px rgba(0,0,0,0.25)" }}>
+            {ext && stillWorking
+              ? <><LoaderCircle size={18} className="spin" /> Preparing & filling…</>
+              : ext && completed
+                ? <><Check size={18} /> Handoff ready — finish in each marketplace</>
+                : copied
+                  ? <><Check size={18} /> {isMobileDevice() ? "Shared" : "Copied & opened"}</>
+                  : <><ExternalLink size={18} /> {ext ? `Prepare ${selected.size} marketplace${selected.size === 1 ? "" : "s"}` : isMobileDevice() ? `Share to ${channel.name}` : `Copy & post to ${channel.name}`}</>}
           </button>
-          {ext && <div style={{ fontSize: 11.5, color: "var(--muted)", textAlign: "center" }}>Opens each tab and fills the form. You review and hit Publish — we never post for you.</div>}
+          {ext && <div style={{ fontSize: 11.5, color: "var(--muted)", textAlign: "center" }}>Facebook and regular eBay drafts fill in your browser. OfferUp continues in its phone app. You review and publish.</div>}
         </div>
 
         {/* Edit fields toggle */}

@@ -53,9 +53,9 @@ export const BLOG: BlogPost[] = [
         ],
       },
       {
-        heading: "Facebook, OfferUp, and Craigslist: the assistant fills it in",
+        heading: "Facebook in the browser, OfferUp on the phone",
         paragraphs: [
-          "Those three marketplaces do not let software post on your behalf. So instead of pretending otherwise, Ahlam does the next best thing: our browser helper opens the posting form in your own logged-in account, fills in the title, description, price, and category, and loads your photos.",
+          "Facebook and Craigslist do not let software post on your behalf. Ahlam's browser helper opens supported forms in your logged-in account, fills the listing, and loads compatible photos. OfferUp personal listings continue in its mobile app with the listing text prepared.",
           "Nothing goes live until you read it over and click Post. You stay in control, your accounts stay safe, and you skip the typing.",
         ],
       },
@@ -65,8 +65,8 @@ export const BLOG: BlogPost[] = [
           "Auto-posting bots that click through Facebook in the background get accounts banned and break every time a page changes. A helper that prefills the real form, in your real browser, with you hitting the final button, is both safer and honest about how these platforms work.",
         ],
         bullets: [
-          "eBay: one click, fully automatic.",
-          "Facebook, OfferUp, Craigslist: prefilled form, you confirm.",
+          "eBay: direct integration after business setup, or a filled regular-account draft.",
+          "Facebook: prefilled browser form; OfferUp: prepared phone handoff.",
           "Bulk Facebook catalog export for large inventories.",
         ],
       },
@@ -300,7 +300,7 @@ export const BLOG: BlogPost[] = [
       },
       {
         q: "Do these marketplaces let software post for me?",
-        a: "Only eBay offers a real posting API, so eBay is fully automatic in Ahlam. For Facebook, OfferUp, and Craigslist, Ahlam prefills the form in your own logged-in browser and you click post.",
+        a: "eBay offers a real posting API for sellers who complete its setup; regular accounts can use an extension-filled draft. Facebook can be filled in your browser. OfferUp personal listings continue in its mobile app.",
       },
     ],
   },

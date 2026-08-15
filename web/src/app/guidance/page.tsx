@@ -48,7 +48,7 @@ const COPY: Record<Lang, {
     steps: [
       { icon: Camera, title: "1. Photograph the part", body: "Snap the part or the whole car. Ahlam identifies it, reads the VIN if it can see one, and grades the condition." },
       { icon: Tag, title: "2. Review the price", body: "Ahlam suggests a price from live eBay comps and condition. Adjust if you want, then approve." },
-      { icon: Send, title: "3. Post everywhere", body: "Publish to eBay in one click. Prefill Facebook, OfferUp, and Craigslist in your own browser, then hit Post." },
+      { icon: Send, title: "3. Post everywhere", body: "Publish through the connected eBay option, or fill a regular eBay draft and Facebook form with the extension. OfferUp continues in its phone app." },
       { icon: MessageSquare, title: "4. Reply to buyers", body: "Buyer messages reach you by email and in the app. Answer fast and close the sale." },
     ],
     ctaTitle: "Ready to list your first part?",
@@ -67,7 +67,7 @@ const COPY: Record<Lang, {
     steps: [
       { icon: Camera, title: "1. Fotografia la pieza", body: "Toma una foto de la pieza o del carro completo. Ahlam la identifica, lee el VIN si lo ve, y califica la condicion." },
       { icon: Tag, title: "2. Revisa el precio", body: "Ahlam sugiere un precio segun ventas reales de eBay y la condicion. Ajustalo si quieres y aprueba." },
-      { icon: Send, title: "3. Publica en todos lados", body: "Publica en eBay con un clic. Llena Facebook, OfferUp y Craigslist en tu propio navegador y presiona Publicar." },
+      { icon: Send, title: "3. Publica en todos lados", body: "Publica con la conexion de eBay, o llena un borrador normal de eBay y el formulario de Facebook con la extension. OfferUp continua en la app del telefono." },
       { icon: MessageSquare, title: "4. Responde a compradores", body: "Los mensajes te llegan por correo y en la app. Responde rapido y cierra la venta." },
     ],
     ctaTitle: "Listo para publicar tu primera pieza?",
