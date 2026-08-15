@@ -4,6 +4,7 @@ import React from "react";
 import { Car, Wrench, Store, CircleCheck, Send, PencilLine, Eye } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge, SellModeBadge, StatusBadge } from "../UI";
 import { useData, csToast } from "../Dashboard";
+import { statusIs } from "../data";
 
 export function Inventory({ go, onVehicle }: { go: (id: string) => void; onVehicle: (v: any) => void }) {
   const { vehicles, listings } = useData();
@@ -15,9 +16,9 @@ export function Inventory({ go, onVehicle }: { go: (id: string) => void; onVehic
   ];
 
   const partsCount = listings.length;
-  const draftCount = listings.filter((l: any) => l.status === "Draft").length;
-  const postedCount = listings.filter((l: any) => l.status === "Posted").length;
-  const soldCount = listings.filter((l: any) => l.status === "Sold").length;
+  const draftCount = listings.filter((l: any) => statusIs(l.status, "draft")).length;
+  const postedCount = listings.filter((l: any) => statusIs(l.status, "posted")).length;
+  const soldCount = listings.filter((l: any) => statusIs(l.status, "sold")).length;
 
   return (
     <div style={{ maxWidth: 1180, display: "grid", gap: 20 }}>
@@ -55,8 +56,8 @@ export function Inventory({ go, onVehicle }: { go: (id: string) => void; onVehic
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
             {vehicles.map((v: any) => {
               const vParts = listings.filter((l: any) => l.vehicle?.includes(v.make) && l.vehicle?.includes(v.model));
-              const vListed = vParts.filter((l: any) => l.status === "Posted").length;
-              const vSold = vParts.filter((l: any) => l.status === "Sold").length;
+              const vListed = vParts.filter((l: any) => statusIs(l.status, "posted")).length;
+              const vSold = vParts.filter((l: any) => statusIs(l.status, "sold")).length;
               return (
                 <button key={v.id} onClick={() => onVehicle(v)} style={{ all: "unset", cursor: "pointer", display: "block" }}>
                   <Card pad={0} style={{ overflow: "hidden" }}>

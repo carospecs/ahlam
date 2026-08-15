@@ -43,11 +43,25 @@ export async function POST(req: NextRequest) {
     const { data, error } = await admin.auth.admin.generateLink({ type: "recovery", email });
     const code = data?.properties?.email_otp;
     if (!error && code) {
-      await sendMail({ to: email, ...resetCodeEmail(code) });
+      const sent = await sendMail({ to: email, ...resetCodeEmail(code) });
+      if (sent) return NextResponse.json({ ok: true, delivery: "code" });
+    }
+    // Local/dev environments may not have Gmail SMTP credentials. Fall back to
+    // Supabase's configured recovery mailer so the user still receives a reset
+    // email instead of a successful-looking response with no message sent.
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (supabaseUrl && anonKey) {
+      await fetch(`${supabaseUrl}/auth/v1/recover`, {
+        method: "POST",
+        headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      return NextResponse.json({ ok: true, delivery: "link" });
     }
     // Unknown email → generateLink errors; still answer ok (no probing).
   } catch (e) {
     console.error("password reset failed", e);
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, delivery: "unknown" });
 }

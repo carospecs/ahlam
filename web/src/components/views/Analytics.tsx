@@ -3,13 +3,14 @@
 import { Eye, MessageSquare, Tag, DollarSign, TrendingUp, BarChart3, Wallet } from "lucide-react";
 import { Card } from "../UI";
 import { useData } from "../Dashboard";
+import { statusIs } from "../data";
 
 export function Analytics({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
   const { listings, threads, vehicles } = useData();
 
   const totalViews = listings.reduce((s: number, l: any) => s + (l.views || 0), 0);
-  const posted = listings.filter((l: any) => l.status === "Posted" || l.status === "active");
-  const sold = listings.filter((l: any) => l.status === "Sold");
+  const posted = listings.filter((l: any) => statusIs(l.status, "posted"));
+  const sold = listings.filter((l: any) => statusIs(l.status, "sold"));
   const revenue = sold.reduce((s: number, l: any) => s + (l.price || 0), 0);
   const inquiries = threads.length;
   const conversionRate = totalViews > 0 ? ((inquiries / totalViews) * 100).toFixed(1) : "0";

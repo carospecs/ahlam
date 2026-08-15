@@ -34,9 +34,13 @@ export async function GET() {
       db.from("shops").select("*").eq("id", shopId).single(),
       db.from("vehicles").select("*").eq("shop_id", shopId).neq("status", "removed").order("created_at", { ascending: false }),
       db.from("listings").select("*").eq("shop_id", shopId).neq("status", "removed").order("created_at", { ascending: false }),
-      db.from("conversations").select("*, messages(*)").eq("shop_id", shopId).order("created_at", { ascending: false }),
-      db.from("activity_log").select("*").eq("shop_id", shopId).order("created_at", { ascending: false }),
-      db.from("shop_members").select("*, profiles(display_name, avatar_url)").eq("shop_id", shopId),
+      // Keep the dashboard payload focused. The old `*, messages(*)` query
+      // pulled every conversation column and message column (including unused
+      // metadata) before the first screen could render. These are the only
+      // fields consumed by the dashboard and inbox UI.
+      db.from("conversations").select("id, contact_name, market, status, part_name, unread, buyer_id, last_time, contact_avatar, messages(id, sender, body, time, created_at, attachments)").eq("shop_id", shopId).order("created_at", { ascending: false }),
+      db.from("activity_log").select("icon, text, time, tone, created_at").eq("shop_id", shopId).order("created_at", { ascending: false }).limit(100),
+      db.from("shop_members").select("user_id, role, profiles(display_name, avatar_url)").eq("shop_id", shopId),
     ]);
 
     if (!shopRes.error) {
@@ -88,7 +92,13 @@ export async function GET() {
       const vehLabel = (v: any) => [v.year, v.make, v.model].filter(Boolean).join(" ");
       for (const l of listings) {
         const v = l.vehicleId ? vMap.get(l.vehicleId) : null;
-        if (v) { v.parts++; if (l.price > 0) v.value += l.price; if (l.status === "Posted" || l.status === "active") v.listed++; if (l.status === "Sold") { v.sold++; v.soldValue += l.price || 0; } }
+        if (v) {
+          v.parts++;
+          if (l.price > 0) v.value += l.price;
+          const status = String(l.status || "").trim().toLowerCase();
+          if (status === "posted" || status === "active") v.listed++;
+          if (status === "sold") { v.sold++; v.soldValue += l.price || 0; }
+        }
         if (isHedge(l.fitment)) l.fitment = v ? vehLabel(v) : "";
         // PHO-1: distinguish a part's OWN photo from a whole-car shot it inherited.
         // A part with no dedicated photo falls back to the vehicle's hero image
@@ -133,7 +143,7 @@ export async function GET() {
         const link = a.icon === "MessageSquare" || txt.includes("message") || txt.includes("inquiry") ? "messages"
           : txt.includes("part") ? "parts"
           : txt.includes("vehicle") || txt.includes("car") ? "vehicles"
-          : txt.includes("export") || txt.includes("posted") || txt.includes("ebay") ? "parts"
+          : txt.includes("export") || txt.includes("posted") || txt.includes("ebay") ? "export"
           : "overview";
         return { icon: a.icon, text: a.text, time: a.time || timeAgo(a.created_at), tone: a.tone || "muted", link };
       });
@@ -191,10 +201,11 @@ function formatFit(fit: any): string {
 }
 
 function statusLabel(s: string) {
-  if (s === "active") return "Posted";
-  if (s === "draft") return "Draft";
-  if (s === "sold") return "Sold";
-  if (s === "removed") return "Removed";
+  const normalized = String(s || "").trim().toLowerCase();
+  if (normalized === "active" || normalized === "posted") return "Posted";
+  if (normalized === "draft") return "Draft";
+  if (normalized === "sold") return "Sold";
+  if (normalized === "removed") return "Removed";
   return s;
 }
 

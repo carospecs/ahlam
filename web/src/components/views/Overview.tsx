@@ -12,8 +12,12 @@ const statItem: Variants = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, 
 export function Overview({ go, onVehicle }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
   const { vehicles, listings, activity, user, shop } = useData();
   const partsIdentified = listings.length;
-  const activeListings = listings.filter((l: any) => l.status === "Posted" || l.status === "active").length;
-  const soldListings = listings.filter((l: any) => l.status === "Sold");
+  // API responses use friendly labels, while older cached rows may still use
+  // the database enum. Normalize both forms before calculating totals so the
+  // overview never silently shows stale zeroes after an edit.
+  const listingStatus = (l: any) => String(l?.status || "").trim().toLowerCase();
+  const activeListings = listings.filter((l: any) => ["posted", "active"].includes(listingStatus(l))).length;
+  const soldListings = listings.filter((l: any) => listingStatus(l) === "sold");
   const soldTotal = soldListings.reduce((s: number, l: any) => s + (l.price || 0), 0);
   const soldCount = soldListings.length;
 
@@ -27,7 +31,7 @@ export function Overview({ go, onVehicle }: { go: (id: string) => void; onVehicl
   const stats = [
     { icon: Car, label: "Vehicles in inventory", value: String(vehicles.length), delta: vehicles.length > 0 ? null : null, tone: "var(--accent)", nav: "vehicles" },
     { icon: Wrench, label: "Parts identified", value: String(partsIdentified), delta: partsIdentified > 0 ? "+ parts" : null, tone: "var(--muted)", nav: "parts" },
-    { icon: Tag, label: "Active listings", value: String(activeListings), tone: "var(--success)", nav: "parts" },
+    { icon: Tag, label: "Active listings", value: String(activeListings), tone: "var(--success)", nav: "export" },
     { icon: DollarSign, label: "Sold this month", value: soldTotal > 0 ? `$${soldTotal.toLocaleString()}` : "$0", delta: soldCount > 0 ? `${soldCount} parts` : null, tone: "var(--signal)", nav: "analytics" },
   ];
 

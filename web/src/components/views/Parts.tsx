@@ -4,6 +4,7 @@ import React from "react";
 import { Wrench, Car, Send, EllipsisVertical, ChevronRight, CirclePlus, Upload, Tag, X, LoaderCircle, FileSpreadsheet, ImageOff } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge, MarketChip, StatusBadge } from "../UI";
 import { useData, csToast } from "../Dashboard";
+import { statusIs } from "../data";
 
 export function Parts({ go }: { go: (id: string) => void; onVehicle?: (v: any) => void }) {
   const { vehicles, listings } = useData();
@@ -62,7 +63,7 @@ export function Parts({ go }: { go: (id: string) => void; onVehicle?: (v: any) =
           <button style={toolBtn} onClick={() => setShowBulk(true)}>
             <Tag size={15} /> Bulk price
           </button>
-          <button style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 600 }} onClick={() => (window as any).csOpenExport?.(listings.find((l: any) => l.status === "Draft") || listings[0])}>
+          <button style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13.5, fontWeight: 600 }} onClick={() => (window as any).csOpenExport?.(listings.find((l: any) => statusIs(l.status, "draft")) || listings[0])}>
             <Send size={15} /> Post selected
           </button>
         </div>
