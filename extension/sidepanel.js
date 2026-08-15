@@ -163,13 +163,55 @@ function readFile(file) {
   });
 }
 
+// HEIC conversion happens in a sandboxed iframe (sandbox.html): heic2any needs
+// a blob: Web Worker, which the side panel's fixed MV3 CSP forbids. The sandbox
+// page has its own relaxed CSP, so we ship files over postMessage.
+let heicFrame = null;
+let heicFrameLoaded = null;
+const heicPending = new Map();
+let heicSeq = 0;
+
+function heicSandbox() {
+  if (!heicFrame) {
+    heicFrame = document.createElement("iframe");
+    heicFrame.src = "sandbox.html";
+    heicFrame.style.display = "none";
+    heicFrameLoaded = new Promise((resolve, reject) => {
+      heicFrame.onload = () => resolve();
+      heicFrame.onerror = () => reject(new Error("HEIC converter didn't load"));
+    });
+    document.body.appendChild(heicFrame);
+    window.addEventListener("message", (event) => {
+      const data = event.data || {};
+      if (!data.ahlamHeic) return;
+      const pending = heicPending.get(data.id);
+      if (!pending) return;
+      heicPending.delete(data.id);
+      clearTimeout(pending.timer);
+      if (data.ok) pending.resolve(data.blob);
+      else pending.reject(new Error(data.error || "Couldn't convert this HEIC photo"));
+    });
+  }
+  return heicFrameLoaded;
+}
+
+async function convertHeicToJpeg(file) {
+  await heicSandbox();
+  const id = `heic-${++heicSeq}`;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      heicPending.delete(id);
+      reject(new Error("HEIC conversion timed out — try sharing the photo as JPEG instead"));
+    }, 30000);
+    heicPending.set(id, { resolve, reject, timer });
+    heicFrame.contentWindow.postMessage({ id, blob: file }, "*");
+  });
+}
+
 async function jpegDataUrl(file) {
   let source = file;
   if (isHeicFile(file)) {
-    if (typeof window.heic2any !== "function") throw new Error("HEIC converter didn't load");
-    const converted = await window.heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
-    const blob = Array.isArray(converted) ? converted[0] : converted;
-    if (!blob) throw new Error("Couldn't convert this HEIC photo");
+    const blob = await convertHeicToJpeg(file);
     source = new File([blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" });
   }
   const raw = await readFile(source);

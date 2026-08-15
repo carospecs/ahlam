@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<!-- HEIC conversion sandbox. heic2any spins up a Web Worker from a blob: URL,
+     which the fixed MV3 extension-page CSP (script-src 'self') forbids — so it
+     can never run in sidepanel.html directly. Sandboxed extension pages get a
+     configurable CSP (see manifest.json "content_security_policy.sandbox"),
+     so the side panel embeds this page in a hidden iframe and converts HEIC
+     photos through postMessage. -->
+<html>
+  <head><meta charset="utf-8" /></head>
+  <body>
+    <script src="vendor/heic2any.min.js"></script>
+    <script src="sandbox-convert.js"></script>
+  </body>
+</html>

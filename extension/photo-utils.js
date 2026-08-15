@@ -49,5 +49,9 @@
     })[mime] || "img";
   }
 
-  return { MAX_SOURCE_BYTES, cleanMime, isImageMime, estimateDataUrlBytes, inspectDataUrl, extensionForMime };
+  function isHeicMime(value) {
+    return /^image\/(heic|heif)/.test(cleanMime(value));
+  }
+
+  return { MAX_SOURCE_BYTES, cleanMime, isImageMime, estimateDataUrlBytes, inspectDataUrl, extensionForMime, isHeicMime };
 });

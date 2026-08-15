@@ -15,6 +15,10 @@
     "https://*.craigslist.org/*"
   ],
   "background": { "service_worker": "background.js" },
+  "sandbox": { "pages": ["sandbox.html"] },
+  "content_security_policy": {
+    "sandbox": "sandbox allow-scripts; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; worker-src 'self' blob:; child-src 'self' blob:;"
+  },
   "content_scripts": [
     {
       "matches": ["https://ahlam.io/*", "http://localhost/*"],

@@ -91,7 +91,9 @@ async function withPhotoData(listing) {
 
 function initialStatus(channel, listing) {
   if (channel === "offerup") {
-    return { state: "phone_handoff", message: "OfferUp requires its mobile app. Your listing text is copied; continue on your phone.", updatedAt: Date.now() };
+    // Don't promise the clipboard is loaded — the side-panel flow never
+    // copies (only the website and the FB/eBay content scripts do).
+    return { state: "phone_handoff", message: "OfferUp requires its mobile app. Continue on your phone — the listing text is in Ahlam, ready to copy.", updatedAt: Date.now() };
   }
   const skipped = (listing.photoErrors || []).length;
   return {

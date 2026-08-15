@@ -25,12 +25,19 @@
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
   }
-  function buttonByText(pattern) {
-    return [...document.querySelectorAll("button")].find((button) => pattern.test((button.textContent || "").trim()));
+  function buttonByText(pattern, root) {
+    // Scope away eBay's global header (#gh) — it has its own "Search" button
+    // and search input that would otherwise match before the listing form.
+    return [...(root || document).querySelectorAll("button")].find(
+      (button) => !button.closest("#gh") && pattern.test((button.textContent || "").trim()),
+    );
   }
   function imageFile(dataUrl, index) {
     const inspected = AhlamPhotoUtils.inspectDataUrl(dataUrl);
     if (!inspected.ok) return null;
+    // eBay rejects HEIC uploads and content scripts can't convert them (Chrome
+    // has no HEIC decoder) — skip rather than attach a photo that errors out.
+    if (AhlamPhotoUtils.isHeicMime(inspected.mime)) return null;
     try {
       const payload = dataUrl.slice(dataUrl.indexOf(",") + 1).replace(/\s/g, "");
       const binary = atob(payload);
@@ -56,7 +63,14 @@
   // Step 1: seed eBay's catalog/category search.
   if (location.pathname.includes("/sl/prelist/suggest")) {
     showProgress("Ahlam — starting your regular eBay listing…");
-    const title = await waitFor(() => document.querySelector('input[aria-label*="selling" i], input[type="text"]'));
+    // Never fall back to a bare input[type=text]: the first text input in
+    // document order is eBay's site-wide search box in the page header, and
+    // typing there kicks the tab to search results instead of the listing flow.
+    const title = await waitFor(() =>
+      document.querySelector('input[aria-label*="selling" i], input[placeholder*="selling" i]') ||
+      [...document.querySelectorAll('input[type="text"], input:not([type])')].find((el) => !el.closest("#gh")) ||
+      null,
+    );
     if (!title) return window.ahlamShowResult("ebay", "Ahlam couldn't find eBay's listing search. The title is on your clipboard.", false);
     setNativeValue(title, String(L.title || "").slice(0, 80));
     await sleep(200);
