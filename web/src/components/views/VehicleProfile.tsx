@@ -232,7 +232,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
 
   return (
     <div style={{ maxWidth: 1080, display: "grid", gap: 18 }}>
-      {/* Header row: back link on the left, Post car on the top-right corner. */}
+      {/* Header row: keep navigation and the destructive action separate. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <button onClick={onBack} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "var(--muted)", fontSize: 13.5, fontWeight: 600, padding: 0, width: "fit-content" }}><ChevronLeft size={16} /> Back to shop vehicles</button>
         <button onClick={deleteVehicle} disabled={deletingVeh} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 9, border: "1px solid color-mix(in srgb, var(--signal) 45%, transparent)", background: "transparent", color: "var(--signal)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: deletingVeh ? 0.6 : 1 }}>
@@ -249,7 +249,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
               <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{mode.desc}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>Post as:</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>What are you selling?</span>
               <div style={{ display: "inline-flex", gap: 4, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 10, padding: 3 }}>
                 {(["parts", "whole", "both"] as const).map((m) => {
                   const on = pendingMode === m;
@@ -331,9 +331,12 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
       {showCar && (
         <Card pad={18}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Car size={16} color="var(--signal)" /> Whole-car listing</span>
+            <div>
+              <span style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Car size={16} color="var(--signal)" /> Whole-car listing</span>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>This is what buyers see when you sell the complete vehicle.</div>
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>Status</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>Listing status</span>
               <StatusPicker value={vehStatus} onChange={setVehStatus} />
             </div>
           </div>
