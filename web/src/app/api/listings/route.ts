@@ -318,7 +318,13 @@ export async function PATCH(req: Request) {
   }
 
   if (body.status) {
-    const enumStatus = ["draft", "active", "sold"].includes(body.status) ? body.status : null;
+    // Accept both the API enum and the human labels used by older clients.
+    // This keeps a stale browser tab from breaking status edits after the UI
+    // was updated from Draft/Posted/Sold to draft/active/sold.
+    const normalizedStatus = String(body.status).trim().toLowerCase();
+    const enumStatus = normalizedStatus === "posted" ? "active"
+      : ["draft", "active", "sold"].includes(normalizedStatus) ? normalizedStatus
+      : null;
     if (!enumStatus) return NextResponse.json({ error: "Valid vehicle status required (draft/active/sold)" }, { status: 400 });
     vehUpdate.status = enumStatus;
   }
