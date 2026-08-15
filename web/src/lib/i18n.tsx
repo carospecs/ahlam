@@ -19,6 +19,7 @@ const SEED: Record<string, string> = {
   "Parts posted": "Piezas publicadas", "Add vehicle / parts": "Añadir vehículo / piezas",
   "Interchange": "Intercambio", "Analytics": "Analíticas", "AI assistant": "Asistente IA",
   "Export & posting": "Exportar y publicar", "Messages": "Mensajes", "Sign out": "Cerrar sesión",
+  "Post to eBay & Facebook": "Publicar en eBay y Facebook", "Help & how-to": "Ayuda y guía", "Ask us anything": "Pregúntanos lo que sea",
   "Language": "Idioma", "Dark mode": "Modo oscuro", "Light mode": "Modo claro",
   "Your shop at a glance": "Tu taller de un vistazo",
   "Good": "Bueno", "Poor": "Malo", "Draft": "Borrador", "Posted": "Publicado", "Sold": "Vendido",

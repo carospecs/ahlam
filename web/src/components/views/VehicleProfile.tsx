@@ -200,7 +200,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { csToast(d.error || "Couldn't save"); }
-      else { csToast(d.titleSkipped ? "Saved (title needs migration 0015)" : "Changes saved"); (window as any).csReloadData?.(); }
+      else { csToast(d.titleSkipped ? "Saved — the new title will show after our next update. Your info is safe." : "Changes saved"); (window as any).csReloadData?.(); }
     } catch { csToast("Couldn't save — check your connection"); }
     setSavingVeh(false);
   }

@@ -87,3 +87,12 @@ export async function fileToJpegDataUrl(file: File, maxDim = 1600, quality = 0.8
     throw error;
   }
 }
+
+// True for errors thrown in this module whose message is already written for
+// the seller. Call sites should show it verbatim instead of collapsing it into
+// a generic "check your connection" toast (which points people at the wrong
+// fix when the real problem is one unconvertible photo).
+export function photoErrorMessage(error: unknown): string | null {
+  const msg = error instanceof Error ? error.message : "";
+  return /photo|HEIC/i.test(msg) ? msg : null;
+}

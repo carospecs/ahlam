@@ -4,13 +4,13 @@ import { useState, useEffect, useRef, createContext, useContext, useSyncExternal
 import {
   LayoutDashboard, Store, Car, Wrench, CirclePlus, Images, Sparkles,
   MessageSquare, X, Menu, Bell, Plus, Search, ChevronsUpDown, LogOut,
-  Check, CircleCheck, Send, PencilLine, Tag, ShoppingBag,
+  Check, CircleCheck, CircleAlert, Send, PencilLine, Tag, ShoppingBag,
   Globe, ChevronDown, User, Users, CreditCard, Download, Share2,
   CheckCheck, Info, Copy, ExternalLink, ChevronLeft, ChevronRight, LoaderCircle,
   Sun, Moon, TrendingUp, BookOpen, FolderClosed, MapPin, Trash2, Maximize2,
 } from "lucide-react";
 import { armAudio, playMessageChime } from "@/lib/notifySound";
-import { fileToJpegDataUrl } from "@/lib/image";
+import { fileToJpegDataUrl, photoErrorMessage } from "@/lib/image";
 import { buildListingText, buildVehicleText, partsForVehicle } from "./data";
 import { Overview } from "./views/Overview";
 import { Vehicles } from "./views/Vehicles";
@@ -46,7 +46,8 @@ export function useData() { return useContext(DataContext); }
 const NAV = [
   { section: "Sell" }, // primary: home, the headline value (post + measure), and the market
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "export", label: "Export & posting", icon: Send },
+  // Plain words over jargon: this is where listings actually reach buyers.
+  { id: "export", label: "Post to eBay & Facebook", icon: Send },
   { id: "analytics", label: "Analytics", icon: TrendingUp },
   { id: "browse", label: "Browse market", icon: Store },
   { section: "Business" }, // run the shop: buyers, deals, ops
@@ -135,6 +136,12 @@ function Sidebar({ active, onNav, onSignOut, open, onClose }: {
         })}
       </nav>
       <div style={{ marginTop: "auto", display: "grid", gap: 12 }}>
+        <a href="/guidance" target="_blank" rel="noopener noreferrer" style={{ ...sx.signout, color: "var(--foreground)", textDecoration: "none" }}>
+          <BookOpen size={16} /> {t("Help & how-to")}
+        </a>
+        <a href={`mailto:mohammadabbas@ahlam.io,andygarcia@ahlam.io?subject=${encodeURIComponent("Ahlam question")}`} style={{ ...sx.signout, textDecoration: "none" }}>
+          <MessageSquare size={16} /> {t("Ask us anything")}
+        </a>
         <button style={sx.signout} onClick={onSignOut}><LogOut size={16} /> {t("Sign out")}</button>
         <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ display: "block", textAlign: "center", marginTop: 8, fontSize: 11.5, color: "var(--muted)", textDecoration: "none" }}>{t("Privacy Policy")}</a>
       </div>
@@ -264,8 +271,12 @@ const VIEWS: Record<string, React.ComponentType<any>> = {
   "deleted-chats": DeletedChats,
 };
 
-let toastFn: (msg: string) => void = () => {};
-export function csToast(msg: string) { toastFn(msg); }
+type ToastOpts = { kind?: "success" | "error"; sticky?: boolean };
+let toastFn: (msg: string, opts?: ToastOpts) => void = () => {};
+// Failure toasts stay on screen until dismissed — older users read slowly, and
+// a vanished error reads as success. "Couldn't…"-style wording is auto-detected
+// so existing call sites get error treatment without changes.
+export function csToast(msg: string, opts?: ToastOpts) { toastFn(msg, opts); }
 
 // ---------------------------------------------------------------------------
 // Thread targeting: the bell (or a notification) asks Messages to open one
@@ -287,22 +298,35 @@ export function csConsumePendingThread(side: "selling" | "buying"): string | nul
 }
 
 function ToastHost() {
-  const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([]);
+  const [toasts, setToasts] = useState<{ id: number; msg: string; kind: "success" | "error"; sticky: boolean }[]>([]);
   const seq = useRef(0);
   useEffect(() => {
-    toastFn = (text: string) => {
+    toastFn = (text: string, opts?: ToastOpts) => {
       const id = ++seq.current;
-      setToasts((t) => [...t, { id, msg: text }].slice(-4)); // cap the stack at 4
-      setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2600);
+      const kind = opts?.kind ?? (/^(couldn|can['’]?t|failed|error|no )/i.test(text) ? "error" : "success");
+      const sticky = opts?.sticky ?? kind === "error";
+      setToasts((t) => [...t, { id, msg: text, kind, sticky }].slice(-4)); // cap the stack at 4
+      if (!sticky) setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
     };
   }, []);
   if (toasts.length === 0) return null;
   return (
     <div style={mx.toastStack}>
       {toasts.map((t) => (
-        <div key={t.id} style={mx.toast} className="fade-up">
-          <CircleCheck size={17} color="var(--success)" style={{ flexShrink: 0 }} />
+        <div key={t.id} style={{ ...mx.toast, ...(t.kind === "error" ? { border: "1px solid var(--danger)" } : {}) }} className="fade-up">
+          {t.kind === "error"
+            ? <CircleAlert size={17} color="var(--danger)" style={{ flexShrink: 0 }} />
+            : <CircleCheck size={17} color="var(--success)" style={{ flexShrink: 0 }} />}
           {t.msg}
+          {t.sticky && (
+            <button
+              aria-label="Dismiss"
+              onClick={() => setToasts((all) => all.filter((x) => x.id !== t.id))}
+              style={{ display: "grid", placeItems: "center", width: 28, height: 28, marginLeft: 4, border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", flexShrink: 0 }}
+            >
+              <X size={15} />
+            </button>
+          )}
         </div>
       ))}
     </div>
@@ -536,14 +560,19 @@ function ExportModal() {
     setUploading(true);
     try {
       // Normalize every photo to a downscaled JPEG data URL — converts iPhone
-      // HEIC/HEIF so it isn't stored mislabeled as JPEG.
-      const b64s = await Promise.all(arr.map((f) => fileToJpegDataUrl(f)));
+      // HEIC/HEIF so it isn't stored mislabeled as JPEG. Convert per-photo so
+      // one bad file skips with an explanation instead of failing the batch.
+      const settled = await Promise.allSettled(arr.map((f) => fileToJpegDataUrl(f)));
+      const b64s = settled.filter((s): s is PromiseFulfilledResult<string> => s.status === "fulfilled").map((s) => s.value);
+      const firstFail = settled.find((s) => s.status === "rejected") as PromiseRejectedResult | undefined;
+      if (!b64s.length) { csToast(photoErrorMessage(firstFail?.reason) || "Couldn't prepare these photos"); setUploading(false); return; }
+      if (firstFail) csToast(photoErrorMessage(firstFail.reason) || "Some photos couldn't be converted and were skipped");
       const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId: listing.id, photosBase64: b64s }) });
       if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't upload photo"); setUploading(false); return; }
       setListing((prev: any) => ({ ...prev, image: b64s[0] })); // optimistic preview
       csToast("Photo added");
       (window as any).csReloadData?.();
-    } catch { csToast("Couldn't upload photo"); }
+    } catch (e) { csToast(photoErrorMessage(e) || "Couldn't upload photo"); }
     setUploading(false);
   }
   function copy() { try { navigator.clipboard?.writeText(text); } catch {} setCopied(true); setTimeout(() => setCopied(false), 1800); csToast("Listing text copied"); }
@@ -938,11 +967,12 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [data, setData] = useState<any>({ role: "seller", user: {}, shop: {}, vehicles: [], listings: [], threads: [], activity: [] });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const reload = () => fetch("/api/data")
-    .then((r) => r.json())
-    .then((d) => { setData(d); setLoading(false); })
-    .catch(() => setLoading(false));
+    .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+    .then((d) => { setData(d); setLoadError(false); setLoading(false); })
+    .catch(() => { setLoadError(true); setLoading(false); });
 
   useEffect(() => { reload(); }, []);
   // Let views (e.g. Add vehicle) trigger a data refresh after they save.
@@ -1001,6 +1031,25 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   // account loads, which is every brand-new signup.
   useEffect(() => { (window as any).csGoMessages = () => navTo("messages"); }, []);
 
+  // A failed fetch must never fall through to CreateShopGate — an established
+  // owner on flaky yard Wi-Fi would be told to "set up your shop" again.
+  if (!loading && loadError && !data.user?.shopId) {
+    return (
+      <div style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: 24 }}>
+        <div style={{ textAlign: "center", maxWidth: 420, display: "grid", gap: 14, justifyItems: "center" }}>
+          <CircleAlert size={34} color="var(--danger)" />
+          <h2 style={{ margin: 0, fontSize: 20 }}>We couldn&apos;t load your shop</h2>
+          <p style={{ margin: 0, fontSize: 15, color: "var(--muted)" }}>Check your internet connection, then try again. Your listings are safe.</p>
+          <button
+            onClick={() => { setLoading(true); setLoadError(false); reload(); }}
+            style={{ padding: "12px 26px", fontSize: 15, fontWeight: 600, borderRadius: 12, border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer" }}
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (!loading && !data.user?.shopId) {
     return <CreateShopGate user={data.user} onDone={() => { setLoading(true); reload(); }} onSignOut={onSignOut} />;
   }

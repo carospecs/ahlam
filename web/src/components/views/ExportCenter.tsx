@@ -18,7 +18,7 @@ import { Card, PhotoCell, ConditionBadge, SellModeBadge } from "../UI";
 import { buildListingText, buildVehicleText, statusIs } from "../data";
 import { useData, csToast } from "../Dashboard";
 import { WARRANTY_DAYS, effectiveWarranty, warrantyLabel } from "@/lib/warranty";
-import { fileToJpegDataUrl } from "@/lib/image";
+import { fileToJpegDataUrl, photoErrorMessage } from "@/lib/image";
 import { prepareChannelsFor } from "@/lib/plan-limits";
 import { EXTENSION_URL } from "@/lib/extension";
 
@@ -36,7 +36,7 @@ const LIVE_CHANNELS = PREPARE_CHANNELS.filter((c) => !c.soon);
 
 // One shared message for every plan-locked cross-post surface. Generic on
 // purpose: it covers both Growth (eBay-only) and an expired free month.
-const LOCKED_CHANNEL_MSG = "This channel isn't included in your current plan. Upgrade under Settings > Billing.";
+const LOCKED_CHANNEL_MSG = "This channel isn't included in your current plan. Tap your name (top right) and choose Billing to upgrade.";
 
 // Detect the Ahlam Auto-Poster browser extension (it sets this attribute on
 // ahlam.io). Polls briefly because the content script can land after mount.
@@ -111,8 +111,16 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
   const [advanced, setAdvanced] = React.useState(false);
   const advRef = React.useRef<HTMLDivElement>(null);
   // Which vehicle groups are expanded. Default collapsed so it reads as a clean
-  // list of vehicles; click a vehicle to reveal its parts.
+  // list of vehicles; click a vehicle to reveal its parts. Small yards (≤3
+  // vehicles) start fully open — a page of closed rows looks empty and hides
+  // the "List on eBay" buttons that are the whole point.
   const [openGroups, setOpenGroups] = React.useState<Set<string>>(new Set());
+  const autoOpened = React.useRef(false);
+  React.useEffect(() => {
+    if (autoOpened.current || groups.length === 0 || groups.length > 3) return;
+    autoOpened.current = true;
+    setOpenGroups(new Set(groups.map((g) => g.key)));
+  }, [groups]);
   const toggleGroup = (key: string) => setOpenGroups((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   // "Post elsewhere" prep sheet (text + photos, shown before opening the marketplace).
@@ -304,7 +312,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
         {ebay && !ebay.configured && (
           <div style={{ display: "flex", gap: 8, fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, background: "var(--surface2)", borderRadius: 10, padding: "11px 14px" }}>
             <Info size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-            <span>Add <code>EBAY_CLIENT_ID</code>, <code>EBAY_CLIENT_SECRET</code> and <code>EBAY_REDIRECT_URI</code> in your environment, then redeploy. See the setup guide.</span>
+            <span>eBay posting isn&apos;t switched on for this site yet — email us at andygarcia@ahlam.io and we&apos;ll turn it on for you.</span>
           </div>
         )}
         {ebay?.configured && !ebay.connected && (
@@ -633,14 +641,19 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
     try {
       // Normalize every photo to a downscaled JPEG data URL — converts iPhone
       // HEIC/HEIF so it isn't stored mislabeled as JPEG (these feed eBay/export).
-      const b64s = await Promise.all(arr.map((f) => fileToJpegDataUrl(f)));
+      // Convert per-photo so one bad file skips instead of failing the batch.
+      const settled = await Promise.allSettled(arr.map((f) => fileToJpegDataUrl(f)));
+      const b64s = settled.filter((s): s is PromiseFulfilledResult<string> => s.status === "fulfilled").map((s) => s.value);
+      const firstFail = settled.find((s) => s.status === "rejected") as PromiseRejectedResult | undefined;
+      if (!b64s.length) { csToast(photoErrorMessage(firstFail?.reason) || "Couldn't prepare these photos"); setUploading(false); return; }
+      if (firstFail) csToast(photoErrorMessage(firstFail.reason) || "Some photos couldn't be converted and were skipped");
       const payload = isCar ? { vehicleId: entity.id, photosBase64: b64s } : { listingId: entity.id, photosBase64: b64s };
       const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't upload photo"); setUploading(false); return; }
       setExtraPhotos((p) => [...p, ...b64s]);
       csToast("Photo added");
       (window as any).csReloadData?.();
-    } catch { csToast("Couldn't upload photo"); }
+    } catch (e) { csToast(photoErrorMessage(e) || "Couldn't upload photo"); }
     setUploading(false);
   }
 
@@ -849,7 +862,25 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
   const chosenStatuses = [...selected].map((key) => ({ key, status: postStatuses[key] })).filter((row) => row.status);
   const stillWorking = chosenStatuses.some((row) => row.status.state === "preparing" || row.status.state === "opening");
   const completed = runStarted && chosenStatuses.length === selected.size && !stillWorking;
-  const startDisabled = ext && (selected.size === 0 || readinessMissing.length > 0 || runStarted);
+  // Disable only while channels are actively reporting — never permanently.
+  // A closed marketplace tab or a dead content script would otherwise leave
+  // this spinner (and the disabled button) stuck until the panel is reopened.
+  const startDisabled = ext && (selected.size === 0 || readinessMissing.length > 0 || stillWorking);
+
+  // Watchdog: a channel that never reports back gets marked so the seller can
+  // retry instead of watching "Preparing…" forever.
+  React.useEffect(() => {
+    if (!stillWorking) return;
+    const timer = setTimeout(() => {
+      setPostStatuses((prev) => Object.fromEntries(Object.entries(prev).map(([k, s]) => [
+        k,
+        s.state === "preparing" || s.state === "opening"
+          ? { state: "needs_help" as const, message: "No response from that marketplace tab. Make sure it stayed open, or press Start again." }
+          : s,
+      ])));
+    }, 90000);
+    return () => clearTimeout(timer);
+  }, [stillWorking]);
 
   return (
     <Portal><div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 18 }}>
@@ -863,7 +894,7 @@ function PreparePanel({ data, shop, onClose, onSavePhotos }: { data: PrepareStat
 
         {/* Full post preview — photo (click the empty box to upload), title, price, … */}
         <div style={{ padding: "12px 16px 0" }}>
-          <input ref={upRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files) uploadPhotos(e.target.files); e.target.value = ""; }} />
+          <input ref={upRef} type="file" accept="image/*,.heic,.heif" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files) uploadPhotos(e.target.files); e.target.value = ""; }} />
           {valid.length > 0 ? (
             <div style={{ display: "grid", gap: 6 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}

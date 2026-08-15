@@ -216,7 +216,16 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
         onLogin();
       } else {
         const { error: signInErr } = await sb.auth.signInWithPassword({ email, password });
-        if (signInErr) { setError(signInErr.message); setBusy(false); return; }
+        if (signInErr) {
+          // Raw Supabase strings ("Invalid login credentials") read as computer-
+          // speak to shop owners — translate the common ones.
+          const friendly = /invalid login credentials/i.test(signInErr.message)
+            ? "That email and password don't match. Check for typos, or use \"Forgot?\" below to reset your password."
+            : /email not confirmed/i.test(signInErr.message)
+              ? "This email hasn't been verified yet. Check your inbox for the code we sent you."
+              : signInErr.message;
+          setError(friendly); setBusy(false); return;
+        }
         onLogin();
       }
     } catch {
@@ -393,7 +402,7 @@ const lx: Record<string, React.CSSProperties> = {
   formTitle: { margin: "8px 0 0", fontSize: 24, fontWeight: 700, letterSpacing: "-0.01em" },
   formSub: { margin: "8px 0 0", color: "var(--muted)", fontSize: 14, lineHeight: 1.5 },
   fieldRow: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  forgot: { color: "var(--muted)", fontSize: 12.5, textDecoration: "none" },
+  forgot: { color: "var(--accent)", fontSize: 14, fontWeight: 600, textDecoration: "none", padding: "4px 6px" },
   inputWrap: { display: "flex", alignItems: "center", gap: 10, padding: "0 14px", background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 12 },
   input: { flex: 1, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 15, padding: "13px 0" },
   cta: { marginTop: 4, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, width: "100%", border: "none", borderRadius: 12, background: "var(--accent)", color: "#fff", fontSize: 15, fontWeight: 600, padding: "13px 0", transition: "background 0.15s" },

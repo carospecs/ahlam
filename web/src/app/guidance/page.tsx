@@ -18,8 +18,10 @@ type Lang = "en" | "es";
 // Set these to the published video URLs (YouTube embed, Mux, or Blob mp4) once
 // the EN/ES tutorials are produced. Leave null to show the "coming soon" slot.
 const VIDEOS: Record<Lang, string | null> = {
-  en: null,
-  es: null,
+  // The 60-second explainer is caption-driven (no narration), so it works for
+  // both languages until the narrated tutorials are produced.
+  en: "/video/ahlam-demo-16x9.mp4",
+  es: "/video/ahlam-demo-16x9.mp4",
 };
 
 const COPY: Record<Lang, {
@@ -129,7 +131,16 @@ export default function GuidancePage() {
           <Reveal>
             <div className="cs-eyebrow" style={{ marginBottom: 14 }}>{t.watch}</div>
             <div style={{ position: "relative", aspectRatio: "16 / 9", borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--line)", background: "var(--card)" }}>
-              {video ? (
+              {video && video.endsWith(".mp4") ? (
+                <video
+                  src={video}
+                  poster="/video/ahlam-demo-poster.jpg"
+                  controls
+                  playsInline
+                  preload="metadata"
+                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              ) : video ? (
                 <iframe
                   src={video}
                   title={t.watch}

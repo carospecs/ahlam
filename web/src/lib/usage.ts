@@ -198,7 +198,7 @@ export async function effectiveShopPlan(db: AdminDb, shopId: string): Promise<st
 /** A friendly limit message for an over-quota response. */
 export function limitMessage(kind: UsageKind, limit: number, plan?: string | null): string {
   if (limit <= 0) {
-    return "Your free month has ended. Pick a plan under Settings > Billing to keep going.";
+    return "Your free month has ended. Pick a plan to keep going.";
   }
   const label =
     kind === "scan" ? `${limit} AI car scan${limit === 1 ? "" : "s"} this month`

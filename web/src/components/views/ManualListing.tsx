@@ -4,7 +4,7 @@ import React from "react";
 import { ArrowLeft, Upload, Camera, X, Sparkles, ScanLine, Check, Car, Wrench, Info, ChevronDown, ScanSearch, LoaderCircle } from "lucide-react";
 import { Card } from "../UI";
 import { csToast } from "../Dashboard";
-import { looksLikeImage, normalizeImageFile, fileToJpegDataUrl } from "@/lib/image";
+import { looksLikeImage, normalizeImageFile, fileToJpegDataUrl, photoErrorMessage } from "@/lib/image";
 
 interface Photo { url: string; name: string; file: File }
 const MAX_PHOTOS = 8;
@@ -54,6 +54,9 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
   const [selParts, setSelParts] = React.useState<Set<string>>(new Set());
   // busy
   const [busy, setBusy] = React.useState<null | "scan" | "write" | "vin" | "save">(null);
+  // A 402 (expired free month / plan cap) must be impossible to miss: the old
+  // 2.6s toast let sellers walk away believing the car was posted.
+  const [quotaMsg, setQuotaMsg] = React.useState<string | null>(null);
 
   const fileRef = React.useRef<HTMLInputElement>(null);
 
@@ -176,11 +179,16 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
       }
       const res = await fetch("/api/listings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const d = await res.json();
-      if (!res.ok) { csToast(d.error || "Couldn't save — try again"); setBusy(null); return; }
+      if (!res.ok) {
+        if (res.status === 402) setQuotaMsg(d.error || "Your current plan doesn't allow posting right now.");
+        else csToast(d.error || "Couldn't save — try again", { kind: "error" });
+        setBusy(null);
+        return;
+      }
       csToast(draft ? "Saved as draft" : kind === "car" ? "Car posted to the market" : "Part posted to the market");
       (window as any).csReloadData?.();
       go(kind === "car" ? "vehicles" : "parts");
-    } catch { csToast("Couldn't save — check your connection"); setBusy(null); }
+    } catch (e) { csToast(photoErrorMessage(e) || "Couldn't save — check your connection"); setBusy(null); }
   }
 
   const isCar = kind === "car";
@@ -326,6 +334,12 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
           <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} /><span>Everything here is editable. AI helpers just give you a starting point — nothing posts until you hit save.</span>
         </div>
 
+        {quotaMsg && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", border: "1px solid var(--danger)", background: "color-mix(in srgb, var(--danger) 8%, transparent)", borderRadius: 12, padding: "14px 16px" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 600, flex: 1, minWidth: 200 }}>{quotaMsg} Everything you typed is still here — pick a plan, then press Post again.</span>
+            <button onClick={() => go("billing")} style={{ padding: "10px 18px", borderRadius: 11, border: "none", background: "var(--danger)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Choose a plan</button>
+          </div>
+        )}
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
           <button onClick={() => save(true)} disabled={!!busy} style={navBtn}>{busy === "save" ? <LoaderCircle size={15} className="spin" /> : null} Save as draft</button>
           <button onClick={() => save(false)} disabled={!!busy} className="cs-raise" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 11, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: busy ? 0.7 : 1 }}>{busy === "save" ? <LoaderCircle size={16} className="spin" /> : <Check size={16} />} {isCar ? "Post car" : "Post part"}</button>

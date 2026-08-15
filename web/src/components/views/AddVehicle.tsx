@@ -5,7 +5,7 @@ import { ImageUp, Upload, ScanLine, Sparkles, Check, Info, CircleCheck, Car, Wre
 import { Card, PhotoCell, ConditionBadge } from "../UI";
 import { SELL_MODE } from "../data";
 import { csToast } from "../Dashboard";
-import { looksLikeScannable, isPdf, normalizeImageFile, fileToJpegDataUrl, fileToAIDataUrl } from "@/lib/image";
+import { looksLikeScannable, isPdf, normalizeImageFile, fileToJpegDataUrl, fileToAIDataUrl, photoErrorMessage } from "@/lib/image";
 import { playSonarPing } from "@/lib/sound";
 import { ManualListing } from "./ManualListing";
 import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, addScanSlot, removeScanSlot, finishScanSlot, useScanSlots, useScanPhases, PRIMARY_SLOT, type ScanSession } from "@/lib/scanSession";
@@ -282,7 +282,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
 
   return (
     <div style={{ display: "grid", gap: 34 }}>
-      <ScanCredits />
+      <ScanCredits onUpgrade={() => go("billing")} />
       {slots.map((k, i) => <CarScanner key={k} slot={k} isPrimary={i === 0} go={go} />)}
       {/* Queue another car — a fresh, independent scanner right below this one */}
       {anyBusy && (
@@ -301,7 +301,7 @@ export function AddVehicle({ go }: { go: (id: string) => void; onVehicle?: (v: a
 // "X car scans left this month" — live quota ticker for capped plans. Refetches
 // whenever any scan starts/finishes (a finished scan was just metered). Hidden
 // on unlimited plans and while the endpoint is unavailable.
-function ScanCredits() {
+function ScanCredits({ onUpgrade }: { onUpgrade?: () => void }) {
   const phases = useScanPhases();
   const [q, setQ] = React.useState<{ used: number; limit: number | null; remaining: number | null; planLabel?: string } | null>(null);
   React.useEffect(() => {
@@ -322,9 +322,14 @@ function ScanCredits() {
         style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700, color: tone, background: `color-mix(in srgb, ${tone} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${tone} 35%, transparent)`, borderRadius: 999, padding: "6px 13px" }}>
         <Sparkles size={13} />
         {out
-          ? `0 of ${q.limit} car scans left this month — upgrade in Settings › Billing`
+          ? `0 of ${q.limit} car scans left this month`
           : `${q.remaining} of ${q.limit} car scan${q.remaining === 1 ? "" : "s"} left this month`}
         {q.planLabel ? <span style={{ fontWeight: 500, color: "var(--muted)" }}>· {q.planLabel}</span> : null}
+        {out && onUpgrade && (
+          <button onClick={onUpgrade} style={{ marginLeft: 4, padding: "5px 12px", borderRadius: 999, border: "none", background: "var(--danger)", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+            Get more scans
+          </button>
+        )}
       </span>
     </div>
   );
@@ -649,7 +654,7 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
 
     } catch (e) {
       if (!isScanRun(myToken, slot)) return; // cancelled / superseded
-      setError("We couldn't reach the analysis server. Check your connection and try again.");
+      setError(photoErrorMessage(e) || "We couldn't reach the analysis server. Check your connection and try again.");
       setPhase("error");
     }
   }
@@ -894,6 +899,9 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
   const anyAiPriced = parts.some((p) => (p._aiPrice || 0) > 0);
 
   const [savingKind, setSavingKind] = React.useState<"post" | "draft" | null>(null);
+  // A 402 (expired free month / plan cap) gets a persistent panel with a way
+  // to fix it — a brief toast reads as success to someone who looked away.
+  const [quotaMsg, setQuotaMsg] = React.useState<string | null>(null);
   // Persist the reviewed vehicle + parts, then reload data and jump to the list.
   // draft=true keeps everything private (status 'draft'), nothing posted to the market.
   async function save(draft = false) {
@@ -931,16 +939,23 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
       };
       const res = await fetch("/api/listings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const d = await res.json();
-      if (!res.ok) { csToast(d.error || "Couldn't save. Try again"); setSaving(false); setSavingKind(null); return; }
-      const dest = sellMode === "whole" ? "vehicles" : "parts";
+      if (!res.ok) {
+        if (res.status === 402) setQuotaMsg(d.error || "Your current plan doesn't allow posting right now.");
+        else csToast(d.error || "Couldn't save. Try again", { kind: "error" });
+        setSaving(false); setSavingKind(null); return;
+      }
+      // After a real (non-draft) parts save, land on the cross-posting screen —
+      // "posted" only covers the Ahlam market, and sellers who stop here never
+      // reach eBay/Facebook where their buyers actually are.
+      const dest = sellMode === "whole" ? "vehicles" : draft ? "parts" : "export";
       csToast(draft
         ? "Saved as draft, not posted yet"
-        : sellMode === "whole" ? "Vehicle saved and posted to the market" : `Saved. ${d.listings} part${d.listings === 1 ? "" : "s"} posted`);
+        : sellMode === "whole" ? "Vehicle saved and posted to the market" : `Saved. ${d.listings} part${d.listings === 1 ? "" : "s"} on the Ahlam market — next, post them to eBay & Facebook`);
       (window as any).csReloadData?.();
       finishScanSlot(slot); // posted/saved — queue slots leave; primary resets
       go(dest);
-    } catch {
-      csToast("Couldn't save. Check your connection");
+    } catch (e) {
+      csToast(photoErrorMessage(e) || "Couldn't save. Check your connection", { kind: "error" });
       setSaving(false);
       setSavingKind(null);
     }
@@ -1073,7 +1088,7 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
                   {isPdf(f.file) ? (
                     <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", gap: 4, background: "var(--surface2)", padding: 6, textAlign: "center" }}>
                       <FileText size={22} color="var(--accent)" />
-                      <span style={{ fontSize: 9.5, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{f.name}</span>
+                      <span style={{ fontSize: 12, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{f.name}</span>
                     </div>
                   ) : (
                     /* eslint-disable-next-line @next/next/no-img-element */
@@ -1471,17 +1486,17 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
                           if (!edited && (price === 0 || rounded === price)) return null;
                           return (
                             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                              {edited && <span className="tnum" style={{ fontSize: 10, color: "var(--muted)" }}>AI: ${p._aiPrice!.toLocaleString()}</span>}
+                              {edited && <span className="tnum" style={{ fontSize: 12, color: "var(--muted)" }}>AI: ${p._aiPrice!.toLocaleString()}</span>}
                               {edited && (
                                 <button onClick={() => setPartPrice(p._id!, String(p._aiPrice))} title="Reset to the AI's suggestion" style={{ width: 20, height: 20, borderRadius: 6, border: "1px solid var(--line)", background: "transparent", display: "grid", placeItems: "center", cursor: "pointer" }}><RotateCcw size={11} color="var(--muted)" /></button>
                               )}
                               {price > 0 && rounded !== price && (
-                                <button onClick={() => setPartPrice(p._id!, String(rounded))} title="Round to a yard-friendly figure" className="tnum" style={{ padding: "2px 8px", borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", fontSize: 10.5, fontWeight: 600, cursor: "pointer" }}>≈ ${rounded.toLocaleString()}</button>
+                                <button onClick={() => setPartPrice(p._id!, String(rounded))} title="Round to a yard-friendly figure" className="tnum" style={{ padding: "2px 8px", borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>≈ ${rounded.toLocaleString()}</button>
                               )}
                             </div>
                           );
                         })()}
-                        {sellMode === "both" && <span style={{ fontSize: 10, color: "var(--muted)" }}>suggested</span>}
+                        {sellMode === "both" && <span style={{ fontSize: 12, color: "var(--muted)" }}>suggested</span>}
                         {p.pricingInsight && (() => {
                           const ins = p.pricingInsight!;
                           const LBL: Record<string, string> = { shop: "Sold comps", grounded: "Market data", ebay: "eBay listings", asking: "Active asking", model: "AI estimate", formula: "AI estimate", market: "Live market comps" };
@@ -1493,16 +1508,16 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
                           const engine = ins.pricedBy === "claude-market" ? " · researched live" : ins.pricedBy === "claude" ? " · market model" : ins.pricedBy ? " · fallback estimate" : "";
                           return (
                             <>
-                              <span title={`${label} · ${ins.confidence || "low"} confidence${engine}`} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap" }}>
+                              <span title={`${label} · ${ins.confidence || "low"} confidence${engine}`} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap" }}>
                                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, flexShrink: 0 }} />{label}
                               </span>
                               {ins.source === "market" && n > 0 && (
-                                <span title={(ins.sources || []).join(", ")} style={{ fontSize: 10, color: "var(--muted)", whiteSpace: "nowrap", textAlign: "right" }}>
+                                <span title={(ins.sources || []).join(", ")} style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", textAlign: "right" }}>
                                   {n} comp{n === 1 ? "" : "s"}{ins.sources?.length ? ` · ${ins.sources.slice(0, 2).join(", ")}` : ""}
                                 </span>
                               )}
                               {em > 0 && (
-                                <span style={{ fontSize: 10, color: "var(--muted)", whiteSpace: "nowrap", textAlign: "right" }}>
+                                <span style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", textAlign: "right" }}>
                                   Selling on eBay ~${em.toLocaleString()}{n ? ` · ${n} listings` : ""}
                                 </span>
                               )}
@@ -1534,6 +1549,12 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
                 </div>
               )}
             </div>
+            {quotaMsg && (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", border: "1px solid var(--danger)", background: "color-mix(in srgb, var(--danger) 8%, transparent)", borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
+                <span style={{ fontSize: 14.5, fontWeight: 600, flex: 1, minWidth: 200 }}>{quotaMsg} Your scan is still here — pick a plan, then press Save again.</span>
+                <button onClick={() => go("billing")} style={{ padding: "10px 18px", borderRadius: 11, border: "none", background: "var(--danger)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Choose a plan</button>
+              </div>
+            )}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button style={navBtn} onClick={() => setPhase("upload")}><ArrowLeft size={15} /> Edit photos</button>
               <button style={{ ...navBtn, opacity: saving ? 0.7 : 1 }} disabled={saving} onClick={() => save(true)}>{savingKind === "draft" ? <ScanLine size={15} className="spin" /> : <FileText size={15} />} {savingKind === "draft" ? "Saving…" : "Save as draft"}</button>
@@ -1667,7 +1688,7 @@ function PriceBand({ low, high, value, confidence, onChange }: { low: number; hi
         <div style={{ position: "absolute", top: 6.5, left: 0, right: 0, height: 3, borderRadius: 2, background: `color-mix(in srgb, ${color} 30%, var(--line))` }} />
         <div style={{ position: "absolute", top: 3, left: `calc(${(frac * 100).toFixed(1)}% - 5px)`, width: 10, height: 10, borderRadius: "50%", background: color, boxShadow: "0 0 0 2px var(--surface)", pointerEvents: "none" }} />
       </div>
-      <div className="tnum" style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--muted)", lineHeight: 1 }}>
+      <div className="tnum" style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--muted)", lineHeight: 1 }}>
         <span>${low.toLocaleString()}</span>
         <span>${high.toLocaleString()}</span>
       </div>
