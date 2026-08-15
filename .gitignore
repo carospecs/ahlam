@@ -56,3 +56,7 @@ coverage/
 .vercel/
 .vercel
 scripts/.cache/
+
+# Demo-account provisioning inputs/outputs hold real passwords — never commit.
+scripts/demo-shops.csv
+scripts/demo-credentials.csv
