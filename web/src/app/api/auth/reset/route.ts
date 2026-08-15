@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 /**
  * POST /api/auth/reset  Body: { email }
- * Emails a 6-digit recovery code through our own SMTP (branded, instead of
+ * Emails the recovery code through our own SMTP (branded, instead of
  * Supabase's default mailer). The client confirms it with
  * verifyOtp({ type: "recovery" }) and then sets the new password.
  * Always answers ok so the endpoint can't be used to probe which emails exist.
