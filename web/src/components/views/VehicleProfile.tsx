@@ -39,7 +39,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
   const [vehPrice, setVehPrice] = React.useState<string>(v.askingPrice != null ? String(v.askingPrice) : "");
   // What the yard paid for the car — private, drives the profit dashboard.
   const [vehCost, setVehCost] = React.useState<string>(v.acquisitionCost != null ? String(v.acquisitionCost) : "");
-  const [vehStatus, setVehStatus] = React.useState<string>(v.status || "Draft");
+  const [vehStatus, setVehStatus] = React.useState<string>(uiStatus(v.status));
   const [savingVeh, setSavingVeh] = React.useState(false);
 
   const mode = SELL_MODE[sellMode];
@@ -157,7 +157,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
   // Local form state for each open part panel.
   const [editForm, setEditForm] = React.useState<Record<string, { name: string; price: string; desc: string; status: string; condition: string; category: string; conditionNotes: string; fitment: string }>>({});
   const formOf = (p: any) => editForm[p.id] || {
-    name: p.part || "", price: String(priceOf(p)), desc: p.desc || p.description || "", status: p.status || "Draft",
+    name: p.part || "", price: String(priceOf(p)), desc: p.desc || p.description || "", status: uiStatus(p.status),
     condition: p.grade === "Poor" ? "C" : p.grade === "Good" ? "B" : (["A","B","C"].includes(p.grade) ? p.grade : "B"), category: p.category || "", conditionNotes: p.note || "", fitment: p.fitment || "",
   };
   const setField = (id: string, p: any, patch: Partial<{ name: string; price: string; desc: string; status: string; condition: string; category: string; conditionNotes: string; fitment: string }>) =>
@@ -169,7 +169,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
     const f = editForm[id] || formOf(p);
     setSavingParts((prev) => new Set(prev).add(id));
     const num = Number(f.price);
-    const body: Record<string, any> = { listingId: id, status: f.status };
+      const body: Record<string, any> = { listingId: id, status: apiStatus(f.status) };
     if (f.name?.trim()) body.partName = f.name.trim();
     if (Number.isFinite(num) && num >= 0) { body.priceUsd = num; setPrices((pr) => ({ ...pr, [id]: num })); }
     if (f.desc != null) { body.description = f.desc; setPartDescs((pd) => ({ ...pd, [id]: f.desc })); }
@@ -196,7 +196,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
     try {
       const r = await fetch("/api/listings", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vehicleId: v.id, title: vehTitle, description: vehDesc, mileage: vehMileage, askingPrice: vehPrice, acquisitionCostCents: vehCost.trim() === "" ? "" : Math.round(Number(vehCost) * 100), status: vehStatus }),
+        body: JSON.stringify({ vehicleId: v.id, title: vehTitle, description: vehDesc, mileage: vehMileage, askingPrice: vehPrice, acquisitionCostCents: vehCost.trim() === "" ? "" : Math.round(Number(vehCost) * 100), status: apiStatus(vehStatus) }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { csToast(d.error || "Couldn't save"); }
@@ -538,6 +538,12 @@ const CATEGORIES = [
 
 const STATUS_OPTS = ["Draft", "Posted", "Sold"] as const;
 const STATUS_COLOR: Record<string, string> = { Draft: "var(--muted)", Posted: "var(--success)", Sold: "var(--signal)" };
+function apiStatus(value: string): "draft" | "active" | "sold" {
+  return value === "Posted" || value === "active" ? "active" : value === "Sold" || value === "sold" ? "sold" : "draft";
+}
+function uiStatus(value: unknown): "Draft" | "Posted" | "Sold" {
+  return value === "active" || value === "Posted" ? "Posted" : value === "sold" || value === "Sold" ? "Sold" : "Draft";
+}
 
 // Segmented A / B / C grade picker (ARA-style).
 function ConditionPicker({ value, onChange }: { value: string; onChange: (s: string) => void }) {
