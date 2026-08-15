@@ -120,7 +120,7 @@ export function Landing({ onGetStarted, onSignIn }: { onGetStarted: () => void; 
               <div style={{ display: "flex", alignItems: "flex-start", gap: 13, justifyContent: "center", flexWrap: "wrap", background: "var(--accent-tint)", border: "1px solid color-mix(in srgb, var(--accent) 26%, transparent)", borderRadius: 14, padding: "15px 22px" }}>
                 <span style={{ display: "inline-flex", marginTop: 1, fontSize: 11, fontWeight: 800, letterSpacing: "0.06em", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)", borderRadius: 999, padding: "2px 8px", flexShrink: 0 }}>LIVE</span>
                 <span style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.6, maxWidth: 740 }}>
-                  <strong style={{ color: "var(--foreground)" }}>Ahlam is live.</strong> Create your account and your first month is free with every feature unlocked. Posting to eBay is automatic; Facebook Marketplace and OfferUp post through the <a href={EXTENSION_URL} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "none" }}>Ahlam Auto-Poster Chrome extension</a>, which fills each form for you.
+                  <strong style={{ color: "var(--foreground)" }}>Ahlam is live.</strong> Create your account and your first month is free with every feature unlocked. Use direct eBay posting after business setup, or let the <a href={EXTENSION_URL} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "none" }}>Ahlam Auto-Poster Chrome extension</a> fill a regular eBay draft and Facebook form. OfferUp continues through its phone app.
                 </span>
               </div>
             </Reveal>

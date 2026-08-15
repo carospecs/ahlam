@@ -11,10 +11,11 @@
   const map = data.ahlamStaged || {};
   const staged = map.facebook;
   if (!staged) return;
-  // Clear only our own entry (other open tabs keep theirs). One-shot.
-  delete map.facebook; chrome.storage.local.set({ ahlamStaged: map });
   // Ignore stale hand-offs (older than 5 minutes).
-  if (Date.now() - (staged.ts || 0) > 5 * 60 * 1000) return;
+  if (Date.now() - (staged.ts || 0) > 5 * 60 * 1000) {
+    delete map.facebook; chrome.storage.local.set({ ahlamStaged: map });
+    return;
+  }
 
   const L = staged.listing || {};
 
@@ -57,15 +58,51 @@
     }
     return null;
   }
-  function dataUrlToFile(dataUrl, name) {
-    try {
-      const [meta, b64] = dataUrl.split(",");
-      const mime = (meta.match(/data:([^;]+)/) || [])[1] || "image/jpeg";
-      const bin = atob(b64);
-      const arr = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      return new File([arr], name, { type: mime });
-    } catch { return null; }
+  function dataUrlToBlob(dataUrl) {
+    const inspected = AhlamPhotoUtils.inspectDataUrl(dataUrl);
+    if (!inspected.ok) throw new Error(inspected.error);
+    const b64 = dataUrl.slice(dataUrl.indexOf(",") + 1).replace(/\s/g, "");
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: inspected.mime });
+  }
+  async function imageSource(blob) {
+    if (typeof createImageBitmap === "function") {
+      try { return await createImageBitmap(blob, { imageOrientation: "from-image" }); } catch {}
+    }
+    return await new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Browser couldn't read this image")); };
+      img.src = url;
+    });
+  }
+  // Facebook is strict about mismatched filenames and image bytes. Decode every
+  // source in Chrome, downscale very large images, and attach a genuine JPEG.
+  async function normalizedPhotoFile(dataUrl, index) {
+    const source = await imageSource(dataUrlToBlob(dataUrl));
+    const rawWidth = source.width || source.naturalWidth || 0;
+    const rawHeight = source.height || source.naturalHeight || 0;
+    if (!rawWidth || !rawHeight) throw new Error("Image has no readable dimensions");
+    const maxEdge = 4096;
+    const scale = Math.min(1, maxEdge / Math.max(rawWidth, rawHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(rawWidth * scale));
+    canvas.height = Math.max(1, Math.round(rawHeight * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Browser couldn't prepare the image");
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+    source.close?.();
+    const jpeg = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    if (!jpeg || !jpeg.size) throw new Error("Browser couldn't convert the image");
+    return new File([jpeg], `ahlam-${index + 1}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+  }
+  function facebookPhotoError() {
+    const nodes = [...document.querySelectorAll('[role="dialog"],[role="alert"]')];
+    const pattern = /can(?:not|'t) read files|could(?: not|n't) read|error uploading|unsupported (?:file|photo|image)/i;
+    return nodes.find((node) => pattern.test(node.textContent || ""))?.textContent?.trim() || "";
   }
   // Facebook's Category/Condition/Vehicle dropdowns are comboboxes (a button that
   // opens a listbox). Best-effort: find by label text, open it, click the match.
@@ -123,18 +160,32 @@
   }
 
   // ---- 1. Photos (FB often reveals the other fields only after a photo) ----
+  let photoOk = false;
+  let photoDetail = "";
   if (Array.isArray(L.photoData) && L.photoData.length) {
     const input = await waitFor(() =>
       document.querySelector('input[type="file"][accept*="image"]') || document.querySelector('input[type="file"]')
     , 15000);
     if (input) {
       const dt = new DataTransfer();
-      L.photoData.forEach((du, i) => { const f = dataUrlToFile(du, `ahlam-${i + 1}.jpg`); if (f) dt.items.add(f); });
+      const failures = [];
+      for (let i = 0; i < L.photoData.length; i++) {
+        try { dt.items.add(await normalizedPhotoFile(L.photoData[i], i)); }
+        catch (error) { failures.push(error?.message || "Unreadable image"); }
+      }
       if (dt.files.length) {
         input.files = dt.files;
         input.dispatchEvent(new Event("change", { bubbles: true }));
+        await sleep(3000);
+        const facebookError = facebookPhotoError();
+        photoOk = !facebookError;
+        photoDetail = facebookError || (failures.length ? `${dt.files.length} photo(s) attached; ${failures.length} skipped` : `${dt.files.length} photo(s) attached`);
+      } else {
+        photoDetail = failures[0] || "No readable photos were available";
       }
-    }
+    } else photoDetail = "Facebook's photo field wasn't found";
+  } else {
+    photoDetail = (L.photoErrors || [])[0] || "No photo was provided";
   }
 
   let filled = [];
@@ -174,9 +225,9 @@
       else setNativeValue(descEl, body);
     }
 
-    filled = [typeOk && "type", yearOk && "year", makeOk && "make", modelOk && "model",
-              (mileageEl && mileageVal) && "mileage", (priceEl && L.price) && "price", descEl && "description"].filter(Boolean);
-    missing = ["type", "year", "make", "model", "mileage"].filter((f) => !filled.includes(f));
+    filled = [photoOk && "photos", typeOk && "type", yearOk && "year", makeOk && "make", modelOk && "model",
+              (mileageEl && mileageVal) && "mileage", (priceEl && digits(L.price)) && "price", (descEl && (L.description || L.text)) && "description"].filter(Boolean);
+    missing = ["photos", "type", "year", "make", "model", "mileage", "price", "description"].filter((f) => !filled.includes(f));
   } else {
     // ---- ITEM form: title / price / description / condition / category ------
     const title = await waitFor(() => fieldBy(["title"]), 20000);
@@ -196,8 +247,8 @@
     // Parts default to the "Auto parts" category when the listing didn't set one.
     const cat = await pickCategory(L.category || "Auto parts & accessories");
 
-    filled = [title && "title", price && "price", desc && "description", cat && "category", cond && "condition"].filter(Boolean);
-    missing = ["category", "condition"].filter((f) => !filled.includes(f));
+    filled = [photoOk && "photos", (title && L.title) && "title", (price && digits(L.price)) && "price", (desc && (L.description || L.text)) && "description", cat && "category", cond && "condition"].filter(Boolean);
+    missing = ["photos", "title", "price", "description", "category", "condition"].filter((f) => !filled.includes(f));
   }
 
   // ---- Location (shared — typeahead: fill, then pick the first suggestion) -
@@ -214,13 +265,19 @@
     }
   }
 
+  const ready = missing.length === 0;
+  const resultText = ready
+    ? "Ahlam filled the required Facebook fields and photos. Review the listing, then click Publish."
+    : `Ahlam filled ${filled.length} field${filled.length === 1 ? "" : "s"}, but ${missing.join(", ")} still need attention. Your full text is on the clipboard.`;
   window.ahlamShowResult(
     "facebook",
-    filled.length
-      ? `Ahlam filled: ${filled.join(", ")}.${missing.length ? ` Set ${missing.join(" & ")} yourself,` : ""} review, then Publish. (Full text copied as backup.)`
-      : `Ahlam couldn't find the fields automatically — the full text is on your clipboard, just paste it.`,
-    filled.length > 0
+    resultText,
+    ready,
+    { filled, missing, photos: photoDetail }
   );
+  // One-shot only after a verified result was reported. A reload during the fill
+  // can still recover the staged listing for up to five minutes.
+  delete map.facebook; chrome.storage.local.set({ ahlamStaged: map });
 
   // ---- tiny status banner -------------------------------------------------
   function banner(text, kind) {

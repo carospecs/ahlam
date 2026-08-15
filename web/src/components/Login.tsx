@@ -162,7 +162,7 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
         if (password.length < 8) { setError("Use at least 8 characters for your password."); setBusy(false); return; }
         if (password !== confirmPassword) { setError("Passwords don't match."); setBusy(false); return; }
         // Create the account through our API (rate-limited, branded emails),
-        // then verify the address with the 6-digit code we send.
+        // then verify the address with the code we send.
         const r = await fetch("/api/auth/signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -171,12 +171,12 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { setError(d.error || "Couldn't create your account. Try again."); setBusy(false); return; }
         setMode("verify");
-        setNotice(`We emailed a 6-digit code to ${email}.`);
+        setNotice(`We emailed a verification code to ${email}.`);
         setResendIn(30);
         setBusy(false);
       } else if (mode === "verify") {
         const token = code.trim();
-        if (!/^\d{6}$/.test(token)) { setError("Enter the 6-digit code from your email."); setBusy(false); return; }
+        if (!/^\d{6,8}$/.test(token)) { setError("Enter the 6 to 8 digit code from your email."); setBusy(false); return; }
         // Verifying the emailed code confirms the address AND signs the user in.
         const { error: otpErr } = await sb.auth.verifyOtp({ email, token, type: "email" });
         if (otpErr) { setError("That code didn't match. Check the email or resend a fresh one."); setBusy(false); return; }
@@ -191,12 +191,12 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
         if (!r.ok) { setError(d.error || "Couldn't start the reset. Try again."); setBusy(false); return; }
         setMode("resetCode");
         setPassword(""); setConfirmPassword("");
-        setNotice(`If an account exists for ${email}, a 6-digit reset code is on its way.`);
+        setNotice(`If an account exists for ${email}, a reset code is on its way.`);
         setResendIn(30);
         setBusy(false);
       } else if (mode === "resetCode") {
         const token = code.trim();
-        if (!/^\d{6}$/.test(token)) { setError("Enter the 6-digit code from your email."); setBusy(false); return; }
+        if (!/^\d{6,8}$/.test(token)) { setError("Enter the 6 to 8 digit code from your email."); setBusy(false); return; }
         if (password.length < 8) { setError("Use at least 8 characters for your new password."); setBusy(false); return; }
         if (password !== confirmPassword) { setError("Passwords don't match."); setBusy(false); return; }
         const { error: otpErr } = await sb.auth.verifyOtp({ email, token, type: "recovery" });
@@ -260,8 +260,8 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
             <p style={lx.formSub}>{
               mode === "signin" ? "Welcome back. Pick up where you left off."
               : mode === "signup" ? "Shop or individual seller — you'll choose next. Same tools either way."
-              : mode === "verify" ? `We sent a 6-digit code to ${email}. Enter it below to activate your account.`
-              : mode === "forgot" ? "Enter your email and we'll send you a 6-digit reset code."
+              : mode === "verify" ? `We sent a verification code to ${email}. Enter it below to activate your account.`
+              : mode === "forgot" ? "Enter your email and we'll send you a reset code."
               : mode === "resetCode" ? `Enter the code we emailed to ${email} and pick a new password.`
               : "Almost done — choose a strong password you'll remember."
             }</p>
@@ -277,11 +277,11 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
                 </Field>
               )}
               {(mode === "verify" || mode === "resetCode") && (
-                <Field label="6-digit code" icon="Mail">
+                <Field label="Email code" icon="Mail">
                   <input
-                    type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required
+                    type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={8} required
                     value={code} onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ""))}
-                    placeholder="123456"
+                    placeholder="Enter the code"
                     style={{ ...lx.input, letterSpacing: "0.35em", fontWeight: 700, fontSize: 18 }}
                   />
                 </Field>

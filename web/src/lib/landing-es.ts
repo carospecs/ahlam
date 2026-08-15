@@ -38,7 +38,8 @@ export const LANDING_ES: Record<string, string> = {
 
   // Launch banner
   "Ahlam is live.": "Ahlam ya está disponible.",
-  "Create your account and your first month is free with every feature unlocked. Posting to eBay is automatic; Facebook Marketplace and OfferUp post through the": "Crea tu cuenta y tu primer mes es gratis con todas las funciones desbloqueadas. La publicación en eBay es automática; Facebook Marketplace y OfferUp se publican a través de la",
+  "Create your account and your first month is free with every feature unlocked. Use direct eBay posting after business setup, or let the": "Crea tu cuenta y tu primer mes es gratis con todas las funciones desbloqueadas. Usa la publicación directa de eBay después de configurar el negocio, o deja que la",
+  "fill a regular eBay draft and Facebook form. OfferUp continues through its phone app.": "llene un borrador normal de eBay y el formulario de Facebook. OfferUp continúa en la aplicación del teléfono.",
   "Ahlam Auto-Poster Chrome extension": "extensión de Chrome Ahlam Auto-Poster",
   ", which fills each form for you.": ", que llena cada formulario por ti.",
 

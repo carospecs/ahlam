@@ -39,7 +39,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
   const [vehPrice, setVehPrice] = React.useState<string>(v.askingPrice != null ? String(v.askingPrice) : "");
   // What the yard paid for the car — private, drives the profit dashboard.
   const [vehCost, setVehCost] = React.useState<string>(v.acquisitionCost != null ? String(v.acquisitionCost) : "");
-  const [vehStatus, setVehStatus] = React.useState<string>(v.status || "Draft");
+  const [vehStatus, setVehStatus] = React.useState<string>(uiStatus(v.status));
   const [savingVeh, setSavingVeh] = React.useState(false);
 
   const mode = SELL_MODE[sellMode];
@@ -157,7 +157,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
   // Local form state for each open part panel.
   const [editForm, setEditForm] = React.useState<Record<string, { name: string; price: string; desc: string; status: string; condition: string; category: string; conditionNotes: string; fitment: string }>>({});
   const formOf = (p: any) => editForm[p.id] || {
-    name: p.part || "", price: String(priceOf(p)), desc: p.desc || p.description || "", status: p.status || "Draft",
+    name: p.part || "", price: String(priceOf(p)), desc: p.desc || p.description || "", status: uiStatus(p.status),
     condition: p.grade === "Poor" ? "C" : p.grade === "Good" ? "B" : (["A","B","C"].includes(p.grade) ? p.grade : "B"), category: p.category || "", conditionNotes: p.note || "", fitment: p.fitment || "",
   };
   const setField = (id: string, p: any, patch: Partial<{ name: string; price: string; desc: string; status: string; condition: string; category: string; conditionNotes: string; fitment: string }>) =>
@@ -169,7 +169,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
     const f = editForm[id] || formOf(p);
     setSavingParts((prev) => new Set(prev).add(id));
     const num = Number(f.price);
-    const body: Record<string, any> = { listingId: id, status: f.status };
+      const body: Record<string, any> = { listingId: id, status: apiStatus(f.status) };
     if (f.name?.trim()) body.partName = f.name.trim();
     if (Number.isFinite(num) && num >= 0) { body.priceUsd = num; setPrices((pr) => ({ ...pr, [id]: num })); }
     if (f.desc != null) { body.description = f.desc; setPartDescs((pd) => ({ ...pd, [id]: f.desc })); }
@@ -196,7 +196,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
     try {
       const r = await fetch("/api/listings", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vehicleId: v.id, title: vehTitle, description: vehDesc, mileage: vehMileage, askingPrice: vehPrice, acquisitionCostCents: vehCost.trim() === "" ? "" : Math.round(Number(vehCost) * 100), status: vehStatus }),
+        body: JSON.stringify({ vehicleId: v.id, title: vehTitle, description: vehDesc, mileage: vehMileage, askingPrice: vehPrice, acquisitionCostCents: vehCost.trim() === "" ? "" : Math.round(Number(vehCost) * 100), status: apiStatus(vehStatus) }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { csToast(d.error || "Couldn't save"); }
@@ -232,7 +232,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
 
   return (
     <div style={{ maxWidth: 1080, display: "grid", gap: 18 }}>
-      {/* Header row: back link on the left, Post car on the top-right corner. */}
+      {/* Header row: keep navigation and the destructive action separate. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <button onClick={onBack} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "var(--muted)", fontSize: 13.5, fontWeight: 600, padding: 0, width: "fit-content" }}><ChevronLeft size={16} /> Back to shop vehicles</button>
         <button onClick={deleteVehicle} disabled={deletingVeh} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 9, border: "1px solid color-mix(in srgb, var(--signal) 45%, transparent)", background: "transparent", color: "var(--signal)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", opacity: deletingVeh ? 0.6 : 1 }}>
@@ -249,7 +249,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
               <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{mode.desc}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>Sell as:</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>What are you selling?</span>
               <div style={{ display: "inline-flex", gap: 4, background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 10, padding: 3 }}>
                 {(["parts", "whole", "both"] as const).map((m) => {
                   const on = pendingMode === m;
@@ -266,8 +266,11 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
                 disabled={savingMode || pendingMode === sellMode}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: "none", background: pendingMode === sellMode ? "var(--surface2)" : "var(--accent)", color: pendingMode === sellMode ? "var(--muted)" : "#fff", fontSize: 12.5, fontWeight: 700, cursor: pendingMode === sellMode ? "default" : "pointer", opacity: savingMode ? 0.6 : 1 }}
               >
-                <Check size={13} /> {savingMode ? "Saving…" : "Submit"}
+                <Check size={13} /> {savingMode ? "Saving…" : "Save posting type"}
               </button>
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.45, marginTop: 5 }}>
+              Parts only shows the individual parts. Whole car shows one vehicle listing. Car + parts keeps both. Your title, description, photos, and VIN stay saved when you switch.
             </div>
             <h2 style={{ margin: "12px 0 0", fontSize: 24, fontWeight: 800 }}>{v.year} {v.make} {v.model} {v.trim}</h2>
             <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 4 }}>{v.body} · {v.color} · {v.mileage}</div>
@@ -328,9 +331,12 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
       {showCar && (
         <Card pad={18}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Car size={16} color="var(--signal)" /> Whole-car listing</span>
+            <div>
+              <span style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Car size={16} color="var(--signal)" /> Whole-car listing</span>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>This is what buyers see when you sell the complete vehicle.</div>
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>Status</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>Listing status</span>
               <StatusPicker value={vehStatus} onChange={setVehStatus} />
             </div>
           </div>
@@ -535,6 +541,12 @@ const CATEGORIES = [
 
 const STATUS_OPTS = ["Draft", "Posted", "Sold"] as const;
 const STATUS_COLOR: Record<string, string> = { Draft: "var(--muted)", Posted: "var(--success)", Sold: "var(--signal)" };
+function apiStatus(value: string): "draft" | "active" | "sold" {
+  return value === "Posted" || value === "active" ? "active" : value === "Sold" || value === "sold" ? "sold" : "draft";
+}
+function uiStatus(value: unknown): "Draft" | "Posted" | "Sold" {
+  return value === "active" || value === "Posted" ? "Posted" : value === "sold" || value === "Sold" ? "Sold" : "Draft";
+}
 
 // Segmented A / B / C grade picker (ARA-style).
 function ConditionPicker({ value, onChange }: { value: string; onChange: (s: string) => void }) {

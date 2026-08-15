@@ -9,9 +9,15 @@
 // (The side panel can also load a listing for editing first, then fire the same
 // open-and-fill.)
 
+importScripts("photo-utils.js");
+
 const MARKET_URL = {
+  ebay: "https://www.ebay.com/sl/prelist/suggest",
   facebook: "https://www.facebook.com/marketplace/create/item",
-  offerup: "https://offerup.com/post/",
+  // OfferUp redirects desktop sellers to its mobile app. We open the official
+  // handoff page and report that honestly instead of waiting for a form that
+  // never appears.
+  offerup: "https://offerup.com/getapp",
   craigslist: "https://post.craigslist.org/",
 };
 
@@ -46,24 +52,72 @@ chrome.runtime.onStartup?.addListener(() => {
 async function toDataUrl(url) {
   try {
     const res = await fetch(url);
-    if (!res.ok) return null;
+    if (!res.ok) return { data: null, error: `Photo download failed (${res.status})` };
     const blob = await res.blob();
-    return await new Promise((resolve) => {
+    if (!AhlamPhotoUtils.isImageMime(blob.type)) return { data: null, error: "Downloaded file is not an image" };
+    if (!blob.size) return { data: null, error: "Downloaded image is empty" };
+    if (blob.size > AhlamPhotoUtils.MAX_SOURCE_BYTES) return { data: null, error: "Image is larger than 15 MB" };
+    const data = await new Promise((resolve) => {
       const r = new FileReader();
       r.onloadend = () => resolve(r.result);
       r.onerror = () => resolve(null);
       r.readAsDataURL(blob);
     });
-  } catch { return null; }
+    const inspected = AhlamPhotoUtils.inspectDataUrl(data);
+    return inspected.ok ? { data, error: null } : { data: null, error: inspected.error };
+  } catch { return { data: null, error: "Couldn't download photo" }; }
 }
 
 // Download up to 10 photos once and cache them on the listing as data URLs so each
 // marketplace can attach them as real files.
 async function withPhotoData(listing) {
-  if (Array.isArray(listing.photoData) && listing.photoData.length) return listing;
+  if (Array.isArray(listing.photoData) && listing.photoData.length) {
+    const valid = [];
+    const photoErrors = [];
+    for (const data of listing.photoData.slice(0, 10)) {
+      const inspected = AhlamPhotoUtils.inspectDataUrl(data);
+      if (inspected.ok) valid.push(data); else photoErrors.push(inspected.error);
+    }
+    return { ...listing, photoData: valid, photoErrors };
+  }
   const urls = Array.isArray(listing.photos) ? listing.photos.slice(0, 10) : [];
-  const photoData = (await Promise.all(urls.map(toDataUrl))).filter(Boolean);
-  return { ...listing, photoData };
+  const results = await Promise.all(urls.map(toDataUrl));
+  return {
+    ...listing,
+    photoData: results.map((r) => r.data).filter(Boolean),
+    photoErrors: results.map((r) => r.error).filter(Boolean),
+  };
+}
+
+function initialStatus(channel, listing) {
+  if (channel === "offerup") {
+    return { state: "phone_handoff", message: "OfferUp requires its mobile app. Your listing text is copied; continue on your phone.", updatedAt: Date.now() };
+  }
+  const skipped = (listing.photoErrors || []).length;
+  return {
+    state: "opening",
+    message: skipped ? `Opening form · ${skipped} invalid photo${skipped === 1 ? " was" : "s were"} skipped` : "Opening marketplace form…",
+    updatedAt: Date.now(),
+  };
+}
+
+async function broadcastQueue(queue) {
+  try {
+    const tabs = await chrome.tabs.query({ url: ["https://ahlam.io/*", "http://localhost/*"] });
+    await Promise.all(tabs.map((tab) => tab.id == null ? null : chrome.tabs.sendMessage(tab.id, { type: "ahlam-queue-update", queue }).catch(() => null)));
+  } catch {}
+}
+
+async function setChannelStatus(channel, state, message, detail) {
+  const { ahlamQueue: queue } = await chrome.storage.local.get("ahlamQueue");
+  if (!queue || !queue.channels?.includes(channel)) return null;
+  const statuses = { ...(queue.statuses || {}) };
+  statuses[channel] = { state, message: message || "", detail: detail || null, updatedAt: Date.now() };
+  const filled = Object.entries(statuses).filter(([, value]) => value?.state === "ready").map(([key]) => key);
+  const next = { ...queue, statuses, filled };
+  await chrome.storage.local.set({ ahlamQueue: next });
+  await broadcastQueue(next);
+  return next;
 }
 
 // Stage the listing for each selected channel, then open every tab at once.
@@ -71,13 +125,23 @@ async function openAll(listing, channels) {
   const withData = await withPhotoData(listing);
   const list = (channels || []).filter((c) => MARKET_URL[c]);
   const staged = {};
-  for (const ch of list) staged[ch] = { listing: withData, ts: Date.now() };
-  const queue = { channels: list, filled: [], ts: Date.now() };
+  for (const ch of list) {
+    // OfferUp has no desktop form for the personal-account flow, so no content
+    // script waits for staged data there.
+    if (ch !== "offerup") staged[ch] = { listing: withData, ts: Date.now() };
+  }
+  const statuses = Object.fromEntries(list.map((ch) => [ch, initialStatus(ch, withData)]));
+  const queue = { channels: list, statuses, filled: [], ts: Date.now() };
   await chrome.storage.local.set({ ahlamStaged: staged, ahlamListing: withData, ahlamQueue: queue });
+  await broadcastQueue(queue);
   // Open them all; the content scripts each pick up their own staged entry.
   // Facebook routes to the item or vehicle create form based on the listing.
-  for (const ch of list) { try { await chrome.tabs.create({ url: marketUrlFor(ch, withData) }); } catch {} }
-  return list;
+  for (const ch of list) {
+    try { await chrome.tabs.create({ url: marketUrlFor(ch, withData) }); }
+    catch { await setChannelStatus(ch, "needs_help", `Couldn't open ${ch}. Try again from Ahlam.`); }
+  }
+  const { ahlamQueue } = await chrome.storage.local.get("ahlamQueue");
+  return { channels: list, queue: ahlamQueue || queue };
 }
 
 function summary(listing) {
@@ -102,8 +166,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       const channels = msg.channels && msg.channels.length
         ? msg.channels
         : [msg.channel || "facebook"];
-      const list = await openAll(listing, channels);
-      sendResponse({ ok: true, channels: list });
+      const opened = await openAll(listing, channels);
+      sendResponse({ ok: true, channels: opened.channels, queue: opened.queue });
     })();
     return true;
   }
@@ -136,8 +200,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     (async () => {
       const { ahlamListing } = await chrome.storage.local.get("ahlamListing");
       if (!ahlamListing) { sendResponse({ ok: false, error: "No listing staged yet" }); return; }
-      await openAll(ahlamListing, [msg.channel]);
-      sendResponse({ ok: true });
+      const opened = await openAll(ahlamListing, [msg.channel]);
+      sendResponse({ ok: true, channels: opened.channels, queue: opened.queue });
     })();
     return true;
   }
@@ -151,16 +215,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
-  // A content script finished filling a marketplace form → mark it for the panel.
-  if (type === "ahlam-filled") {
+  // A marketplace content script reports a verified result. Failures stay
+  // visible as needs-help instead of being incorrectly counted as filled.
+  if (type === "ahlam-result" || type === "ahlam-filled") {
     (async () => {
-      const { ahlamQueue: q } = await chrome.storage.local.get("ahlamQueue");
-      if (q) {
-        const filled = new Set(q.filled || []);
-        filled.add(msg.channel);
-        await chrome.storage.local.set({ ahlamQueue: { ...q, filled: [...filled] } });
-      }
-      sendResponse({ ok: true });
+      const state = type === "ahlam-filled" ? "ready" : (msg.state || (msg.ok ? "ready" : "needs_help"));
+      const queue = await setChannelStatus(msg.channel, state, msg.message, msg.detail);
+      sendResponse({ ok: true, queue });
     })();
     return true;
   }

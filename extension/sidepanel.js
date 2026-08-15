@@ -8,6 +8,7 @@
 // worker, so photo edits survive the hand-off to the marketplace tab.
 
 const CHANNELS = [
+  { key: "ebay", name: "eBay regular account" },
   { key: "facebook", name: "Facebook Marketplace" },
   { key: "craigslist", name: "Craigslist" },
   { key: "offerup", name: "OfferUp" },
@@ -141,7 +142,7 @@ function renderPhotos() {
     const add = document.createElement("label");
     add.className = "addp";
     add.title = "Add a photo from your device";
-    add.innerHTML = `+<input type="file" accept="image/*" multiple />`;
+    add.innerHTML = `+<input type="file" accept="image/*,.heic,.heif" multiple />`;
     add.querySelector("input").onchange = (e) => addFiles(e.target.files);
     wrap.appendChild(add);
   }
@@ -149,24 +150,72 @@ function renderPhotos() {
 
 function swap(arr, a, b) { const t = arr[a]; arr[a] = arr[b]; arr[b] = t; }
 
-function addFiles(files) {
+function isHeicFile(file) {
+  return /image\/(heic|heif)/i.test(file.type || "") || /\.(heic|heif)$/i.test(file.name || "");
+}
+
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Couldn't read this photo"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function jpegDataUrl(file) {
+  let source = file;
+  if (isHeicFile(file)) {
+    if (typeof window.heic2any !== "function") throw new Error("HEIC converter didn't load");
+    const converted = await window.heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+    const blob = Array.isArray(converted) ? converted[0] : converted;
+    if (!blob) throw new Error("Couldn't convert this HEIC photo");
+    source = new File([blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" });
+  }
+  const raw = await readFile(source);
+  const image = await new Promise((resolve, reject) => {
+    const element = new Image();
+    element.onload = () => resolve(element);
+    element.onerror = () => reject(new Error("Couldn't decode this photo"));
+    element.src = raw;
+  });
+  const maxEdge = 2000;
+  const scale = Math.min(1, maxEdge / Math.max(image.width, image.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.width * scale));
+  canvas.height = Math.max(1, Math.round(image.height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Couldn't prepare this photo");
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const result = canvas.toDataURL("image/jpeg", 0.88);
+  if (!result.startsWith("data:image/jpeg;base64,")) throw new Error("Couldn't convert this photo to JPEG");
+  return result;
+}
+
+async function addFiles(files) {
   const L = state.listing;
   const list = [...files].slice(0, 10 - L.photoData.length);
-  let pending = list.length;
-  if (!pending) return;
-  list.forEach((f) => {
-    const r = new FileReader();
-    r.onloadend = () => { if (r.result) L.photoData.push(r.result); if (--pending === 0) { renderPhotos(); queueSave(); } };
-    r.onerror = () => { if (--pending === 0) { renderPhotos(); queueSave(); } };
-    r.readAsDataURL(f);
-  });
+  if (!list.length) return;
+  $("step").textContent = list.some(isHeicFile) ? "Converting iPhone HEIC photos to JPEG…" : "Preparing photos…";
+  const results = await Promise.allSettled(list.map(jpegDataUrl));
+  const converted = results.filter((result) => result.status === "fulfilled").map((result) => result.value);
+  const failed = results.length - converted.length;
+  L.photoData.push(...converted);
+  renderPhotos();
+  queueSave();
+  $("step").textContent = failed
+    ? `${converted.length} photo${converted.length === 1 ? "" : "s"} added; ${failed} couldn't be converted. Try exporting that photo as JPEG.`
+    : `${converted.length} photo${converted.length === 1 ? "" : "s"} ready as JPEG.`;
 }
 
 function statusFor(channel, queue) {
   if (!queue || !Array.isArray(queue.channels)) return null;
   if (queue.channels.indexOf(channel) < 0) return null;
-  if ((queue.filled || []).includes(channel)) return "done";
-  return "current"; // opened, waiting for the seller to Publish
+  const state = queue.statuses?.[channel]?.state;
+  if (state === "ready") return "done";
+  if (state === "needs_help") return "help";
+  if (state === "phone_handoff") return "phone";
+  return "current";
 }
 
 function renderChannels() {
@@ -183,8 +232,8 @@ function renderChannels() {
     const st = statusFor(c.key, state.queue);
     if (st) {
       const badge = document.createElement("span");
-      badge.className = "status " + (st === "done" ? "s-done" : st === "current" ? "s-current" : "s-pending");
-      badge.textContent = st === "done" ? "Filled" : st === "current" ? "Open now" : "Queued";
+      badge.className = "status " + (st === "done" ? "s-done" : "s-current");
+      badge.textContent = st === "done" ? "Filled" : st === "help" ? "Needs help" : st === "phone" ? "Use phone app" : "Opening";
       row.appendChild(badge);
     }
 
@@ -200,11 +249,12 @@ function renderChannels() {
 function renderStep() {
   const queue = state.queue;
   if (queue && Array.isArray(queue.channels) && queue.channels.length) {
-    const filled = (queue.filled || []).length;
+    const statuses = Object.values(queue.statuses || {});
+    const finished = statuses.filter((s) => ["ready", "needs_help", "phone_handoff"].includes(s?.state)).length;
     const n = queue.channels.length;
-    $("step").textContent = filled >= n
-      ? "All tabs filled — review each and hit Publish."
-      : `Opened ${n} marketplace${n === 1 ? "" : "s"}. Review and Publish each tab (${filled}/${n} filled).`;
+    $("step").textContent = finished >= n
+      ? "Handoff ready — review Facebook/Craigslist and finish OfferUp in its phone app."
+      : `Preparing ${n} marketplace${n === 1 ? "" : "s"} (${finished}/${n} ready).`;
   } else {
     $("step").textContent = "";
   }
@@ -224,7 +274,7 @@ $("postAll").onclick = async () => {
   if (!state.listing) return;
   $("postAll").disabled = true;
   await save();
-  const r = await send("ahlam-stage-queue", { listing: storeShape(), channels: ["facebook", "craigslist", "offerup"] });
+  const r = await send("ahlam-stage-queue", { listing: storeShape(), channels: ["ebay", "facebook", "craigslist", "offerup"] });
   $("postAll").disabled = false;
   if (!r.ok) $("step").textContent = r.error || "Open a listing in Ahlam first.";
 };

@@ -59,7 +59,8 @@ export async function fileToAIDataUrl(file: File): Promise<string> {
 
 // Downscale + re-encode any image to a JPEG data URL. Used both for the AI call
 // (vision APIs reject HEIC and choke on multi-MB photos) and for persistence.
-// Falls back to the raw data URL if the browser can't decode it.
+// Never persist a raw HEIC payload: downstream marketplaces cannot reliably
+// decode it, and a mislabeled HEIC is the root of “Can't Read Files” failures.
 export async function fileToJpegDataUrl(file: File, maxDim = 1600, quality = 0.85): Promise<string> {
   const normalized = await normalizeImageFile(file);
   const raw = await readAsDataUrl(normalized);
@@ -76,10 +77,13 @@ export async function fileToJpegDataUrl(file: File, maxDim = 1600, quality = 0.8
     const canvas = document.createElement("canvas");
     canvas.width = w; canvas.height = h;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return raw;
+    if (!ctx) throw new Error("This browser couldn't prepare the photo");
     ctx.drawImage(img, 0, 0, w, h);
-    return canvas.toDataURL("image/jpeg", quality);
-  } catch {
-    return raw;
+    const jpeg = canvas.toDataURL("image/jpeg", quality);
+    if (!jpeg.startsWith("data:image/jpeg;base64,")) throw new Error("This browser couldn't convert the photo to JPEG");
+    return jpeg;
+  } catch (error) {
+    if (isHeic(file)) throw new Error("We couldn't convert this iPhone HEIC photo. In Photos, share it as Most Compatible (JPEG) and try again.");
+    throw error;
   }
 }

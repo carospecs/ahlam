@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Ahlam Auto-Poster",
-  "version": "2.0.0",
-  "description": "Auto-fills your Ahlam listings into Facebook, OfferUp, and Craigslist. You review and click Publish. Nothing posts on its own.",
+  "version": "2.1.0",
+  "description": "Fills Ahlam listings into supported marketplace forms and prepares mobile handoffs. You review and click Publish.",
   "permissions": ["storage", "sidePanel", "unlimitedStorage"],
   "icons": { "16": "icons/icon-16.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
   "host_permissions": [
     "https://ahlam.io/*",
     "http://localhost/*",
     "https://*.supabase.co/*",
+    "https://www.ebay.com/*",
     "https://www.facebook.com/*",
     "https://offerup.com/*",
     "https://*.craigslist.org/*"
@@ -21,13 +22,18 @@
       "run_at": "document_start"
     },
     {
+      "matches": ["https://www.ebay.com/sl/prelist/*", "https://www.ebay.com/sl/list*", "https://www.ebay.com/lstng*"],
+      "js": ["photo-utils.js", "content-banner.js", "content-ebay.js"],
+      "run_at": "document_idle"
+    },
+    {
       "matches": ["https://www.facebook.com/marketplace/create/*"],
-      "js": ["content-banner.js", "content-facebook.js"],
+      "js": ["photo-utils.js", "content-banner.js", "content-facebook.js"],
       "run_at": "document_idle"
     },
     {
       "matches": ["https://offerup.com/post/*", "https://offerup.com/sell/*"],
-      "js": ["content-banner.js", "content-offerup.js"],
+      "js": ["photo-utils.js", "content-banner.js", "content-offerup.js"],
       "run_at": "document_idle"
     },
     {
