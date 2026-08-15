@@ -10,6 +10,7 @@ import { WARRANTY_DAYS } from "@/lib/warranty";
 import { effectivePlan } from "@/lib/plan-limits";
 import { slugify, validateSlug, siteOrigin } from "@/lib/slug";
 import { normalizeImageFile } from "@/lib/image";
+import { statusIs } from "../data";
 
 function reloadData() { (window as any).csReloadData?.(); }
 
@@ -688,10 +689,10 @@ function PayoutCard({ canManage }: { canManage: boolean }) {
 
 export function Billing(_: ViewProps) {
   const { listings, vehicles, shop, user } = useData();
-  const active = listings.filter((l: any) => l.status === "Posted").length;
-  const sold = listings.filter((l: any) => l.status === "Sold").length;
+  const active = listings.filter((l: any) => statusIs(l.status, "posted")).length;
+  const sold = listings.filter((l: any) => statusIs(l.status, "sold")).length;
   const identified = listings.length;
-  const revenue = listings.filter((l: any) => l.status === "Sold").reduce((s: number, l: any) => s + (l.price || 0), 0);
+  const revenue = listings.filter((l: any) => statusIs(l.status, "sold")).reduce((s: number, l: any) => s + (l.price || 0), 0);
   const trialLeft = shop.trialDaysLeft ?? 0;
   // Trial copy only makes sense on the free-month plans; legacy "Pro" and paid
   // plans have no trial clock (their trialDaysLeft is 0 and would read as an

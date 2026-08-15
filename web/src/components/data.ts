@@ -34,6 +34,12 @@ export interface Activity {
   icon: string; text: string; time: string; tone: string;
 }
 
+/** Accept both API-friendly labels (Posted/Sold) and database enum values. */
+export function statusIs(value: unknown, expected: "draft" | "posted" | "sold" | "active"): boolean {
+  const status = String(value ?? "").trim().toLowerCase();
+  return expected === "posted" ? status === "posted" || status === "active" : status === expected;
+}
+
 export const VEHICLES: Vehicle[] = [
   { id: "v1", year: "2014", make: "Honda", model: "Accord", trim: "EX-L", body: "Sedan", vin: "1HGCR2F8XEA •••••", color: "Modern Steel", added: "2 days ago", photos: 6, parts: 9, value: 1240, listed: 7, sold: 1, sellMode: "parts", askingPrice: null, mileage: "112k mi" },
   { id: "v2", year: "2013", make: "Ford", model: "F-150", trim: "XLT", body: "Pickup", vin: "1FTFW1ET5DF •••••", color: "Oxford White", added: "3 days ago", photos: 5, parts: 12, value: 2310, listed: 10, sold: 3, sellMode: "both", askingPrice: 4200, mileage: "148k mi" },

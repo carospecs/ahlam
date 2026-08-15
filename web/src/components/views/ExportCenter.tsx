@@ -15,7 +15,7 @@ function Portal({ children }: { children: React.ReactNode }) {
 // native OS share sheet (text + photo files) → the real Facebook/OfferUp/etc. APP.
 const isMobileDevice = () => typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 import { Card, PhotoCell, ConditionBadge, SellModeBadge } from "../UI";
-import { buildListingText, buildVehicleText } from "../data";
+import { buildListingText, buildVehicleText, statusIs } from "../data";
 import { useData, csToast } from "../Dashboard";
 import { WARRANTY_DAYS, effectiveWarranty, warrantyLabel } from "@/lib/warranty";
 import { fileToJpegDataUrl } from "@/lib/image";
@@ -77,7 +77,7 @@ export function ExportCenter({ go }: { go: (id: string) => void; onVehicle?: (v:
   const ext = useAhlamExtension();
   const planId = (shop?.planId as string | undefined) ?? null;
   const menuChannels = LIVE_CHANNELS.filter((c) => !lockedChannel(planId, c.key));
-  const ready = listings.filter((l: any) => l.status === "Draft" || l.status === "Posted");
+  const ready = listings.filter((l: any) => statusIs(l.status, "draft") || statusIs(l.status, "posted"));
 
   // Resolve a listing's car from its vehicleId (live data has no inline name).
   const vById = React.useMemo(
