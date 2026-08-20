@@ -208,12 +208,19 @@ export async function runDealAgent(
   const db = supabaseAdmin();
 
   const [shopRes, partsRes, vehRes] = await Promise.all([
-    db.from("shops").select("name, location, business_phone, email, hours, returns_policy, default_warranty_days").eq("id", shopId).single(),
+    db.from("shops").select("name, location, business_phone, email, hours, returns_policy, default_warranty_days, deal_floor_pct").eq("id", shopId).single(),
     db.from("listings").select("id, stock_number, price_usd, ai_output, corrected").eq("shop_id", shopId).eq("status", "active").eq("listing_type", "part").order("created_at", { ascending: false }).limit(MAX_ITEMS),
     db.from("vehicles").select("id, stock_number, year, make, model, trim, title, mileage, asking_price, sell_mode").eq("shop_id", shopId).in("sell_mode", ["whole", "both"]).eq("status", "active").order("created_at", { ascending: false }).limit(MAX_ITEMS),
   ]);
 
-  const shop = shopRes.data;
+  let shop: any = shopRes.data;
+  // Pre-migration fallback: until 20260820000000_deal_floor_pct.sql is applied
+  // the column doesn't exist and the select above 42703s the whole row. Retry
+  // without it rather than 404ing the assistant for every shop in that window.
+  if (!shop && shopRes.error?.code === "42703") {
+    const retry = await db.from("shops").select("name, location, business_phone, email, hours, returns_policy, default_warranty_days").eq("id", shopId).single();
+    shop = retry.data;
+  }
   if (!shop) return { ok: false, status: 404, error: "Shop not found" };
 
   const parts = (partsRes.data || []).map(partLine).join("\n");
@@ -225,6 +232,12 @@ export async function runDealAgent(
 
   const warranty = shop.default_warranty_days ? `${shop.default_warranty_days}-day` : null;
   const surface = channel === "voice" ? "on the phone" : "on the shop's public storefront";
+
+  // How far off the listed price the assistant may go on its own, set by the
+  // shop owner in Settings (Store policies). Defaults to 5% for new shops.
+  const rawFloor = Number(shop.deal_floor_pct);
+  const floorPct = Number.isFinite(rawFloor) ? Math.min(50, Math.max(0, rawFloor)) : 5;
+  const floorOfPrice = 100 - floorPct;
 
   const voiceNote =
     channel === "voice"
@@ -247,8 +260,9 @@ HARD RULES
 - Be concise, friendly, and shop-floor practical.
 
 NEGOTIATION POLICY
-- You may accept a reasonable offer down to 90% of the listed price on a single item, and you may offer up to 10% off when the customer buys multiple items or asks for a bundle deal. Do NOT go below that.
-- If the customer pushes for a lower price than the policy allows, say you will pass their offer along to the shop rather than agreeing.
+- The lowest you are willing to go on your own is ${floorPct}% off the listed price (i.e. down to ${floorOfPrice}% of the listed price) on a single item, and the same ${floorPct}% applies as the most you may offer for a multi-item or bundle deal. Do NOT go below that.
+- If a customer asks what your lowest price is, tell them plainly: up to ${floorPct}% off.
+- If the customer pushes for a lower price than the policy allows, say you will pass their offer along to the shop owner rather than agreeing — the owner can approve a deeper discount themselves.
 - When a deal is agreed, summarize it clearly: the item(s), the agreed price, and then ask for the customer's name and best phone or email so the shop can confirm.
 ${warranty ? `- Parts carry a ${warranty} warranty. Mention it if the customer asks about returns or guarantees.` : ""}
 - To finalize any deal or sourcing request, you MUST get the customer's name AND a phone or email. If you don't have both, ask for them before confirming.${voiceNote}

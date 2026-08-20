@@ -4,6 +4,7 @@ import { siteOrigin } from "@/lib/slug";
 import * as shopProfiles from "@/lib/shop-static-profiles";
 import { SiteInventory } from "@/components/site/SiteInventory";
 import { ShopSiteFooter } from "@/components/site/ShopSiteFooter";
+import { DealAgent } from "@/components/DealAgent";
 
 // Home page of an Ultimate shop's personal website — the SEO-optimized,
 // zero-config storefront generated from the data the shop already keeps on
@@ -221,6 +222,9 @@ export default async function ShopSiteHome({ params }: Params) {
       </div>
 
       <ShopSiteFooter shop={shop} parts={parts} />
+      {/* The demo site (demo.ahlam.io) has no real shop row for the agent to
+          query, so skip the widget there rather than show a broken chat. */}
+      {shop.id !== "demo-site" && <DealAgent shopId={shop.id} shopName={shop.name} />}
     </>
   );
 }
