@@ -7,7 +7,7 @@ import { effectivePlan } from "@/lib/plan-limits";
 
 export const runtime = "nodejs";
 
-const EDITABLE = ["name", "location", "business_phone", "email", "website", "description", "hours", "logo_url", "cover_url", "zip_code", "default_warranty_days", "returns_policy", "nmvtis_id", "nmvtis_entity_name"];
+const EDITABLE = ["name", "location", "business_phone", "email", "website", "description", "hours", "logo_url", "cover_url", "zip_code", "default_warranty_days", "returns_policy", "nmvtis_id", "nmvtis_entity_name", "deal_floor_pct"];
 
 async function ctx() {
   const supabase = await supabaseServer();
@@ -63,6 +63,14 @@ export async function PATCH(req: NextRequest) {
   if ("default_warranty_days" in patch) {
     const d = Number(patch.default_warranty_days);
     patch.default_warranty_days = [0, 30, 60, 90].includes(d) ? d : 30;
+  }
+
+  // Deal-agent negotiation floor: percent off the listed price the chatbot may
+  // accept on its own. Clamp to the DB check constraint's range (0-50) so a bad
+  // client value 500s instead of silently falling back to the column default.
+  if ("deal_floor_pct" in patch) {
+    const p = Number(patch.deal_floor_pct);
+    patch.deal_floor_pct = Number.isFinite(p) ? Math.min(50, Math.max(0, p)) : 5;
   }
 
   // Geocode to lat/lng whenever the ZIP or location changes, so the marketplace

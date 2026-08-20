@@ -125,6 +125,7 @@ export function ShopProfile({ go }: ViewProps) {
         email: s.email || "", website: s.website || "", description: s.description || "", hours: s.hours || "",
         default_warranty_days: typeof s.default_warranty_days === "number" ? s.default_warranty_days : 30,
         returns_policy: s.returns_policy || "",
+        deal_floor_pct: typeof s.deal_floor_pct === "number" ? s.deal_floor_pct : 5,
       };
       savedFormRef.current = JSON.stringify(loaded);
       setForm(loaded);
@@ -285,6 +286,21 @@ export function ShopProfile({ go }: ViewProps) {
             </Field>
             <Field label="Returns policy">
               <textarea value={form.returns_policy} onChange={(e) => set("returns_policy", e.target.value)} rows={3} placeholder="e.g. Returns accepted within 30 days with receipt. Electrical parts must be tested on the vehicle before installation. Core charges refunded on return of the old unit." style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} disabled={!canEdit} />
+            </Field>
+            <Field label="AI assistant negotiation floor">
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input
+                  type="number" min={0} max={50} step={1}
+                  value={form.deal_floor_pct}
+                  onChange={(e) => set("deal_floor_pct", e.target.value === "" ? "" : Math.min(50, Math.max(0, Number(e.target.value))) as any)}
+                  style={{ ...inp, width: 90 }}
+                  disabled={!canEdit}
+                />
+                <span style={{ fontSize: 13, color: "var(--muted)" }}>% off, max</span>
+              </div>
+              <span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6, display: "block" }}>
+                The most your storefront chatbot may discount a listed price on its own before a customer&apos;s offer. Deeper offers get passed to you instead of accepted automatically.
+              </span>
             </Field>
           </>
         ))}
