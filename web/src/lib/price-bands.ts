@@ -48,6 +48,16 @@ export const DEFAULT_BANDS: Record<string, PriceBand> = {
   // Used catalytic converters span scrap-core value to full OEM units; wide band
   // keeps a sane floor without capping a high-value OEM cat. (AHLAM-56)
   catalytic_converter: { low: 75, high: 900 },
+  // BEV/hybrid powertrain — without these, a Tesla battery pack (etc.) had no
+  // band and fell all the way to DEFAULT_BAND ($40-160), an absurd floor for
+  // the single most valuable part on the car. Anchors are rough used-market
+  // dismantler asking prices; recalibration will refine them once EV comps
+  // are part of the basket.
+  hv_battery_pack: { low: 2500, high: 8000 },
+  hybrid_battery_pack: { low: 300, high: 1200 },
+  drive_unit: { low: 1200, high: 3500 },
+  onboard_charger: { low: 200, high: 600 },
+  ev_inverter: { low: 300, high: 900 },
 };
 
 // Recalibrated bands win over defaults; anything the job didn't cover keeps its
@@ -84,6 +94,13 @@ const BAND_MATCHERS: Matcher[] = [
   { key: "alternator", label: "Alternator", re: /\balternator\b/i },
   { key: "starter", label: "Starter", re: /\bstarter\b/i },
   { key: "ac_compressor", label: "AC compressor", re: /\b(a\/?c )?compressor\b/i },
+  // Hybrid pack first — it also contains the words "battery pack" that the
+  // generic HV matcher below would otherwise claim.
+  { key: "hybrid_battery_pack", label: "Hybrid battery pack", re: /\bhybrid\s?battery\s?pack\b/i },
+  { key: "hv_battery_pack", label: "High-voltage battery pack", re: /\b(high.?voltage|hv|traction)\s?battery\s?pack\b|\bbattery\s?pack\b/i },
+  { key: "drive_unit", label: "Drive unit (motor)", re: /\bdrive\s?unit\b/i },
+  { key: "onboard_charger", label: "Onboard charger", re: /\bonboard\s?charger\b/i },
+  { key: "ev_inverter", label: "Inverter / DC-DC converter", re: /\binverter\b|\bdc.?dc\s?converter\b/i },
 ];
 
 // Map a free-form part name (e.g. "Front Left Door") to its band, or null when
