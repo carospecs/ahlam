@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { SHOP_SUBDOMAINS } from "@/lib/shop-subdomains";
+import { AUTH_COOKIE_DOMAIN } from "@/lib/auth-cookie";
 
 const allowedOrigins = [
   "http://localhost:3000",
@@ -78,6 +79,7 @@ export async function middleware(req: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
+        cookieOptions: { domain: AUTH_COOKIE_DOMAIN },
         cookies: {
           getAll() {
             return req.cookies.getAll();

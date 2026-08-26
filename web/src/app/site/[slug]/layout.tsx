@@ -1,6 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import { getShopBySlug } from "@/lib/shop-site";
 import { hasPersonalSite } from "@/lib/slug";
+import { supabaseServer } from "@/lib/supabase-server";
+import { supabaseAdmin } from "@/lib/supabase";
+import { I18nProvider } from "@/lib/i18n";
 import { ShopSiteHeader } from "@/components/site/ShopSiteHeader";
 
 // Layout for the Ultimate personal websites. Only ever reached through the
@@ -10,6 +13,24 @@ import { ShopSiteHeader } from "@/components/site/ShopSiteHeader";
 export const dynamic = "force-dynamic";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ahlam.io";
+
+// True when the visitor is signed in as a member of THIS shop — shows the
+// "Dashboard" link back to ahlam.io in the header. Relies on the auth cookie
+// being shared across ahlam.io and {slug}.ahlam.io (see lib/auth-cookie.ts);
+// fails closed (no link) on any error, including the demo/preview shops
+// which have no real profiles pointing at them.
+async function isShopMember(shopId: string): Promise<boolean> {
+  try {
+    const supabase = await supabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const db = supabaseAdmin();
+    const { data: profile } = await db.from("profiles").select("shop_id").eq("id", user.id).single();
+    return profile?.shop_id === shopId;
+  } catch {
+    return false;
+  }
+}
 
 export default async function ShopSiteLayout({
   children,
@@ -26,6 +47,8 @@ export default async function ShopSiteLayout({
   // comes right back when the plan does.
   if (!hasPersonalSite(shop)) redirect(`${SITE_URL}/shop/${shop.id}`);
 
+  const isOwner = await isShopMember(shop.id);
+
   return (
     <>
       {/* The personal sites default to the light (Paper) theme — a shop's own
@@ -36,10 +59,12 @@ export default async function ShopSiteLayout({
           __html: `try{if(localStorage.getItem('cs-theme')!=='dark')document.documentElement.setAttribute('data-theme','light');}catch(e){document.documentElement.setAttribute('data-theme','light');}`,
         }}
       />
-      <main style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)" }}>
-        <ShopSiteHeader shop={shop} />
-        {children}
-      </main>
+      <I18nProvider>
+        <main style={{ minHeight: "100vh", background: "var(--background)", color: "var(--foreground)" }}>
+          <ShopSiteHeader shop={shop} isOwner={isOwner} />
+          {children}
+        </main>
+      </I18nProvider>
     </>
   );
 }

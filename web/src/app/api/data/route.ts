@@ -152,7 +152,7 @@ export async function GET() {
       // becomes "free"); plan stays the display label.
       const planId = effectivePlan(s.plan, s.trial_ends_at);
       shop = {
-        id: s.id, name: s.name, location: s.location || "",
+        id: s.id, name: s.name, location: s.location || "", slug: s.slug || null,
         phone: s.business_phone || "", email: s.email || "", website: s.website || "",
         description: s.description || "", hours: s.hours || "", logoUrl: s.logo_url || null,
         coverUrl: s.cover_url || null, members, plan: planLabel(s.plan), planId, trialDaysLeft: trialLeft,
