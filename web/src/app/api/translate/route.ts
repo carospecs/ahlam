@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = "llama-3.3-70b-versatile";
+// llama-3.3-70b-versatile was retired from Groq's catalog (2026-08) — every
+// Llama model was, in favor of their gpt-oss/qwen lineup. gpt-oss-20b supports
+// json_mode and is fast/cheap enough for bulk UI-string translation.
+const MODEL = "openai/gpt-oss-20b";
 
 // Batch-translate UI strings to Spanish for the live language layer. The app is
 // authored in English and everything is STORED in English — this only powers what
@@ -40,6 +43,11 @@ export async function POST(req: Request) {
         model: MODEL,
         temperature: 0,
         max_tokens: 4000,
+        // gpt-oss is a reasoning model — left at its default effort it burns
+        // ~100 "thinking" tokens per string (1000+ tokens for a normal batch),
+        // which blew through this key's per-minute quota. "low" cuts that to
+        // near-zero with no visible quality loss on short UI/listing strings.
+        reasoning_effort: "low",
         response_format: { type: "json_object" },
         messages: [{ role: "system", content: SYSTEM }, { role: "user", content: JSON.stringify(texts) }],
       }),
