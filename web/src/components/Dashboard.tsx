@@ -10,7 +10,6 @@ import {
   Sun, Moon, TrendingUp, BookOpen, FolderClosed, MapPin, Trash2, Maximize2,
 } from "lucide-react";
 import { armAudio, playMessageChime } from "@/lib/notifySound";
-import { channelLabel } from "@/lib/channels";
 import { fileToJpegDataUrl } from "@/lib/image";
 import { buildListingText, buildVehicleText, partsForVehicle } from "./data";
 import { Overview } from "./views/Overview";
@@ -965,33 +964,6 @@ export function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   useEffect(() => { reload(); }, []);
   // Let views (e.g. Add vehicle) trigger a data refresh after they save.
   useEffect(() => { (window as any).csReloadData = reload; }, []);
-
-  // "I published this" confirmations relayed from the Auto-Poster extension.
-  // The extension can't reach our API itself, so it hands the event to this
-  // signed-in page; we record it, ack (so the extension drops it from its
-  // pending queue), and refresh so the channel badges flip to posted.
-  useEffect(() => {
-    const seen = new Set<string>();
-    async function onMsg(e: MessageEvent) {
-      if (e.source !== window) return;
-      const d = e.data;
-      if (!d || d.__ahlamPosted !== true || !d.channel || seen.has(d.id)) return;
-      seen.add(d.id);
-      try {
-        const r = await fetch("/api/channels", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "posted", channel: d.channel, listingId: d.listingId || undefined, vehicleId: d.vehicleId || undefined, url: d.url || undefined }),
-        });
-        // Ack even a 404 (item deleted since) — retrying forever won't fix it.
-        if (r.ok || r.status === 404) {
-          if (d.id) window.postMessage({ __ahlamPostedAck: true, id: d.id }, "*");
-          if (r.ok) { csToast(`Marked as posted on ${channelLabel(d.channel)}`); reload(); }
-        }
-      } catch { seen.delete(d.id); /* transient — the extension will re-deliver */ }
-    }
-    window.addEventListener("message", onMsg);
-    return () => window.removeEventListener("message", onMsg);
-  }, []);
 
   // Reopen the view the user was on after a full page load — e.g. hitting Back
   // from a public profile returns them to Messages, not Overview. Declared
