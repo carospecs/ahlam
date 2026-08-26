@@ -1,14 +1,18 @@
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { LanguageToggle } from "@/components/site/LanguageToggle";
+import { LayoutDashboard } from "lucide-react";
 
 // Sticky branded header for the Ultimate personal sites ({slug}.ahlam.io).
 // Server component — everything here comes off the shop's public row.
+
+const APP_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ahlam.io";
 
 function starString(value: number): string {
   const n = Math.max(0, Math.min(5, Math.round(value)));
   return "★★★★★".slice(0, n) + "☆☆☆☆☆".slice(0, 5 - n);
 }
 
-export function ShopSiteHeader({ shop }: { shop: any }) {
+export function ShopSiteHeader({ shop, isOwner }: { shop: any; isOwner?: boolean }) {
   const initials = (shop.name || "S").split(" ").map((s: string) => s[0]).join("").toUpperCase().slice(0, 2);
   const ratingAvg = Number(shop.rating_avg || 0);
   const ratingCount = shop.rating_count || 0;
@@ -42,6 +46,12 @@ export function ShopSiteHeader({ shop }: { shop: any }) {
               {shop.business_phone}
             </a>
           )}
+          {isOwner && (
+            <a href={APP_URL} style={{ ...navLink, display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid var(--line)", borderRadius: 9 }}>
+              <LayoutDashboard size={13} /> Dashboard
+            </a>
+          )}
+          <LanguageToggle />
           <span style={{ marginLeft: 6 }}><ThemeToggle size={34} /></span>
         </nav>
       </div>
