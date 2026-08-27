@@ -309,6 +309,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
   .cs-topbar h1 { font-size: 18px !important; }
   /* Language is also in the profile menu; drop the header copy on phones. */
   .cs-lang { display: none !important; }
+  .cs-view-site-label { display: none; }
   /* Avatar is enough on phones — the name/email crowd the title. */
   .cs-profile-text { display: none !important; }
   .cs-grid4 { grid-template-columns: 1fr 1fr !important; }
