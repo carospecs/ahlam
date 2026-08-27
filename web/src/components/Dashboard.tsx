@@ -35,6 +35,7 @@ import { BrandChip } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
 import { I18nProvider, useI18n, useT } from "@/lib/i18n";
 import { AddressAutocomplete, ZipField } from "./AddressAutocomplete";
+import { siteOrigin } from "@/lib/slug";
 
 export const DataContext = createContext<any>({ user: {}, shop: {}, vehicles: [], listings: [], threads: [], activity: [] });
 export function useData() { return useContext(DataContext); }
@@ -148,6 +149,8 @@ function Topbar({ meta, onMenu, onSignOut, onNav, onToggleAssistant }: {
 }) {
   const t = useT();
   const { lang, setLang } = useI18n();
+  const { shop } = useData();
+  const hasSite = !!shop?.slug && (shop?.planId === "ultimate" || shop?.planId === "founder");
   return (
     <header style={sx.topbar} className="cs-topbar">
       <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
@@ -158,6 +161,20 @@ function Topbar({ meta, onMenu, onSignOut, onNav, onToggleAssistant }: {
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {hasSite && (
+          <a
+            href={siteOrigin(shop.slug)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="cs-view-site"
+            title={t("View my site")}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--surface2)", color: "var(--foreground)", fontSize: 12.5, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}
+          >
+            <Globe size={14} color="var(--accent)" />
+            <span className="cs-view-site-label">{t("View my site")}</span>
+            <ExternalLink size={12} />
+          </a>
+        )}
         <NotificationBell onNav={onNav} />
         <button
           title={t("AI assistant")}
