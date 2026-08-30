@@ -174,8 +174,12 @@ export async function POST(req: Request) {
         photo_urls: url ? [url] : [],   // gallery seeded with the part's photo; more can be added later
         ai_output: ai,
         // Grade C parts are intentionally unpriced — preserve null so the seller
-        // sets the price manually. A/B parts use the formula price as-is.
-        price_usd: p.suggestedPriceUsd ?? null,
+        // sets the price manually. A/B parts use the formula price as-is, but a
+        // null on an A/B part means the pricing pipeline never found one (e.g. an
+        // inferred mechanical part like a BEV battery pack with thin comps) —
+        // that's a pipeline gap, not an intentional blank, so floor it to a
+        // band-sane price (AHLAM-51) instead of posting empty.
+        price_usd: p.condition === "C" ? (p.suggestedPriceUsd ?? null) : floorPrice(p.suggestedPriceUsd, p.partName || ""),
         status,
       };
     });
@@ -402,6 +406,8 @@ export async function DELETE(req: Request) {
   if (ids.length) {
     const { error } = await db.from("listings").update({ status: "removed" }).in("id", ids).eq("shop_id", shopId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    // Channel history follows the item: whatever was posted where is now gone.
+    await db.from("listing_channels").update({ status: "removed", updated_at: new Date().toISOString() }).in("listing_id", ids).eq("shop_id", shopId);
     return NextResponse.json({ ok: true, removed: ids.length });
   }
 
@@ -411,6 +417,10 @@ export async function DELETE(req: Request) {
     // The car's part listings are posts from this car — they go with it.
     const { error: pErr } = await db.from("listings").update({ status: "removed" }).eq("vehicle_id", body.vehicleId).eq("shop_id", shopId);
     if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
+    // Channel rows for the vehicle AND its parts follow.
+    await db.from("listing_channels").update({ status: "removed", updated_at: new Date().toISOString() }).eq("vehicle_id", body.vehicleId).eq("shop_id", shopId);
+    const { data: partIds } = await db.from("listings").select("id").eq("vehicle_id", body.vehicleId).eq("shop_id", shopId);
+    if (partIds?.length) await db.from("listing_channels").update({ status: "removed", updated_at: new Date().toISOString() }).in("listing_id", partIds.map((p: { id: string }) => p.id)).eq("shop_id", shopId);
     return NextResponse.json({ ok: true });
   }
 
