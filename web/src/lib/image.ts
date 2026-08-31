@@ -40,6 +40,24 @@ export async function normalizeImageFile(file: File): Promise<File> {
   }
 }
 
+// Run `fn` over `items` with at most `limit` in flight at once. HEIC decoding
+// (heic2any) runs a WASM heap per call — firing all of a full-car scan batch
+// (up to 15 photos) at once via Promise.all can exhaust that heap and silently
+// fail some conversions, which then fall back to shipping raw multi-MB HEIC
+// files and blow the save/identify request past Vercel's ~4.5MB body cap.
+export async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -80,6 +98,14 @@ export async function fileToJpegDataUrl(file: File, maxDim = 1600, quality = 0.8
     ctx.drawImage(img, 0, 0, w, h);
     return canvas.toDataURL("image/jpeg", quality);
   } catch {
+    // The browser couldn't decode this as an <img> — for a HEIC/HEIF source this
+    // almost always means heic2any's WASM decode above ALSO failed, leaving `raw`
+    // as the ORIGINAL undecoded multi-MB file. Shipping that in a save/identify
+    // payload is what blows a multi-photo batch past Vercel's request-body cap
+    // and surfaces as a generic "check your connection" failure. Refuse to
+    // forward it — throw a clear per-photo error instead (non-HEIC formats that
+    // fail to decode are rare and small enough to pass through as-is).
+    if (isHeic(normalized)) throw new Error(`Couldn't process "${file.name}" — try re-saving it as JPG and re-uploading.`);
     return raw;
   }
 }

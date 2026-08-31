@@ -5,7 +5,7 @@ import { ImageUp, Upload, ScanLine, Sparkles, Check, Info, CircleCheck, Car, Wre
 import { Card, PhotoCell, ConditionBadge } from "../UI";
 import { SELL_MODE } from "../data";
 import { csToast } from "../Dashboard";
-import { looksLikeScannable, isPdf, normalizeImageFile, fileToJpegDataUrl, fileToAIDataUrl } from "@/lib/image";
+import { looksLikeScannable, isPdf, normalizeImageFile, fileToJpegDataUrl, fileToAIDataUrl, mapWithConcurrency } from "@/lib/image";
 import { playSonarPing } from "@/lib/sound";
 import { ManualListing } from "./ManualListing";
 import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, addScanSlot, removeScanSlot, finishScanSlot, useScanSlots, useScanPhases, PRIMARY_SLOT, type ScanSession } from "@/lib/scanSession";
@@ -384,10 +384,10 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
     if (room <= 0) { csToast(`You can add up to ${MAX_PHOTOS} photos`); return; }
     const take = imgs.slice(0, room);
     if (take.length < imgs.length) csToast(`Added ${take.length}. ${MAX_PHOTOS}-photo limit reached`);
-    const mapped = await Promise.all(take.map(async (f) => {
+    const mapped = await mapWithConcurrency(take, 3, async (f) => {
       const file = await normalizeImageFile(f); // HEIC → JPEG; others pass through
       return { url: URL.createObjectURL(file), name: f.name, file };
-    }));
+    });
     setPhotos((prev) => [...prev, ...mapped].slice(0, MAX_PHOTOS));
   }
   const atPhotoLimit = photos.length >= MAX_PHOTOS;
@@ -416,7 +416,7 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
     let resolvedVin: string | null = /^[A-HJ-NPR-Z0-9]{17}$/.test(typedVin) ? typedVin : null;
     try {
       // Encode each photo once; reused by the VIN-read pass and the catalog pass.
-      const dataUrls = await Promise.all(photos.map((p) => fileToAIDataUrl(p.file)));
+      const dataUrls = await mapWithConcurrency(photos, 3, (p) => fileToAIDataUrl(p.file));
       if (!isScanRun(myToken, slot)) return;
 
       if (!resolvedVin) {
@@ -620,7 +620,7 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
 
     } catch (e) {
       if (!isScanRun(myToken, slot)) return; // cancelled / superseded
-      setError("We couldn't reach the analysis server. Check your connection and try again.");
+      setError(e instanceof Error && e.message ? e.message : "We couldn't reach the analysis server. Check your connection and try again.");
       setPhase("error");
     }
   }
@@ -877,11 +877,11 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
       const imagePhotos = photos.filter((p) => !isPdf(p.file));
       // Upload REDACTED images for any photo with PII (plate/VIN) so the saved, customer-
       // facing listing never carries them; fall back to the normal encode otherwise.
-      const images = await Promise.all(imagePhotos.map(async (p) =>
+      const images = await mapWithConcurrency(imagePhotos, 3, async (p) =>
         p.piiRegions && p.piiRegions.length
           ? (await redactImageToDataUrl(p.url, p.piiRegions)) ?? (await fileToJpegDataUrl(p.file))
           : fileToJpegDataUrl(p.file),
-      ));
+      );
       const idxOf = new Map(imagePhotos.map((p, i) => [p.url, i]));
       const heroIndex = mainPhoto && idxOf.has(mainPhoto) ? idxOf.get(mainPhoto)! : 0;
 
@@ -909,8 +909,8 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
       (window as any).csReloadData?.();
       finishScanSlot(slot); // posted/saved — queue slots leave; primary resets
       go(dest);
-    } catch {
-      csToast("Couldn't save. Check your connection");
+    } catch (err) {
+      csToast(err instanceof Error && err.message ? err.message : "Couldn't save. Check your connection");
       setSaving(false);
       setSavingKind(null);
     }
