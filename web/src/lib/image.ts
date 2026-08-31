@@ -40,6 +40,23 @@ export async function normalizeImageFile(file: File): Promise<File> {
   }
 }
 
+// Run `fn` over `items` with at most `limit` in flight at once. HEIC decoding
+// (heic2any) runs a WASM heap per call — firing all of a full-car scan batch
+// (up to 15 photos) at once via Promise.all can exhaust that heap and cause
+// spurious conversion failures under otherwise-normal use.
+export async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();

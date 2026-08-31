@@ -4,7 +4,7 @@ import React from "react";
 import { ArrowLeft, Upload, Camera, X, Sparkles, ScanLine, Check, Car, Wrench, Info, ChevronDown, ScanSearch, LoaderCircle } from "lucide-react";
 import { Card } from "../UI";
 import { csToast } from "../Dashboard";
-import { looksLikeImage, normalizeImageFile, fileToJpegDataUrl } from "@/lib/image";
+import { looksLikeImage, normalizeImageFile, fileToJpegDataUrl, mapWithConcurrency } from "@/lib/image";
 
 interface Photo { url: string; name: string; file: File }
 const MAX_PHOTOS = 8;
@@ -63,7 +63,7 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
     if (!imgs.length) { csToast("Add JPG, PNG or HEIC photos"); return; }
     const room = MAX_PHOTOS - photos.length;
     const take = imgs.slice(0, Math.max(0, room));
-    const mapped = await Promise.all(take.map(async (f) => { const file = await normalizeImageFile(f); return { url: URL.createObjectURL(file), name: f.name, file }; }));
+    const mapped = await mapWithConcurrency(take, 3, async (f) => { const file = await normalizeImageFile(f); return { url: URL.createObjectURL(file), name: f.name, file }; });
     setPhotos((p) => [...p, ...mapped].slice(0, MAX_PHOTOS));
   }
   function removePhoto(i: number) { setPhotos((p) => { const n = [...p]; const [g] = n.splice(i, 1); if (g) URL.revokeObjectURL(g.url); return n; }); }
@@ -156,7 +156,7 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
     }
     setBusy("save");
     try {
-      const images = photos.length ? await Promise.all(photos.map((p) => fileToJpegDataUrl(p.file))) : [];
+      const images = photos.length ? await mapWithConcurrency(photos, 3, (p) => fileToJpegDataUrl(p.file)) : [];
       const priceNum = price === "" ? null : Number(price);
       let payload: any;
       if (kind === "car") {
@@ -180,7 +180,7 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
       csToast(draft ? "Saved as draft" : kind === "car" ? "Car posted to the market" : "Part posted to the market");
       (window as any).csReloadData?.();
       go(kind === "car" ? "vehicles" : "parts");
-    } catch { csToast("Couldn't save — check your connection"); setBusy(null); }
+    } catch (err) { csToast(err instanceof Error && err.message ? err.message : "Couldn't save — check your connection"); setBusy(null); }
   }
 
   const isCar = kind === "car";
