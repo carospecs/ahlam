@@ -1,6 +1,6 @@
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/site/LanguageToggle";
-import { LayoutDashboard } from "lucide-react";
+import { LayoutDashboard, CheckCircle2 } from "lucide-react";
 
 // Sticky branded header for the Ultimate personal sites ({slug}.ahlam.io).
 // Server component — everything here comes off the shop's public row.
@@ -18,6 +18,11 @@ export function ShopSiteHeader({ shop, isOwner }: { shop: any; isOwner?: boolean
   const ratingCount = shop.rating_count || 0;
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 20, background: "color-mix(in srgb, var(--background) 88%, transparent)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--line)" }}>
+      {shop.promo_text && (
+        <div style={{ background: "var(--accent)", color: "#fff", textAlign: "center", fontSize: 12.5, fontWeight: 700, padding: "7px 24px", letterSpacing: "0.01em" }}>
+          {shop.promo_text}
+        </div>
+      )}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "12px 24px", display: "flex", alignItems: "center", gap: 14 }}>
         <a href="/" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none", color: "inherit", minWidth: 0 }}>
           {shop.logo_url ? (
@@ -28,8 +33,8 @@ export function ShopSiteHeader({ shop, isOwner }: { shop: any; isOwner?: boolean
           )}
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: 7, whiteSpace: "nowrap" }}>
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{shop.name}</span>
-              {shop.verified && <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--success)", background: "color-mix(in srgb, var(--success) 12%, transparent)", borderRadius: 999, padding: "2.5px 8px", letterSpacing: "0.04em", flexShrink: 0 }}>✓ VERIFIED</span>}
+              <span data-no-i18n style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{shop.name}</span>
+              {shop.verified && <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--success)", background: "color-mix(in srgb, var(--success) 12%, transparent)", borderRadius: 999, padding: "2.5px 8px", letterSpacing: "0.04em", flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4 }}><CheckCircle2 size={10} /> VERIFIED</span>}
             </div>
             <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {[shop.location, ratingCount > 0 ? `${starString(ratingAvg)} ${ratingAvg.toFixed(1)} (${ratingCount})` : ""].filter(Boolean).join(" · ")}

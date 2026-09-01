@@ -7,7 +7,7 @@ import { effectivePlan } from "@/lib/plan-limits";
 
 export const runtime = "nodejs";
 
-const EDITABLE = ["name", "location", "business_phone", "email", "website", "description", "hours", "logo_url", "cover_url", "zip_code", "default_warranty_days", "returns_policy", "nmvtis_id", "nmvtis_entity_name"];
+const EDITABLE = ["name", "location", "business_phone", "email", "website", "facebook_url", "yelp_url", "description", "hours", "logo_url", "cover_url", "zip_code", "default_warranty_days", "returns_policy", "nmvtis_id", "nmvtis_entity_name", "promo_text"];
 
 async function ctx() {
   const supabase = await supabaseServer();

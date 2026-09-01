@@ -121,7 +121,8 @@ export function ShopProfile({ go }: ViewProps) {
       const loaded = {
         name: s.name || "", location: s.location || "", business_phone: s.business_phone || "",
         zip_code: s.zip_code || "",
-        email: s.email || "", website: s.website || "", description: s.description || "", hours: s.hours || "",
+        email: s.email || "", website: s.website || "", facebook_url: s.facebook_url || "", yelp_url: s.yelp_url || "", description: s.description || "", hours: s.hours || "",
+        promo_text: s.promo_text || "",
         default_warranty_days: typeof s.default_warranty_days === "number" ? s.default_warranty_days : 30,
         returns_policy: s.returns_policy || "",
       };
@@ -245,6 +246,9 @@ export function ShopProfile({ go }: ViewProps) {
             <Field label="About your shop">
               <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} placeholder="Family-owned salvage yard since 2004. Quality used OEM parts, tested before they ship, with a 30-day guarantee." style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} disabled={!canEdit} />
             </Field>
+            <Field label="Promo banner (optional)">
+              <input value={form.promo_text} onChange={(e) => set("promo_text", e.target.value)} placeholder="Labor Day Sale (Aug 31–Sept 7): 10% off all parts" style={inp} disabled={!canEdit} />
+            </Field>
           </>
         ))}
 
@@ -255,6 +259,8 @@ export function ShopProfile({ go }: ViewProps) {
               <Field label="Public email"><input value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="sales@yourshop.com" style={inp} disabled={!canEdit} /></Field>
             </div>
             <Field label="Website"><input value={form.website} onChange={(e) => set("website", e.target.value)} placeholder="yourshop.com" style={inp} disabled={!canEdit} /></Field>
+            <Field label="Facebook page"><input value={form.facebook_url} onChange={(e) => set("facebook_url", e.target.value)} placeholder="https://facebook.com/yourshop" style={inp} disabled={!canEdit} /></Field>
+            <Field label="Yelp page"><input value={form.yelp_url} onChange={(e) => set("yelp_url", e.target.value)} placeholder="https://yelp.com/biz/yourshop" style={inp} disabled={!canEdit} /></Field>
           </>
         ))}
 

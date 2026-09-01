@@ -3,6 +3,12 @@ import { supabaseServer } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { sendMail } from "@/lib/mailer";
 
+// Downtown Auto Dismantlers is family-run — Andy also wants a copy of every
+// buyer message so he can help his dad respond, in addition to the shop's
+// own business email and the in-app Ahlam thread. Scoped to this one shop.
+const DAD_SHOP_ID = "159c4cdc-3cbc-4061-9942-5c901486df49";
+const DAD_OWNER_CC = "andygar1019@gmail.com,clara.gomez1985@yahoo.com";
+
 // A buyer contacts a seller — either about a specific part listing or about a
 // whole-car vehicle (shop-level). Delegates to SECURITY DEFINER RPCs so web and
 // mobile share one code path.
@@ -86,6 +92,7 @@ async function notifySellerByEmail(opts: {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://ahlam.io";
     await sendMail({
       to,
+      cc: shopId === DAD_SHOP_ID ? DAD_OWNER_CC : undefined,
       replyTo: opts.buyerEmail || undefined,
       subject: `New buyer message for ${shopName} on Ahlam`,
       text:

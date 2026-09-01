@@ -14,7 +14,7 @@ import { evFitLines, type EvFitLine } from "@/lib/ev-interchange";
 // plan / trial_ends_at / subscription_status are for hasPersonalSite() gating
 // only; they are never rendered.
 const BASE_COLUMNS =
-  "id, name, location, address_line, zip_code, lat, lng, business_phone, email, website, description, hours, logo_url, cover_url, default_warranty_days, returns_policy, verified, rating_avg, rating_count, plan, trial_ends_at, subscription_status";
+  "id, name, location, address_line, zip_code, lat, lng, business_phone, email, website, facebook_url, yelp_url, description, hours, logo_url, cover_url, default_warranty_days, returns_policy, verified, rating_avg, rating_count, plan, trial_ends_at, subscription_status, promo_text";
 export const SHOP_PUBLIC_COLUMNS = `${BASE_COLUMNS}, slug`;
 
 // ---------------------------------------------------------------------------
@@ -35,6 +35,9 @@ const DEMO_SHOP = {
   business_phone: "(714) 555-0142",
   email: "parts@example.com",
   website: null,
+  facebook_url: null,
+  yelp_url: null,
+  promo_text: null,
   description: "Family-run auto recycler serving Orange County since 1998. Every part is pulled by our own crew, tested where it counts, honestly graded, and photographed as-is.",
   hours: "Mon–Fri 8:00 AM – 5:00 PM\nSat 8:00 AM – 3:00 PM\nSun closed",
   logo_url: null, cover_url: null,
@@ -73,8 +76,37 @@ const DEMO_REVIEWS = [
   { id: "demo-r2", rating: 5, body: "Best prices in OC for body panels. The condition grades are honest.", verified_purchase: true, author: "Sandra T." },
 ];
 
+// TEMP LOCAL PREVIEW (2026-08-11): serves Downtown Auto Dismantlers' real profile
+// before the shop_slug migration lands, so the site can be previewed locally.
+// Remove this block (and its three hooks below) once the migration is applied —
+// the DB row 159c4cdc-3cbc-4061-9942-5c901486df49 then takes over via slug lookup.
+const DAD_PREVIEW = {
+  ...DEMO_SHOP,
+  id: "159c4cdc-3cbc-4061-9942-5c901486df49",
+  name: "Downtown Auto Dismantlers Inc.",
+  slug: "downtownautodismantlers",
+  location: "Los Angeles, CA 90001",
+  address_line: "6828 McKinley Ave",
+  zip_code: "90001",
+  lat: 33.9731, lng: -118.2479,
+  business_phone: "(323) 758-5167",
+  email: "downtownautodismantling@gmail.com",
+  website: "http://trade9527.car-part.com",
+  facebook_url: "https://www.facebook.com/people/Downtown-Auto-Dismantlers-Inc/61590698635809/",
+  yelp_url: "https://www.yelp.com/biz/downtown-auto-dismantlers-los-angeles-2",
+  description: "We've sold quality used OEM auto parts in Los Angeles since 2013, specializing in Toyota, Honda, Chevy, Ford, and Dodge. We're now expanding into EV, including Tesla, with delivery for EV parts only.",
+  hours: "Mon–Fri 8am–5pm, Sat 8am–3pm",
+  default_warranty_days: 60,
+  returns_policy: "60-day warranty on labor. Engine and transmission carry a 90-day warranty with exchange.",
+  promo_text: "Labor Day Sale (Aug 31–Sept 7): 10% off all parts",
+  verified: false,
+  rating_avg: 0, rating_count: 0,
+  plan: "ultimate",
+};
+
 export const getShopById = cache(async (id: string): Promise<any | null> => {
   if (id === DEMO_SHOP.id) return DEMO_SHOP;
+  if (id === DAD_PREVIEW.id) return DAD_PREVIEW; // TEMP LOCAL PREVIEW
   try {
     const db = supabaseAdmin();
     const { data, error } = await db.from("shops").select(SHOP_PUBLIC_COLUMNS).eq("id", id).single();
@@ -94,6 +126,7 @@ export const getShopById = cache(async (id: string): Promise<any | null> => {
 
 export const getShopBySlug = cache(async (slug: string): Promise<any | null> => {
   if (slug === DEMO_SHOP.slug) return DEMO_SHOP;
+  if (slug === DAD_PREVIEW.slug) return DAD_PREVIEW; // TEMP LOCAL PREVIEW
   try {
     const db = supabaseAdmin();
     // Pre-migration (no slug column) this errors and returns null — every

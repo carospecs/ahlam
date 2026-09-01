@@ -71,7 +71,7 @@ export function MessageSeller({
         onClick={() => setOpen(true)}
         style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: compact ? "8px 14px" : "11px 18px", borderRadius: 11, border: "1px solid var(--accent)", background: "transparent", color: "var(--accent)", fontSize: compact ? 13 : 14, fontWeight: 700, cursor: "pointer", width: fullWidth ? "100%" : undefined }}
       >
-        <MessageSquare size={15} /> Message {sellerName || "seller"}
+        <MessageSquare size={15} /> Message <span data-no-i18n>{sellerName || "seller"}</span>
       </button>
     );
   }

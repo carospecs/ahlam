@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { SHOP_SUBDOMAINS } from "@/lib/shop-subdomains";
 import { AUTH_COOKIE_DOMAIN } from "@/lib/auth-cookie";
+import { validateSlug } from "@/lib/slug";
 
 const allowedOrigins = [
   "http://localhost:3000",
@@ -59,6 +60,17 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  // Ultimate personal sites: {slug}.ahlam.io (or {slug}.localhost in dev) ->
+  // /site/{slug}, transparently (URL bar keeps showing the subdomain). API
+  // routes stay untouched — the site's client-side fetches (e.g. /api/translate)
+  // must resolve normally on the tenant host, not rewrite into /site/{slug}/api/….
+  const tenant = tenantSlug(req);
+  if (tenant && !req.nextUrl.pathname.startsWith("/site/") && !req.nextUrl.pathname.startsWith("/api/")) {
+    const url = req.nextUrl.clone();
+    url.pathname = `/site/${tenant}${url.pathname === "/" ? "" : url.pathname}`;
+    return NextResponse.rewrite(url);
+  }
+
   const res = NextResponse.next();
 
   // CORS preflight
@@ -103,5 +115,7 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*", "/dashboard/:path*", "/"],
+  // Broad enough to catch tenant-subdomain requests to any path (site pages,
+  // part pages, …), not just "/" — excludes Next internals and static files.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
