@@ -104,3 +104,34 @@ export async function fileToJpegDataUrl(file: File, maxDim = 1600, quality = 0.8
     throw error;
   }
 }
+
+// Per-photo RAW byte ceiling for anything joining a BATCHED multi-photo request
+// (save/read-vin send up to MAX_PHOTOS=15 images in one JSON body). At 130KB raw
+// (~173KB once base64-encoded), a full 15-photo batch tops out around 2.6MB of
+// image data — leaving real headroom under Vercel's ~4.5MB request-body cap for
+// the rest of the JSON (vehicle + up to 50 priced parts). Cutting it closer than
+// that is what surfaced as a raw "Request Entity Too Large" response, which broke
+// res.json() and showed the seller a JSON parse error instead of a real message.
+export const BATCH_IMAGE_MAX_BYTES = 130_000;
+
+// Call `produce(maxDim, quality)` at progressively smaller sizes until the
+// resulting JPEG data URL's decoded size is under `maxBytes`, or the smallest
+// step is reached (best-effort — never blocks the caller).
+export async function shrinkUntilUnderBudget(
+  produce: (maxDim: number, quality: number) => Promise<string>,
+  maxBytes: number = BATCH_IMAGE_MAX_BYTES,
+): Promise<string> {
+  const steps: Array<[number, number]> = [[1600, 0.82], [1280, 0.7], [1024, 0.6], [800, 0.5], [640, 0.4]];
+  let out = "";
+  for (const [maxDim, quality] of steps) {
+    out = await produce(maxDim, quality);
+    const approxBytes = (out.length - out.indexOf(",") - 1) * 0.75; // base64 → raw bytes
+    if (approxBytes <= maxBytes) return out;
+  }
+  return out;
+}
+
+// Encode a File for a BATCHED multi-photo request (see BATCH_IMAGE_MAX_BYTES).
+export async function fileToJpegDataUrlBudgeted(file: File, maxBytes: number = BATCH_IMAGE_MAX_BYTES): Promise<string> {
+  return shrinkUntilUnderBudget((maxDim, quality) => fileToJpegDataUrl(file, maxDim, quality), maxBytes);
+}

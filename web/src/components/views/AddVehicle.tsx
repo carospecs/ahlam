@@ -5,7 +5,7 @@ import { ImageUp, Upload, ScanLine, Sparkles, Check, Info, CircleCheck, Car, Wre
 import { Card, PhotoCell, ConditionBadge } from "../UI";
 import { SELL_MODE } from "../data";
 import { csToast } from "../Dashboard";
-import { looksLikeScannable, isPdf, normalizeImageFile, fileToJpegDataUrl, fileToAIDataUrl, mapWithConcurrency } from "@/lib/image";
+import { looksLikeScannable, isPdf, normalizeImageFile, fileToJpegDataUrl, fileToAIDataUrl, mapWithConcurrency, shrinkUntilUnderBudget, fileToJpegDataUrlBudgeted } from "@/lib/image";
 import { playSonarPing } from "@/lib/sound";
 import { ManualListing } from "./ManualListing";
 import { useScanSession, setScanSession, getScanSession, resetScanSession, beginScanRun, isScanRun, addScanSlot, removeScanSlot, finishScanSlot, useScanSlots, useScanPhases, PRIMARY_SLOT, type ScanSession } from "@/lib/scanSession";
@@ -905,12 +905,16 @@ function CarScanner({ go, slot, isPrimary }: { go: (id: string) => void; slot: s
       // for identification but are never stored as listing images.
       const imagePhotos = photos.filter((p) => !isPdf(p.file));
       // Upload REDACTED images for any photo with PII (plate/VIN) so the saved, customer-
-      // facing listing never carries them; fall back to the normal encode otherwise.
-      const images = await mapWithConcurrency(imagePhotos, 3, async (p) =>
-        p.piiRegions && p.piiRegions.length
-          ? (await redactImageToDataUrl(p.url, p.piiRegions)) ?? (await fileToJpegDataUrl(p.file))
-          : fileToJpegDataUrl(p.file),
-      );
+      // facing listing never carries them; fall back to the normal encode otherwise. Every
+      // photo is shrunk to fit BATCH_IMAGE_MAX_BYTES so a full MAX_PHOTOS-photo save can
+      // never blow past the platform's request-body size limit (AHLAM save-payload-size).
+      const images = await mapWithConcurrency(imagePhotos, 3, (p) => {
+        const piiRegions = p.piiRegions;
+        return piiRegions && piiRegions.length
+          ? shrinkUntilUnderBudget(async (maxDim, quality) =>
+              (await redactImageToDataUrl(p.url, piiRegions, maxDim, quality)) ?? fileToJpegDataUrl(p.file, maxDim, quality))
+          : fileToJpegDataUrlBudgeted(p.file);
+      });
       const idxOf = new Map(imagePhotos.map((p, i) => [p.url, i]));
       const heroIndex = mainPhoto && idxOf.has(mainPhoto) ? idxOf.get(mainPhoto)! : 0;
 

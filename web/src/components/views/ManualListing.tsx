@@ -4,7 +4,7 @@ import React from "react";
 import { ArrowLeft, Upload, Camera, X, Sparkles, ScanLine, Check, Car, Wrench, Info, ChevronDown, ScanSearch, LoaderCircle } from "lucide-react";
 import { Card } from "../UI";
 import { csToast } from "../Dashboard";
-import { looksLikeImage, normalizeImageFile, fileToJpegDataUrl, mapWithConcurrency } from "@/lib/image";
+import { looksLikeImage, normalizeImageFile, fileToJpegDataUrl, mapWithConcurrency, fileToJpegDataUrlBudgeted } from "@/lib/image";
 
 interface Photo { url: string; name: string; file: File }
 const MAX_PHOTOS = 8;
@@ -156,7 +156,7 @@ export function ManualListing({ kind, onBack, go }: { kind: "car" | "part"; onBa
     }
     setBusy("save");
     try {
-      const images = photos.length ? await mapWithConcurrency(photos, 3, (p) => fileToJpegDataUrl(p.file)) : [];
+      const images = photos.length ? await mapWithConcurrency(photos, 3, (p) => fileToJpegDataUrlBudgeted(p.file)) : [];
       const priceNum = price === "" ? null : Number(price);
       let payload: any;
       if (kind === "car") {

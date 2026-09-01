@@ -12,13 +12,20 @@ export type PiiBox = { box: [number, number, number, number] }; // [x0,y0,x1,y1]
 const clamp = (n: number) => Math.min(1, Math.max(0, n));
 
 // Draw the image and paint an opaque box over each region. Returns the canvas, or null
-// if the image can't be loaded / drawn. Shared by both public helpers below.
-async function maskToCanvas(url: string, regions: PiiBox[]): Promise<HTMLCanvasElement | null> {
+// if the image can't be loaded / drawn. Shared by both public helpers below. Downscales
+// to maxDim like the rest of the photo pipeline (lib/image.ts) — without this, a
+// redacted photo (drawn at full native resolution) can run several MB by itself and,
+// bundled with a car's other photos into one save request, blow past the platform's
+// request-body size limit.
+async function maskToCanvas(url: string, regions: PiiBox[], maxDim = 1600): Promise<HTMLCanvasElement | null> {
   if (!regions.length || typeof document === "undefined") return null;
   const img = await loadImage(url);
-  const w = img.naturalWidth || img.width;
-  const h = img.naturalHeight || img.height;
-  if (!w || !h) return null;
+  const naturalW = img.naturalWidth || img.width;
+  const naturalH = img.naturalHeight || img.height;
+  if (!naturalW || !naturalH) return null;
+  const scale = Math.min(1, maxDim / Math.max(naturalW, naturalH));
+  const w = Math.max(1, Math.round(naturalW * scale));
+  const h = Math.max(1, Math.round(naturalH * scale));
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
@@ -51,10 +58,10 @@ export async function redactImage(url: string, regions: PiiBox[]): Promise<strin
 
 // Redacted JPEG data URL for the UPLOADED/SAVED listing image — the customer-facing copy.
 // Returns null if there's nothing to redact so the caller can use its normal encode path.
-export async function redactImageToDataUrl(url: string, regions: PiiBox[]): Promise<string | null> {
+export async function redactImageToDataUrl(url: string, regions: PiiBox[], maxDim = 1600, quality = 0.85): Promise<string | null> {
   try {
-    const canvas = await maskToCanvas(url, regions);
-    return canvas ? canvas.toDataURL("image/jpeg", 0.9) : null;
+    const canvas = await maskToCanvas(url, regions, maxDim);
+    return canvas ? canvas.toDataURL("image/jpeg", quality) : null;
   } catch {
     return null;
   }
