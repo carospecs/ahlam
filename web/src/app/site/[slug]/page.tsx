@@ -5,6 +5,9 @@ import * as shopProfiles from "@/lib/shop-static-profiles";
 import { SiteInventory } from "@/components/site/SiteInventory";
 import { ShopSiteFooter } from "@/components/site/ShopSiteFooter";
 import { DealAgent } from "@/components/DealAgent";
+import { FacebookIcon } from "@/components/icons/FacebookIcon";
+import { YelpIcon } from "@/components/icons/YelpIcon";
+import { Phone, Mail, MapPin, Globe } from "lucide-react";
 
 // Home page of an Ultimate shop's personal website — the SEO-optimized,
 // zero-config storefront generated from the data the shop already keeps on
@@ -14,6 +17,11 @@ import { DealAgent } from "@/components/DealAgent";
 export const dynamic = "force-dynamic";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ahlam.io";
+
+// Downtown Auto Dismantlers is the only shop currently offering EV parts
+// delivery — the hero CTA below is scoped to this one shop, not shown as a
+// generic claim on every Ultimate site.
+const DAD_SHOP_ID = "159c4cdc-3cbc-4061-9942-5c901486df49";
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -35,6 +43,17 @@ function sameAsFor(slug: string, shop: any): string[] | undefined {
  *  only, no hardcoded fallback. */
 function stateFrom(location?: string | null): string | undefined {
   return (location || "").match(/,\s*([A-Z]{2})\b/)?.[1];
+}
+
+/** Facebook/Yelp links out of the same_as list, for the visible social icon
+ *  row (same_as itself only feeds invisible JSON-LD structured data). */
+function socialLinksFrom(sameAs?: string[]): { facebook?: string; yelp?: string } {
+  const out: { facebook?: string; yelp?: string } = {};
+  for (const url of sameAs || []) {
+    if (/facebook\.com/i.test(url)) out.facebook = url;
+    else if (/yelp\.com/i.test(url)) out.yelp = url;
+  }
+  return out;
 }
 
 export async function generateMetadata({ params }: Params) {
@@ -77,9 +96,9 @@ export default async function ShopSiteHome({ params }: Params) {
   ]);
 
   const place = shop.location || shop.zip_code || "";
-  const warrantyDays = shop.default_warranty_days ?? 30;
   const signinHref = `${SITE_URL}/?signin=1`;
   const ratingCount = shop.rating_count || 0;
+  const { facebook: facebookUrl, yelp: yelpUrl } = socialLinksFrom(sameAsFor(slug, shop));
 
   // LocalBusiness structured data — the machine-readable layer Google reads
   // for the local pack and rich results.
@@ -125,18 +144,28 @@ export default async function ShopSiteHome({ params }: Params) {
           <div className="cs-kicker" style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--sand)", fontWeight: 700 }}>
             Used OEM auto parts{place ? ` · ${place}` : ""}
           </div>
-          <h1 className="cs-display" style={{ margin: "12px 0 0", fontSize: "clamp(30px, 4.6vw, 44px)", fontWeight: 800, letterSpacing: "-0.025em", lineHeight: 1.08, maxWidth: 680 }}>
+          <h1 data-no-i18n className="cs-display" style={{ margin: "12px 0 0", fontSize: "clamp(30px, 4.6vw, 44px)", fontWeight: 800, letterSpacing: "-0.025em", lineHeight: 1.08, maxWidth: 680 }}>
             {shop.name}
           </h1>
+          {(shop.address_line || place) && (
+            mapsHref ? (
+              <a href={mapsHref} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 15.5, fontWeight: 700, color: "var(--foreground)", textDecoration: "none" }}>
+                <MapPin size={15} /> {[shop.address_line, place].filter(Boolean).join(", ")}
+              </a>
+            ) : (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 15.5, fontWeight: 700, color: "var(--foreground)" }}>
+                <MapPin size={15} /> {[shop.address_line, place].filter(Boolean).join(", ")}
+              </div>
+            )
+          )}
           {shop.description && (
             <p style={{ margin: "14px 0 0", color: "var(--muted)", maxWidth: 600, fontSize: 16, lineHeight: 1.6 }}>{shop.description}</p>
           )}
-          <div style={{ display: "flex", gap: 8, marginTop: 20, flexWrap: "wrap" }}>
-            <span style={chip}><b style={{ color: "var(--foreground)" }}>{parts.length}</b>&nbsp;part{parts.length === 1 ? "" : "s"} in stock</span>
-            {warrantyDays > 0 && <span style={chip}><b style={{ color: "var(--foreground)" }}>{warrantyDays}-day</b>&nbsp;warranty standard</span>}
-            {shop.verified && <span style={chip}>✓ Verified business</span>}
-            {place && <span style={chip}>📍 {place}</span>}
-          </div>
+          {shop.id === DAD_SHOP_ID && shop.business_phone && (
+            <a href={`tel:${String(shop.business_phone).replace(/[^\d+]/g, "")}`} style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 18, padding: "10px 16px", borderRadius: 11, background: "var(--accent)", color: "#fff", fontWeight: 700, fontSize: 14.5, textDecoration: "none" }}>
+              <Phone size={15} /> Call or message us to arrange EV parts delivery
+            </a>
+          )}
         </div>
       </div>
 
@@ -180,18 +209,30 @@ export default async function ShopSiteHome({ params }: Params) {
           </div>
         )}
 
-        {/* About / contact / hours */}
-        <div id="about" style={{ scrollMarginTop: 80 }}>
-          <h2 style={sectionH}>About {shop.name}</h2>
-          <div className="cs-site-two" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 22 }}>
+        {/* Contact / hours — shop identity + description already shown in the hero above */}
+        <div id="about" style={{ scrollMarginTop: 80, paddingTop: 44 }}>
+          <div className="cs-site-two" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 22, alignItems: "start" }}>
             <div style={{ ...card, padding: 24 }}>
-              {shop.description && <p style={{ margin: 0, color: "var(--muted)", fontSize: 14, lineHeight: 1.6 }}>{shop.description}</p>}
-              <div style={{ display: "flex", gap: 10, marginTop: shop.description ? 14 : 0, flexWrap: "wrap" }}>
-                {shop.business_phone && <a href={`tel:${String(shop.business_phone).replace(/[^\d+]/g, "")}`} style={contactBtn}>📞 {shop.business_phone}</a>}
-                {shop.email && <a href={`mailto:${shop.email}`} style={contactBtn}>✉️ Email us</a>}
-                {mapsHref && <a href={mapsHref} target="_blank" rel="noopener noreferrer" style={contactBtn}>📍 Get directions</a>}
-                {shop.website && <a href={shop.website} target="_blank" rel="noopener noreferrer" style={contactBtn}>🌐 Website</a>}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {shop.business_phone && <a href={`tel:${String(shop.business_phone).replace(/[^\d+]/g, "")}`} style={{ ...contactBtn, display: "inline-flex", alignItems: "center", gap: 7 }}><Phone size={13} /> {shop.business_phone}</a>}
+                {shop.email && <a href={`mailto:${shop.email}`} style={{ ...contactBtn, display: "inline-flex", alignItems: "center", gap: 7 }}><Mail size={13} /> Email us</a>}
+                {mapsHref && <a href={mapsHref} target="_blank" rel="noopener noreferrer" style={{ ...contactBtn, display: "inline-flex", alignItems: "center", gap: 7 }}><MapPin size={13} /> Get directions</a>}
+                {shop.website && <a href={shop.website} target="_blank" rel="noopener noreferrer" style={{ ...contactBtn, display: "inline-flex", alignItems: "center", gap: 7 }}><Globe size={13} /> Website</a>}
               </div>
+              {(facebookUrl || yelpUrl) && (
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 14, marginTop: 18, paddingTop: 18, borderTop: "1px solid var(--line)" }}>
+                  {facebookUrl && (
+                    <a href={facebookUrl} target="_blank" rel="noopener noreferrer" aria-label="Facebook" style={socialBtn}>
+                      <FacebookIcon size={16} />
+                    </a>
+                  )}
+                  {yelpUrl && (
+                    <a href={yelpUrl} target="_blank" rel="noopener noreferrer" aria-label="Yelp" style={socialBtn}>
+                      <YelpIcon size={16} />
+                    </a>
+                  )}
+                </div>
+              )}
               {reviews.length > 0 && reviews.slice(0, 3).map((r: any) => (
                 <div key={r.id} style={{ borderTop: "1px solid var(--line)", paddingTop: 12, marginTop: 14, fontSize: 13.5 }}>
                   <span style={{ color: "var(--sand)", letterSpacing: 2 }}>{starString(r.rating)}</span>
@@ -229,7 +270,7 @@ export default async function ShopSiteHome({ params }: Params) {
   );
 }
 
-const chip: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: "var(--muted)", border: "1px solid var(--line)", background: "var(--surface)", borderRadius: 999, padding: "5px 12px", display: "inline-flex", alignItems: "center" };
 const card: React.CSSProperties = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", overflow: "hidden" };
 const sectionH: React.CSSProperties = { fontSize: 21, fontWeight: 800, letterSpacing: "-0.015em", margin: "44px 0 16px", display: "flex", alignItems: "baseline", gap: 10 };
 const contactBtn: React.CSSProperties = { fontSize: 13, fontWeight: 700, textDecoration: "none", color: "inherit", border: "1px solid var(--line)", background: "var(--surface2)", borderRadius: 10, padding: "9px 15px" };
+const socialBtn: React.CSSProperties = { width: 36, height: 36, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--line)", background: "var(--surface2)", borderRadius: 999, flexShrink: 0 };

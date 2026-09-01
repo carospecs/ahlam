@@ -27,13 +27,19 @@ export type ShopStaticProfile = {
   lat: number;
   lng: number;
   business_phone: string;
-  description: string;
+  /** Optional — omit to let the shop's own DB description win. Only pin this
+   *  when the DB row doesn't have a good one yet. */
+  description?: string;
   hours: string;
   verified: boolean;
   plan: string;
   trial_ends_at: null;
   subscription_status: string;
   same_as: string[];
+  /** Optional time-boxed marketing banner, shown site-wide in the header.
+   *  Pinned in code (not a DB column) so it's a one-line edit to update or
+   *  clear — e.g. a seasonal sale. */
+  promo_text?: string;
 };
 
 export const SHOP_STATIC_PROFILES: Record<string, ShopStaticProfile> = {
@@ -47,8 +53,9 @@ export const SHOP_STATIC_PROFILES: Record<string, ShopStaticProfile> = {
     lat: 33.9776,
     lng: -118.2566,
     business_phone: "(323) 758-5167",
-    description:
-      "Family-owned salvage yard and used OEM auto parts supplier in South Los Angeles, serving the greater LA area with engines, transmissions, body parts, and more. We also buy junk cars.",
+    // description intentionally NOT pinned — the shop's real DB row already
+    // carries a detailed, up-to-date description (founding story, warranty,
+    // services); pinning here would silently override and regress it.
     hours: "Mon–Fri 8:00 AM – 5:00 PM\nSat 8:00 AM – 3:00 PM\nSun closed",
     verified: true,
     plan: "ultimate",
@@ -59,6 +66,7 @@ export const SHOP_STATIC_PROFILES: Record<string, ShopStaticProfile> = {
       "https://www.facebook.com/DOWNTOWNAUTOinc/",
       "https://www.yelp.com/biz/downtown-auto-dismantlers-los-angeles-2",
     ],
+    promo_text: "Labor Day Sale (Aug 31–Sept 7): 10% off all parts",
   },
   aaconautoparts: {
     id: "b696bcc7-10e9-4f01-ad49-56f9fe5eb25b",

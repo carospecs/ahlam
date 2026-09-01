@@ -29,7 +29,7 @@ export function ShopSiteFooter({ shop, parts }: { shop: any; parts: any[] }) {
         )}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <div style={{ fontSize: 12.5, color: "var(--muted)" }}>
-            © {new Date().getFullYear()} {shop.name}{shop.address_line ? ` · ${shop.address_line}` : ""}{place ? ` · ${place}` : ""}
+            © {new Date().getFullYear()} <span data-no-i18n>{shop.name}</span>{shop.address_line ? ` · ${shop.address_line}` : ""}{place ? ` · ${place}` : ""}
           </div>
           <a href="https://ahlam.io" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none", color: "inherit", fontWeight: 800, fontSize: 13.5 }}>
             <BrandMark size={18} /> Powered by Ahlam

@@ -3,6 +3,7 @@ import { MessageSeller } from "@/components/MessageSeller";
 import { type Grade } from "@/lib/grade";
 import { getShopBySlug, getListingDetail, partSeoTitle } from "@/lib/shop-site";
 import { siteOrigin } from "@/lib/slug";
+import { Phone, Info, CheckCircle2 } from "lucide-react";
 
 // Part detail on an Ultimate shop's personal website — the subdomain twin of
 // /p/[id], canonical on the shop's own domain. Sold parts render a noindex
@@ -115,7 +116,11 @@ export default async function SitePartPage({ params }: Params) {
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
             <span style={{ fontSize: 12.5, fontWeight: 700, padding: "5px 11px", borderRadius: 999, background: "color-mix(in srgb, var(--accent) 14%, transparent)", color: "var(--accent)" }}>{GRADE_LABEL[l.grade as Grade]}</span>
-            {!sold && <span style={{ fontSize: 12.5, fontWeight: 700, padding: "5px 11px", borderRadius: 999, background: l.asIs ? "color-mix(in srgb, var(--muted) 14%, transparent)" : "color-mix(in srgb, var(--success) 16%, transparent)", color: l.asIs ? "var(--muted)" : "var(--success)" }}>{l.asIs ? "🛈 " : "✔ "}{l.warrantyText}</span>}
+            {!sold && (
+              <span style={{ fontSize: 12.5, fontWeight: 700, padding: "5px 11px", borderRadius: 999, display: "inline-flex", alignItems: "center", gap: 5, background: l.asIs ? "color-mix(in srgb, var(--muted) 14%, transparent)" : "color-mix(in srgb, var(--success) 16%, transparent)", color: l.asIs ? "var(--muted)" : "var(--success)" }}>
+                {l.asIs ? <Info size={11} /> : <CheckCircle2 size={11} />} {l.warrantyText}
+              </span>
+            )}
             {l.category && <span style={{ fontSize: 12.5, fontWeight: 600, padding: "5px 11px", borderRadius: 999, border: "1px solid var(--line)", color: "var(--muted)" }}>{l.category}</span>}
           </div>
 
@@ -141,8 +146,8 @@ export default async function SitePartPage({ params }: Params) {
           ) : (
             <>
               <div style={{ marginTop: 20, padding: 14, borderRadius: 14, border: "1px solid var(--line)", background: "var(--surface)" }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700 }}>
-                  {l.asIs ? "🛈 Sold as-is" : `✔ ${l.warrantyText}`}
+                <div style={{ fontSize: 13.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                  {l.asIs ? <><Info size={13} /> Sold as-is</> : <><CheckCircle2 size={13} /> {l.warrantyText}</>}
                 </div>
                 <div style={{ marginTop: 5, fontSize: 13, color: "var(--muted)", lineHeight: 1.55 }}>
                   {l.asIs
@@ -160,8 +165,8 @@ export default async function SitePartPage({ params }: Params) {
                 <div style={{ display: "grid", gap: 10 }}>
                   <MessageSeller listingId={l.id} sellerName={shop.name} fullWidth signinHref={signinHref} />
                   {shop.business_phone && (
-                    <a href={`tel:${String(shop.business_phone).replace(/[^\d+]/g, "")}`} style={{ textAlign: "center", padding: "11px 18px", borderRadius: 11, background: "var(--surface2)", border: "1px solid var(--line)", color: "var(--foreground)", textDecoration: "none", fontSize: 14, fontWeight: 700 }}>
-                      ☎ {shop.business_phone}
+                    <a href={`tel:${String(shop.business_phone).replace(/[^\d+]/g, "")}`} style={{ textAlign: "center", padding: "11px 18px", borderRadius: 11, background: "var(--surface2)", border: "1px solid var(--line)", color: "var(--foreground)", textDecoration: "none", fontSize: 14, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+                      <Phone size={13} /> {shop.business_phone}
                     </a>
                   )}
                 </div>
