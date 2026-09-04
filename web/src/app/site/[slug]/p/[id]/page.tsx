@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { MessageSeller } from "@/components/MessageSeller";
+import { storefrontPriceLabel } from "@/lib/storefront-display.mjs";
 import { type Grade } from "@/lib/grade";
 import { getShopBySlug, getListingDetail, partSeoTitle } from "@/lib/shop-site";
 import { siteOrigin } from "@/lib/slug";
@@ -111,7 +112,7 @@ export default async function SitePartPage({ params }: Params) {
           {l.fitment && <div style={{ marginTop: 6, fontSize: 14.5, color: "var(--muted)" }}>Fits {l.fitment}</div>}
 
           <div style={{ marginTop: 16, fontSize: 30, fontWeight: 800, color: sold ? "var(--muted)" : "var(--success)", textDecoration: sold ? "line-through" : "none" }}>
-            ${Number(l.price).toLocaleString()}
+            {storefrontPriceLabel(l.price)}
           </div>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
