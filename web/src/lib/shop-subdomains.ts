@@ -10,7 +10,13 @@ export const SHOP_SUBDOMAINS: Record<string, string> = {
   // this file originally seeded, which Andy correctly deleted as a dupe
   // during the ultimate-personal-sites work (PR #51, 2026-08-11).
   downtownautodismantlers: "159c4cdc-3cbc-4061-9942-5c901486df49",
-  aaconautoparts: "b696bcc7-10e9-4f01-ad49-56f9fe5eb25b",
+  // Points at the yard's real shop record (owned by their actual login,
+  // aacononahlam@gmail.com, signed up 2026-09-03) — not the placeholder
+  // account/shop this file originally seeded (b696bcc7-10e9-4f01-ad49-
+  // 56f9fe5eb25b, owner aaconautoparts@ahlam.io), which is now an orphaned
+  // dupe with 0 listings pending manual cleanup, same as the Downtown Auto
+  // Dismantlers fix above (PR #51).
+  aaconautoparts: "9e40bef8-f3d4-4f5a-bc99-b01af1053499",
   avalancheautowrecking: "de61192c-a92a-4c6c-a8be-d26eb0891dfa",
   speedyautowrecking: "82e638d7-7c4c-467a-97b1-baa5c7a71332",
   aandbautosalvage: "555bb92c-64a2-4092-a1fd-0024cedaed6b",
