@@ -69,7 +69,7 @@ export const SHOP_STATIC_PROFILES: Record<string, ShopStaticProfile> = {
     promo_text: "Labor Day Sale (Aug 31–Sept 7): 10% off all parts",
   },
   aaconautoparts: {
-    id: "b696bcc7-10e9-4f01-ad49-56f9fe5eb25b",
+    id: "9e40bef8-f3d4-4f5a-bc99-b01af1053499",
     slug: "aaconautoparts",
     name: "Aacon Auto Parts",
     location: "Los Angeles, CA",
