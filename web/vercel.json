@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/marketing-drafts-summer",
+      "schedule": "5 16 * * 1,5"
+    },
+    {
+      "path": "/api/cron/marketing-drafts-winter",
+      "schedule": "5 17 * * 1,5"
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import Link from "next/link";
-import { RefreshCw, Users, LogOut, ExternalLink, Send, Trash2, ShieldCheck } from "lucide-react";
+import { RefreshCw, Users, LogOut, ExternalLink, Send, Trash2, ShieldCheck, Sparkles } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
 const Login = lazy(() => import("@/components/Login").then((m) => ({ default: m.Login })));
@@ -166,6 +166,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
             Founder console
           </h1>
           <div style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <Link href="/adminhost/marketing" style={btnGhost}><Sparkles size={15} /> Client marketing</Link>
             <Link href="/adminhost/waitlist" style={btnGhost}><Send size={15} /> Waitlist & launch email</Link>
             <Link href="/" style={btnGhost}><ExternalLink size={15} /> Open the app</Link>
             <button onClick={load} className="cs-raise" style={btnGhost}><RefreshCw size={15} /> Refresh</button>

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { MessageSeller } from "@/components/MessageSeller";
+import { storefrontPriceLabel } from "@/lib/storefront-display.mjs";
 
 // Searchable inventory for the Ultimate personal sites. Server-rendered with
 // the full inventory in the payload (indexable), filtered client-side — the
@@ -79,7 +80,7 @@ export function SiteInventory({
                   )}
                 </div>
                 <div className="cs-listing-cta" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, padding: "13px 16px", borderLeft: "1px solid var(--line)", width: 170, flexShrink: 0 }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: "var(--success)" }}>${Number(p.price).toLocaleString()}</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "var(--success)", textAlign: "right" }}>{storefrontPriceLabel(p.price)}</div>
                   <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "3px 9px", whiteSpace: "nowrap", color: p.asIs ? "var(--muted)" : "var(--success)", background: p.asIs ? "color-mix(in srgb, var(--muted) 14%, transparent)" : "color-mix(in srgb, var(--success) 14%, transparent)" }}>{p.warrantyText}</span>
                   <span style={{ marginTop: "auto", fontSize: 12, fontWeight: 600, color: "var(--accent)" }}>View details →</span>
                 </div>
