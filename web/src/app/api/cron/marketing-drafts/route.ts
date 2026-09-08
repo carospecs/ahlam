@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { generateMarketingDraft } from "@/lib/marketing-draft-agent";
 import {
   CLIENT_STOREFRONTS,
+  cronRequestAuthorized,
   extensionPayload,
   fallbackMarketingDraft,
   marketingWindow,
@@ -11,9 +13,10 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+type ShopResult = { shop: string; state: "ready" | "skipped" | "error"; detail: string };
+
 function authorized(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  return !!secret && req.headers.get("authorization") === `Bearer ${secret}`;
+  return cronRequestAuthorized(process.env.CRON_SECRET, req.headers.get("authorization"));
 }
 
 export async function GET(req: NextRequest) {
@@ -32,8 +35,9 @@ export async function GET(req: NextRequest) {
     .order("name");
   if (shopsError) return NextResponse.json({ error: shopsError.message }, { status: 500 });
 
-  const results: Array<{ shop: string; state: "ready" | "skipped" | "error"; detail: string }> = [];
-  for (const shop of shops || []) {
+  // Each enabled shop is independent. Run them together so one slow model call
+  // cannot consume the whole serverless window before later shops are reached.
+  const results: ShopResult[] = await Promise.all((shops || []).map(async (shop): Promise<ShopResult> => {
     try {
       const [vehiclesResult, listingsResult, historyResult] = await Promise.all([
         db.from("vehicles")
@@ -53,19 +57,19 @@ export async function GET(req: NextRequest) {
 
       const usedSourceKeys = (historyResult.data || []).map((row) => row.source_listing_id
         ? `listing:${row.source_listing_id}`
-        : row.source_vehicle_id ? `vehicle:${row.source_vehicle_id}` : null).filter(Boolean);
+        : row.source_vehicle_id ? `vehicle:${row.source_vehicle_id}` : null).filter(Boolean) as string[];
       const candidate = selectMarketingCandidate({
         vehicles: vehiclesResult.data || [],
         listings: listingsResult.data || [],
         usedSourceKeys,
-      });
+      } as any);
       if (!candidate) {
-        results.push({ shop: shop.name, state: "skipped", detail: "No active inventory with a public photo and price" });
-        continue;
+        return { shop: shop.name, state: "skipped", detail: "No active inventory with a public photo" };
       }
 
-      const storefrontUrl = CLIENT_STOREFRONTS[shop.id] || `https://ahlam.io/shop/${shop.id}`;
-      const draft = fallbackMarketingDraft({ shop, candidate, storefrontUrl });
+      const storefrontUrl = (CLIENT_STOREFRONTS as Record<string, string>)[shop.id] || `https://ahlam.io/shop/${shop.id}`;
+      const fallback = fallbackMarketingDraft({ shop, candidate, storefrontUrl });
+      const draft = await generateMarketingDraft({ shop, candidate, storefrontUrl, fallback });
       const payload = extensionPayload({ shop, candidate, draft });
       const { data, error } = await db.from("marketing_post_drafts").upsert({
         shop_id: shop.id,
@@ -79,16 +83,17 @@ export async function GET(req: NextRequest) {
         image_url: candidate.photos[0] || null,
         payload,
         status: "ready",
-        generator: "deterministic",
+        generator: draft.generator,
+        agent_run_id: draft.agentRunId,
       }, { onConflict: "shop_id,platform,slot_key", ignoreDuplicates: true }).select("id").maybeSingle();
       if (error) throw error;
-      results.push(data?.id
+      return data?.id
         ? { shop: shop.name, state: "ready", detail: candidate.label }
-        : { shop: shop.name, state: "skipped", detail: "This time slot already exists" });
+        : { shop: shop.name, state: "skipped", detail: "This time slot already exists" };
     } catch (error: any) {
-      results.push({ shop: shop.name, state: "error", detail: error?.message || "Unknown error" });
+      return { shop: shop.name, state: "error", detail: error?.message || "Unknown error" };
     }
-  }
+  }));
 
   return NextResponse.json({
     ok: !results.some((result) => result.state === "error"),

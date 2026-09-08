@@ -580,6 +580,12 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
   .cs-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 26px !important; }
 }
 
+/* Founder marketing queue: keep the photo and editor readable on phones. */
+@media (max-width: 760px) {
+  .cs-marketing-draft { grid-template-columns: 1fr !important; }
+  .cs-marketing-draft > img { max-height: 340px; }
+}
+
 /* ---- Print: listing cards ---- */
 @media print {
   .cs-sidebar, .cs-topbar, .cs-hamburger, .cs-navclose, .cs-backdrop, button {

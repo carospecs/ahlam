@@ -1,5 +1,9 @@
 const DEFAULT_TIME_ZONE = "America/Los_Angeles";
 
+export function cronRequestAuthorized(secret, authorization) {
+  return typeof secret === "string" && secret.length >= 32 && authorization === `Bearer ${secret}`;
+}
+
 // Keep the storefront URL in the saved draft even if the public site is later
 // served from a different host. shop-subdomains.test.mjs checks these IDs
 // against the same registry that middleware uses.
@@ -148,11 +152,46 @@ export function parseAgentDraft(raw, fallback, requiredNames = []) {
   }
 }
 
+function cleanHashtags(hashtags = []) {
+  return [...new Set((Array.isArray(hashtags) ? hashtags : [])
+    .map((tag) => String(tag).replace(/^#/, "").trim())
+    .filter(Boolean))].slice(0, 5);
+}
+
+function hashtagsFromDescription(description) {
+  return cleanHashtags([...String(description || "").matchAll(/(?:^|\s)#([\p{L}\p{N}_]+)/gu)]
+    .map((match) => match[1]));
+}
+
+export function marketingDescription(body, hashtags = []) {
+  const tags = cleanHashtags(hashtags);
+  return [String(body || "").trim(), tags.length ? tags.map((tag) => `#${tag}`).join(" ") : null]
+    .filter(Boolean).join("\n\n");
+}
+
+/** Preserve the generated hashtags when a founder edits a draft's copy. */
+export function mergeDraftPayload(existingPayload = {}, { headline, body } = {}) {
+  const payload = { ...(existingPayload || {}) };
+  const hashtags = cleanHashtags(payload.hashtags).length
+    ? cleanHashtags(payload.hashtags)
+    : hashtagsFromDescription(payload.description || payload.text);
+  if (headline != null) payload.title = String(headline);
+  if (body != null) {
+    payload.body = String(body);
+    payload.hashtags = hashtags;
+    payload.description = marketingDescription(body, hashtags);
+    payload.text = payload.description;
+  }
+  return payload;
+}
+
 export function extensionPayload({ shop, candidate, draft }) {
-  const description = `${draft.body}\n\n${draft.hashtags.map((h) => `#${h}`).join(" ")}`.trim();
+  const description = marketingDescription(draft.body, draft.hashtags);
   const base = {
     title: draft.headline,
     price: candidate.price || "",
+    body: draft.body,
+    hashtags: cleanHashtags(draft.hashtags),
     description,
     text: description,
     photos: candidate.photos,

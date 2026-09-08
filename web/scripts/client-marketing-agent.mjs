@@ -118,7 +118,9 @@ async function generateDraft(shop, candidate, fallback, storefrontUrl) {
       ? [candidate.vehicle.make, candidate.vehicle.model].filter(Boolean).join(" ")
       : candidate.partName;
     const draft = parseAgentDraft(result.result, fallback, [shop.name, inventoryName]);
-    return { ...draft, generator: "cursor-sdk", agentRunId: result.id };
+    return draft === fallback
+      ? { ...fallback, generator: "deterministic", agentRunId: result.id }
+      : { ...draft, generator: "cursor-sdk", agentRunId: result.id };
   } catch (error) {
     if (error instanceof CursorAgentError) {
       console.warn(`[fallback] ${shop.name}: SDK unavailable (${error.isRetryable ? "retryable" : "not retryable"})`);

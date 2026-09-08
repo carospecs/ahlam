@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminOrViewer, requireAdmin } from "@/lib/admin";
 import { supabaseAdmin } from "@/lib/supabase";
+import { mergeDraftPayload } from "../../../../../scripts/marketing-core.mjs";
 
 export const runtime = "nodejs";
 
@@ -67,14 +68,10 @@ export async function PATCH(req: NextRequest) {
     update.body = draftBody;
   }
   if (headline !== null || draftBody !== null) {
-    const payload = { ...((existing as any).payload || {}) };
-    if (headline !== null) payload.title = headline;
-    if (draftBody !== null) {
-      payload.body = draftBody;
-      payload.description = draftBody;
-      payload.text = draftBody;
-    }
-    update.payload = payload;
+    update.payload = mergeDraftPayload((existing as any).payload || {}, {
+      ...(headline !== null ? { headline } : {}),
+      ...(draftBody !== null ? { body: draftBody } : {}),
+    });
   }
 
   const { data, error } = await db.from("marketing_post_drafts")

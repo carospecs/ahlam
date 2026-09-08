@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
 import {
+  cronRequestAuthorized,
   extensionPayload,
   fallbackMarketingDraft,
+  marketingDescription,
   marketingWindow,
+  mergeDraftPayload,
   parseAgentDraft,
   selectMarketingCandidate,
 } from "../../scripts/marketing-core.mjs";
+
+const cronSecret = "a".repeat(32);
+assert.equal(cronRequestAuthorized(cronSecret, `Bearer ${cronSecret}`), true);
+assert.equal(cronRequestAuthorized(cronSecret, "Bearer wrong"), false);
+assert.equal(cronRequestAuthorized("too-short", "Bearer too-short"), false);
+assert.equal(cronRequestAuthorized(undefined, undefined), false);
 
 const fridaySummer = marketingWindow(new Date("2026-09-04T16:05:00Z"));
 assert.equal(fridaySummer.due, true);
@@ -43,5 +52,18 @@ const payload = extensionPayload({ shop, candidate, draft: parsed });
 assert.equal(payload.kind, "vehicle");
 assert.equal(payload.year, "2023");
 assert.deepEqual(payload.photos, ["https://img.test/car.jpg"]);
+assert.match(payload.description, /#Ahlam$/);
+
+const editedPayload = mergeDraftPayload(payload, { headline: "Edited headline", body: "Edited, truthful copy." });
+assert.equal(editedPayload.title, "Edited headline");
+assert.equal(editedPayload.body, "Edited, truthful copy.");
+assert.equal(editedPayload.description, "Edited, truthful copy.\n\n#Ahlam");
+assert.equal(marketingDescription("No tags", []), "No tags");
+
+const legacyPayload = mergeDraftPayload(
+  { description: "Old copy\n\n#UsedCars #Ahlam" },
+  { body: "New copy" },
+);
+assert.equal(legacyPayload.description, "New copy\n\n#UsedCars #Ahlam");
 
 console.log("marketing-agent: scheduling, selection, copy safety, and extension payload verified");
