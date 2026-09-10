@@ -1,6 +1,6 @@
 # Ahlam LinkedIn Launch Kit
 
-This kit turns the team-approved [Ahlam product overview](ahlam-overview.md) into a simple four-week LinkedIn series. Every post is ready to paste, but a founder must review and publish it. Do not add claims, customer names, savings, or performance numbers that have not been verified.
+This kit turns the team-approved [Ahlam product overview](ahlam-overview.md) into an evergreen company campaign plus a daily client-inventory spotlight. Founders control the LinkedIn connection and can pause automatic publishing at any time. Do not add claims, customer names, savings, or performance numbers that have not been verified.
 
 ## Brand direction
 
@@ -11,16 +11,28 @@ This kit turns the team-approved [Ahlam product overview](ahlam-overview.md) int
 - Core message: We build the website. We help market the inventory. We help the yard price and cross-list it.
 - Avoid: hype, invented results, generic AI language, third-party marketplace logos, and promises that a listing will publish without the seller's final review.
 
-## Four-week publishing calendar
+## Publishing calendar
 
-| Week | Day | Theme | Asset |
+| Cadence | Time | Theme | Asset |
 | --- | --- | --- | --- |
-| 1 | Tuesday, 9:00 AM PT | The three promises | Main campaign visual |
-| 2 | Tuesday, 9:00 AM PT | Website and inventory | Storefront screenshot from an approved client |
-| 3 | Tuesday, 9:00 AM PT | Practical marketing | Approved listing-to-post example |
-| 4 | Tuesday, 9:00 AM PT | Pricing and cross-listing | Approved scan/pricing screenshot |
+| Daily | 9:00 AM PT | One truthful, currently active client inventory spotlight | The inventory item's public photo |
+| Week 1 | Tuesday, 9:00 AM PT | The three promises | Main campaign visual |
+| Week 2 | Tuesday, 9:00 AM PT | Website and inventory | Storefront screenshot from an approved client |
+| Week 3 | Tuesday, 9:00 AM PT | Practical marketing | Approved listing-to-post example |
+| Week 4 | Tuesday, 9:00 AM PT | Pricing and cross-listing | Approved scan/pricing screenshot |
 
-The client marketing queue for inventory-specific Facebook drafts runs separately on Monday and Friday at 9:00 AM Pacific. Keep LinkedIn focused on Ahlam's company story and verified customer work.
+The LinkedIn worker rotates across marketing-enabled client sites. It chooses only active inventory with a public photo, creates one fact-checked draft for the day, and records the resulting LinkedIn URL. The client Facebook queue remains separate on Monday and Friday at 9:00 AM Pacific.
+
+## Daily spotlight safeguards
+
+- Use only active inventory with a public client storefront and photo.
+- Rotate the least recently featured shop first, then prefer unused inventory.
+- Never invent condition, savings, availability, performance numbers, or scan-time claims.
+- Credit the shop and link to its storefront; the post speaks as Ahlam, not as the shop.
+- Create at most one LinkedIn slot per Pacific calendar day.
+- Keep automatic publishing disabled until the Ahlam Page connection is approved and tested.
+- Lock a draft while publishing so a timeout or double click cannot create a duplicate.
+- Pause and require reconnection if LinkedIn expires or revokes the authorization.
 
 ## Post 1: What Ahlam does
 
@@ -100,5 +112,6 @@ Before publishing any post:
 - Get client approval before using its name, photos, address, or testimonial.
 - Remove VINs, customer messages, account details, and private dashboard data.
 - Check prices and availability on the day of publishing.
-- Have a founder make the final publish decision.
+- Confirm Ahlam has permission to publicly name the featured client and use its public inventory photo.
+- For manually published campaign posts, have a founder make the final publish decision.
 - Record the post URL and date after it is live.

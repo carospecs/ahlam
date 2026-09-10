@@ -66,7 +66,6 @@ export const SHOP_STATIC_PROFILES: Record<string, ShopStaticProfile> = {
       "https://www.facebook.com/DOWNTOWNAUTOinc/",
       "https://www.yelp.com/biz/downtown-auto-dismantlers-los-angeles-2",
     ],
-    promo_text: "Labor Day Sale (Aug 31–Sept 7): 10% off all parts",
   },
   aaconautoparts: {
     id: "9e40bef8-f3d4-4f5a-bc99-b01af1053499",

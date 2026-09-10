@@ -20,18 +20,22 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   if (!shop || !hasPersonalSite(shop)) return new Response("Not found", { status: 404 });
 
   const origin = siteOrigin(shop.slug);
-  let ids: string[] = [];
+  let listings: Array<{ id: string; updated_at?: string | null; created_at?: string | null }> = [];
   try {
     const db = supabaseAdmin();
-    const { data } = await db.from("listings").select("id").eq("shop_id", shop.id).eq("status", "active").order("created_at", { ascending: false }).limit(5000);
-    ids = (data || []).map((l: any) => l.id);
+    const { data } = await db.from("listings").select("id,updated_at,created_at").eq("shop_id", shop.id).eq("status", "active").order("created_at", { ascending: false }).limit(5000);
+    listings = data || [];
   } catch {
-    ids = [];
+    listings = [];
   }
 
   const urls = [
     `  <url><loc>${xmlEscape(origin)}</loc></url>`,
-    ...ids.map((id) => `  <url><loc>${xmlEscape(`${origin}/p/${id}`)}</loc></url>`),
+    ...listings.map((listing) => {
+      const changed = listing.updated_at || listing.created_at;
+      const lastmod = changed ? `<lastmod>${xmlEscape(new Date(changed).toISOString())}</lastmod>` : "";
+      return `  <url><loc>${xmlEscape(`${origin}/p/${listing.id}`)}</loc>${lastmod}</url>`;
+    }),
   ].join("\n");
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>

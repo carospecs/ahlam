@@ -7,6 +7,14 @@
     {
       "path": "/api/cron/marketing-drafts-winter",
       "schedule": "5 17 * * 1,5"
+    },
+    {
+      "path": "/api/cron/linkedin-publish-summer",
+      "schedule": "10 16 * * *"
+    },
+    {
+      "path": "/api/cron/linkedin-publish-winter",
+      "schedule": "10 17 * * *"
     }
   ]
 }
