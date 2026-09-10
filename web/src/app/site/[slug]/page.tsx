@@ -45,6 +45,42 @@ function stateFrom(location?: string | null): string | undefined {
   return (location || "").match(/,\s*([A-Z]{2})\b/)?.[1];
 }
 
+function cityFrom(location?: string | null): string | undefined {
+  const city = String(location || "").split(",")[0]?.trim();
+  return city || undefined;
+}
+
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const DAY_INDEX: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+
+function twentyFourHour(value: string) {
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return value.trim();
+  let hour = Number(match[1]) % 12;
+  if (match[3].toUpperCase() === "PM") hour += 12;
+  return `${String(hour).padStart(2, "0")}:${match[2]}`;
+}
+
+function openingHoursSpecification(hours?: string | null) {
+  const specs: Array<Record<string, unknown>> = [];
+  for (const line of String(hours || "").split(/\n+/)) {
+    if (/closed/i.test(line)) continue;
+    const match = line.trim().match(/^([A-Za-z]{3})(?:\s*[–-]\s*([A-Za-z]{3}))?\s+(\d{1,2}:\d{2}\s*[AP]M)\s*[–-]\s*(\d{1,2}:\d{2}\s*[AP]M)$/i);
+    if (!match) continue;
+    const start = DAY_INDEX[match[1].slice(0, 1).toUpperCase() + match[1].slice(1, 3).toLowerCase()];
+    const endKey = match[2] ? match[2].slice(0, 1).toUpperCase() + match[2].slice(1, 3).toLowerCase() : null;
+    const end = endKey ? DAY_INDEX[endKey] : start;
+    if (start == null || end == null || end < start) continue;
+    specs.push({
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: DAYS.slice(start, end + 1),
+      opens: twentyFourHour(match[3]),
+      closes: twentyFourHour(match[4]),
+    });
+  }
+  return specs.length ? specs : undefined;
+}
+
 /** Facebook/Yelp links out of the same_as list, for the visible social icon
  *  row (same_as itself only feeds invisible JSON-LD structured data). */
 function socialLinksFrom(sameAs?: string[]): { facebook?: string; yelp?: string } {
@@ -113,14 +149,14 @@ export default async function ShopSiteHome({ params }: Params) {
     address: (shop.address_line || place) ? {
       "@type": "PostalAddress",
       streetAddress: shop.address_line || undefined,
-      addressLocality: shop.location || undefined,
+      addressLocality: cityFrom(shop.location),
       addressRegion: stateFrom(shop.location),
       postalCode: shop.zip_code || undefined,
       addressCountry: "US",
     } : undefined,
     sameAs: sameAsFor(slug, shop),
     geo: shop.lat && shop.lng ? { "@type": "GeoCoordinates", latitude: shop.lat, longitude: shop.lng } : undefined,
-    openingHours: shop.hours || undefined,
+    openingHoursSpecification: openingHoursSpecification(shop.hours),
     aggregateRating: ratingCount > 0 ? {
       "@type": "AggregateRating",
       ratingValue: Number(shop.rating_avg || 0).toFixed(1),

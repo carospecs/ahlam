@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const UPDATED = "June 22, 2026";
+const UPDATED = "September 10, 2026";
 
 // Public privacy policy. Covers both the Ahlam web service and the Ahlam
 // Auto-Poster Chrome extension (the Chrome Web Store listing links here).
@@ -48,6 +48,13 @@ const SECTIONS: LegalSection[] = [
     heading: "How we use your information",
     paragraphs: [
       "We use your information to provide the service: to identify and price parts, build listings, send buyer and seller message notifications by email, and let you post to the marketplaces you choose.",
+    ],
+  },
+  {
+    heading: "Ahlam company social publishing",
+    paragraphs: [
+      "Ahlam administrators may connect Ahlam's own LinkedIn company Page to our private marketing queue. With administrator approval, Ahlam uses LinkedIn account authorization to publish company updates built from public, active client inventory. This connection is separate from the Auto-Poster extension and never connects a client's personal LinkedIn account.",
+      "LinkedIn access and refresh tokens are encrypted at rest, are available only to server-side Ahlam administrators, and are used only to manage posts for the connected Ahlam company Page. An administrator can revoke the connection in LinkedIn or ask us to delete the stored connection at any time.",
     ],
   },
   {

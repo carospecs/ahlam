@@ -3,6 +3,9 @@ import {
   cronRequestAuthorized,
   extensionPayload,
   fallbackMarketingDraft,
+  fallbackLinkedInDraft,
+  linkedinPayload,
+  linkedinWindow,
   marketingDescription,
   marketingWindow,
   mergeDraftPayload,
@@ -22,6 +25,12 @@ assert.equal(fridaySummer.slotKey, "2026-09-04:facebook");
 assert.equal(marketingWindow(new Date("2026-09-04T15:05:00Z")).due, false);
 assert.equal(marketingWindow(new Date("2026-12-04T17:05:00Z")).due, true);
 
+const linkedinSummer = linkedinWindow(new Date("2026-09-04T16:05:00Z"));
+assert.equal(linkedinSummer.due, true);
+assert.equal(linkedinSummer.slotKey, "2026-09-04:linkedin");
+assert.equal(linkedinWindow(new Date("2026-09-04T17:05:00Z")).due, false);
+assert.equal(linkedinWindow(new Date("2026-12-04T17:05:00Z")).due, true);
+
 const vehicle = {
   id: "v1", year: "2023", make: "Tesla", model: "Model 3", trim: "Long Range",
   status: "active", sell_mode: "whole", asking_price: 24900, photo_url: "https://img.test/car.jpg",
@@ -40,6 +49,11 @@ const fallback = fallbackMarketingDraft({ shop, candidate, storefrontUrl: "https
 assert.match(fallback.body, /Downtown Auto Dismantlers/);
 assert.match(fallback.body, /\$24,900/);
 
+const linkedinFallback = fallbackLinkedInDraft({ shop, candidate, storefrontUrl: "https://downtownautodismantlers.ahlam.io" });
+assert.match(linkedinFallback.headline, /Downtown Auto Dismantlers/);
+assert.match(linkedinFallback.body, /searchable website/);
+assert.doesNotMatch(linkedinFallback.body, /15 minutes/i);
+
 const parsed = parseAgentDraft(
   '{"headline":"2023 Tesla Model 3 available","body":"Downtown Auto Dismantlers has this Tesla Model 3 ready to view.","hashtags":["#Ahlam"]}',
   fallback,
@@ -53,6 +67,15 @@ assert.equal(payload.kind, "vehicle");
 assert.equal(payload.year, "2023");
 assert.deepEqual(payload.photos, ["https://img.test/car.jpg"]);
 assert.match(payload.description, /#Ahlam$/);
+
+const linkedIn = linkedinPayload({
+  shop,
+  candidate,
+  draft: linkedinFallback,
+  storefrontUrl: "https://downtownautodismantlers.ahlam.io",
+});
+assert.match(linkedIn.text, /#AutoRecycling/);
+assert.equal(linkedIn.imageUrl, "https://img.test/car.jpg");
 
 const editedPayload = mergeDraftPayload(payload, { headline: "Edited headline", body: "Edited, truthful copy." });
 assert.equal(editedPayload.title, "Edited headline");

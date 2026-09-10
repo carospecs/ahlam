@@ -4,6 +4,16 @@ import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ahlam.io";
 
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Ahlam, Inc.",
+  url: SITE_URL,
+  logo: `${SITE_URL.replace(/\/$/, "")}/icon.svg`,
+  sameAs: ["https://www.linkedin.com/company/ahlam-inc/"],
+  description: "Inventory, pricing assistance, client websites, and cross-listing help for independent auto dismantlers and used auto parts shops.",
+};
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "Ahlam — Photo to parts listing, in seconds",
@@ -34,6 +44,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
         {/* Apply the saved theme before paint to avoid a flash of the wrong theme. */}
         <script
           dangerouslySetInnerHTML={{

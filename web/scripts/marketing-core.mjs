@@ -42,6 +42,22 @@ export function marketingWindow(now = new Date(), timeZone = DEFAULT_TIME_ZONE) 
   };
 }
 
+/** Daily Ahlam company-page window. Two Vercel cron entries call the route at
+ *  16:05 and 17:05 UTC; this local-time gate makes exactly one of them due at
+ *  9 AM Pacific through daylight-saving changes. */
+export function linkedinWindow(now = new Date(), timeZone = DEFAULT_TIME_ZONE) {
+  const p = zonedParts(now, timeZone);
+  const localDate = `${p.year}-${p.month}-${p.day}`;
+  return {
+    due: Number(p.hour) === 9,
+    localDate,
+    slotKey: `${localDate}:linkedin`,
+    weekday: p.weekday,
+    hour: Number(p.hour),
+    timeZone,
+  };
+}
+
 const active = (status) => ["active", "posted"].includes(String(status || "").toLowerCase());
 const photoList = (row) => [...new Set([
   row?.photo_url,
@@ -130,6 +146,29 @@ export function fallbackMarketingDraft({ shop, candidate, storefrontUrl }) {
   return { headline: title, body, hashtags: ["UsedAutoParts", "AutoRecycling", "Ahlam"] };
 }
 
+/** Fact-only company-page copy. This is intentionally different from the
+ *  marketplace draft: Ahlam is speaking, the client is credited, and the
+ *  public storefront is the call to action. */
+export function fallbackLinkedInDraft({ shop, candidate, storefrontUrl }) {
+  const price = money(candidate.price);
+  const item = candidate.type === "vehicle"
+    ? candidate.label
+    : `${candidate.partName}${candidate.vehicle ? ` from a ${vehicleLabel(candidate.vehicle)}` : ""}`;
+  const availability = price ? `It is listed at ${price}.` : "Contact the shop for current pricing.";
+  const headline = `Client inventory spotlight: ${shop.name}`;
+  const body = [
+    `${shop.name} currently lists ${item} in its live inventory.`,
+    availability,
+    "Ahlam helps independent auto dismantlers turn real inventory into a searchable website, practical pricing assistance, and cross-listing-ready content without retyping the same details.",
+    `See what is currently available from ${shop.name}: ${storefrontUrl}`,
+  ].join("\n\n");
+  return {
+    headline,
+    body,
+    hashtags: ["AutoRecycling", "UsedAutoParts", "SalvageYard", "Ahlam"],
+  };
+}
+
 export function parseAgentDraft(raw, fallback, requiredNames = []) {
   if (!raw) return fallback;
   try {
@@ -212,5 +251,19 @@ export function extensionPayload({ shop, candidate, draft }) {
     mileage: String(v.mileage || "").replace(/[^0-9]/g, ""),
     bodyStyle: v.body || "",
     exteriorColor: v.color || "",
+  };
+}
+
+export function linkedinPayload({ shop, candidate, draft, storefrontUrl }) {
+  return {
+    title: draft.headline,
+    body: draft.body,
+    hashtags: cleanHashtags(draft.hashtags),
+    text: marketingDescription(`${draft.headline}\n\n${draft.body}`, draft.hashtags),
+    imageUrl: candidate.photos[0] || null,
+    imageAlt: `${candidate.label} available from ${shop.name}`.slice(0, 300),
+    storefrontUrl,
+    sourceLabel: candidate.label,
+    kind: candidate.type,
   };
 }

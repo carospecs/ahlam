@@ -57,11 +57,13 @@ export async function generateMarketingDraft({
   candidate,
   storefrontUrl,
   fallback,
+  platform = "facebook",
 }: {
   shop: any;
   candidate: any;
   storefrontUrl: string;
   fallback: Draft;
+  platform?: "facebook" | "linkedin";
 }): Promise<Draft & { generator: string; agentRunId: string | null }> {
   if (!process.env.ANTHROPIC_API_KEY) {
     return { ...fallback, generator: "deterministic", agentRunId: null };
@@ -79,11 +81,13 @@ export async function generateMarketingDraft({
         },
         system: [
           "You are Ahlam's client marketing editor for independent auto dismantlers.",
-          "Write one concise Facebook Marketplace draft using only the supplied public inventory facts.",
+          platform === "linkedin"
+            ? "Write one concise LinkedIn company-page post in Ahlam's voice using only the supplied public inventory facts. Credit the client shop, explain Ahlam's practical role, and send readers to the shop's storefront."
+            : "Write one concise Facebook Marketplace draft using only the supplied public inventory facts.",
           "Never invent condition, warranty, compatibility, availability, mechanical claims, or discounts.",
           "Name the shop and item, use plain language, include the storefront URL, and invite the buyer to message the shop.",
           "No em dashes. Headline under 100 characters. Body under 900 characters.",
-          "This is a private review draft. Do not claim it has been published or scheduled.",
+          "Do not claim the post has already been published or scheduled.",
         ].join(" "),
         messages: [{ role: "user", content: JSON.stringify(facts) }],
       },

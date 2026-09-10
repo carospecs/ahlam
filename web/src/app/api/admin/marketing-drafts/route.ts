@@ -14,8 +14,8 @@ export async function GET() {
   const db = supabaseAdmin();
   const { data: drafts, error } = await db
     .from("marketing_post_drafts")
-    .select("id,shop_id,source_vehicle_id,source_listing_id,platform,slot_key,scheduled_for,headline,body,image_url,payload,status,generator,agent_run_id,created_at,updated_at")
-    .in("status", ["ready", "opened", "published"])
+    .select("id,shop_id,source_vehicle_id,source_listing_id,platform,slot_key,scheduled_for,headline,body,image_url,payload,status,generator,agent_run_id,error,published_post_id,published_url,published_at,attempt_count,last_attempt_at,created_at,updated_at")
+    .in("status", ["ready", "opened", "publishing", "published", "failed"])
     .order("scheduled_for", { ascending: false })
     .limit(200);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
