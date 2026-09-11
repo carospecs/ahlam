@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, ArrowLeft, LoaderCircle, Mail, Lock, ScanLine } from "lucide-react";
+import { ArrowRight, ArrowLeft, Eye, EyeOff, LoaderCircle, Mail, Lock, ScanLine } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase-browser";
+import { publicSignInError } from "@/lib/auth-signin";
 import { BrandChip } from "./BrandMark";
 
 const EASE = [0.22, 0.8, 0.26, 1] as const;
@@ -88,8 +89,11 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [code, setCode] = useState("");
   const [resendIn, setResendIn] = useState(0);
+  const [retryIn, setRetryIn] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -136,6 +140,13 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
     const id = setInterval(() => setResendIn((n) => (n > 0 ? n - 1 : 0)), 1000);
     return () => clearInterval(id);
   }, [resendIn]);
+
+  // Keep the password button disabled until the server-provided cooldown ends.
+  useEffect(() => {
+    if (retryIn <= 0) return;
+    const id = setInterval(() => setRetryIn((n) => (n > 0 ? n - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [retryIn]);
 
   async function resendCode() {
     if (resendIn > 0) return;
@@ -215,8 +226,19 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
         if (updErr) { setError(updErr.message); setBusy(false); return; }
         onLogin();
       } else {
+        // Keep this browser-side so Supabase sees the customer's IP instead of
+        // grouping every customer under one Vercel server IP for rate limiting.
         const { error: signInErr } = await sb.auth.signInWithPassword({ email, password });
-        if (signInErr) { setError(signInErr.message); setBusy(false); return; }
+        if (signInErr) {
+          const safe = publicSignInError(signInErr);
+          if (safe.code === "rate_limited") {
+            setRetryIn(safe.retryAfterSec || 180);
+          } else {
+            setError(safe.error);
+          }
+          setBusy(false);
+          return;
+        }
         onLogin();
       }
     } catch {
@@ -294,12 +316,32 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
               )}
               {mode !== "forgot" && mode !== "verify" && (
                 <Field label={mode === "recover" || mode === "resetCode" ? "New password" : "Password"} icon="Lock" right={mode === "signin" ? <a href="#" style={lx.forgot} onClick={(e) => { e.preventDefault(); setError(""); setNotice(""); setMode("forgot"); }}>Forgot?</a> : null}>
-                  <input type="password" required autoComplete={mode === "signin" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" style={lx.input} />
+                  <input type={showPassword ? "text" : "password"} required autoComplete={mode === "signin" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" style={lx.input} />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((shown) => !shown)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
+                    style={lx.passwordToggle}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
                 </Field>
               )}
               {(mode === "signup" || mode === "resetCode") && (
                 <Field label="Confirm password" icon="Lock">
-                  <input type="password" required autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Same password again" style={lx.input} />
+                  <input type={showConfirmPassword ? "text" : "password"} required autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Same password again" style={lx.input} />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((shown) => !shown)}
+                    aria-label={showConfirmPassword ? "Hide confirmed password" : "Show confirmed password"}
+                    aria-pressed={showConfirmPassword}
+                    style={lx.passwordToggle}
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    {showConfirmPassword ? "Hide" : "Show"}
+                  </button>
                 </Field>
               )}
               {(mode === "signup" || mode === "recover" || mode === "resetCode") && password.length > 0 && (
@@ -312,16 +354,21 @@ export function Login({ onLogin, onClose, signInOnly, initialMode }: { onLogin: 
                   <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{pwLabels[pwScore]} · use 8+ chars with a number and symbol</span>
                 </div>
               )}
-              {error && (
-                <div style={{ fontSize: 13, color: "var(--danger)", padding: "6px 0" }}>{error}</div>
+              {(error || retryIn > 0) && (
+                <div role="alert" aria-live="polite" style={{ fontSize: 13, color: "var(--danger)", padding: "6px 0", lineHeight: 1.45 }}>
+                  {retryIn > 0
+                    ? `Too many sign-in attempts. Please wait ${retryIn} second${retryIn === 1 ? "" : "s"}, then try again. You can still use Google sign-in below.`
+                    : error}
+                </div>
               )}
               {notice && (
                 <div style={{ fontSize: 13, color: "var(--success)", padding: "6px 0" }}>{notice}</div>
               )}
-              <button type="submit" disabled={busy} style={{ ...lx.cta, opacity: busy ? 0.65 : 1 }}>
+              <button type="submit" disabled={busy || (mode === "signin" && retryIn > 0)} style={{ ...lx.cta, opacity: busy || (mode === "signin" && retryIn > 0) ? 0.65 : 1 }}>
                 {busy && <LoaderCircle size={18} style={{ animation: "spin 0.8s linear infinite" }} />}
                 {busy ? "Please wait…" : (
-                  mode === "signin" ? "Sign in"
+                  mode === "signin" && retryIn > 0 ? `Try again in ${retryIn}s`
+                  : mode === "signin" ? "Sign in"
                   : mode === "signup" ? "Create account"
                   : mode === "verify" ? "Verify & continue"
                   : mode === "forgot" ? "Email me a reset code"
@@ -395,7 +442,8 @@ const lx: Record<string, React.CSSProperties> = {
   fieldRow: { display: "flex", justifyContent: "space-between", alignItems: "center" },
   forgot: { color: "var(--muted)", fontSize: 12.5, textDecoration: "none" },
   inputWrap: { display: "flex", alignItems: "center", gap: 10, padding: "0 14px", background: "var(--surface2)", border: "1px solid var(--line)", borderRadius: 12 },
-  input: { flex: 1, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 15, padding: "13px 0" },
+  input: { flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", color: "var(--foreground)", fontSize: 15, padding: "13px 0" },
+  passwordToggle: { minWidth: 58, minHeight: 36, marginRight: -8, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, border: "none", borderRadius: 9, background: "transparent", color: "var(--accent)", fontSize: 12.5, fontWeight: 700, cursor: "pointer" },
   cta: { marginTop: 4, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, width: "100%", border: "none", borderRadius: 12, background: "var(--accent)", color: "#fff", fontSize: 15, fontWeight: 600, padding: "13px 0", transition: "background 0.15s" },
   divider: { display: "flex", alignItems: "center", gap: 12, margin: "20px 0" },
   divLine: { flex: 1, height: 1, background: "var(--line)" },
