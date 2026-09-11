@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
+import { publicSignInError } from "@/lib/auth-signin";
 
 export async function POST(req: NextRequest) {
   let body: { email?: string; password?: string };
@@ -27,7 +28,11 @@ export async function POST(req: NextRequest) {
   const limit = !perAccount.ok ? perAccount : perIp;
   if (!limit.ok) {
     return NextResponse.json(
-      { error: "Too many sign-in attempts. Try again in a minute." },
+      {
+        error: "Too many sign-in attempts. Please wait one minute, then try again.",
+        code: "rate_limited",
+        retryAfterSec: limit.retryAfterSec,
+      },
       { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } }
     );
   }
@@ -36,7 +41,11 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 401 });
+    const safe = publicSignInError(error);
+    const headers = safe.retryAfterSec
+      ? { "Retry-After": String(safe.retryAfterSec) }
+      : undefined;
+    return NextResponse.json(safe, { status: safe.status, headers });
   }
 
   return NextResponse.json({ user: data.user });
