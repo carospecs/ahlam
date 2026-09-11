@@ -21,6 +21,7 @@ assert.deepEqual(publicSignInError({ code: "invalid_credentials", status: 400 })
   error: "Email or password is incorrect. Try again or use Forgot password.",
   code: "invalid_credentials",
 });
+assert.equal(publicSignInError({ status: 400, code: "captcha_failed" }).code, "signin_failed");
 
 assert.equal(publicSignInError({ code: "email_not_confirmed", status: 400 }).code, "email_not_confirmed");
 

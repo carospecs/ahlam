@@ -37,7 +37,7 @@ export function publicSignInError(error: SignInErrorLike): PublicSignInError {
     };
   }
 
-  if (code === "invalid_credentials" || status === 400 || status === 401) {
+  if (code === "invalid_credentials" || /invalid login credentials/i.test(message)) {
     return {
       status: 401,
       error: "Email or password is incorrect. Try again or use Forgot password.",
