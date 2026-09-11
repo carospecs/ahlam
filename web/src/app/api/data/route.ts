@@ -38,10 +38,19 @@ export async function GET() {
       // pulled every conversation column and message column (including unused
       // metadata) before the first screen could render. These are the only
       // fields consumed by the dashboard and inbox UI.
-      db.from("conversations").select("id, contact_name, market, status, part_name, unread, buyer_id, last_time, contact_avatar, messages(id, sender, body, time, created_at, attachments)").eq("shop_id", shopId).order("created_at", { ascending: false }),
+      //
+      // messages(*) (not a named column list): naming `attachments` here
+      // breaks the whole query with a 42703 wherever migration 0040 hasn't
+      // been applied yet, which silently emptied every shop's inbox (see
+      // insertMessage()'s same tolerance in message-storage.ts).
+      db.from("conversations").select("id, contact_name, market, status, part_name, unread, buyer_id, last_time, contact_avatar, messages(*)").eq("shop_id", shopId).order("created_at", { ascending: false }),
       db.from("activity_log").select("icon, text, time, tone, created_at").eq("shop_id", shopId).order("created_at", { ascending: false }).limit(100),
       db.from("shop_members").select("user_id, role, profiles(display_name, avatar_url)").eq("shop_id", shopId),
     ]);
+
+    if (convRes.error) {
+      console.error("[api/data] conversations query failed, inbox will render empty:", convRes.error);
+    }
 
     if (!shopRes.error) {
       vehicles = (vehRes.data || []).map((v: any) => ({
