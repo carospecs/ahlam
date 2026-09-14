@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Car, Wrench, ChevronLeft, Copy, Send, Sparkles, ScanLine, Check, CheckCircle2, Pencil, Lightbulb, LoaderCircle, ChevronDown, ChevronRight, Building, Cpu, Fuel, Gauge, Hash, AlertTriangle, Trash2 } from "lucide-react";
+import { Car, Wrench, ChevronLeft, Copy, Send, Sparkles, ScanLine, Check, CheckCircle2, Pencil, Lightbulb, LoaderCircle, ChevronDown, ChevronRight, Building, Cpu, Fuel, Gauge, Hash, AlertTriangle, Trash2, Star } from "lucide-react";
 import { Card, PhotoCell, ConditionBadge, SellModeBadge, StatusBadge } from "../UI";
 import { buildVehicleText, partsForVehicle, SELL_MODE } from "../data";
 import { csToast, useData } from "../Dashboard";
@@ -242,7 +242,7 @@ export function VehicleProfile({ v, onBack, go }: { v: any; onBack: () => void; 
 
       <Card pad={0} style={{ overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "320px 1fr" }} className="cs-veh-hero">
-          <VehicleGallery v={v} />
+          <VehicleGallery v={v} showCover={showCar} />
           <div style={{ padding: 22 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <SellModeBadge mode={sellMode} />
@@ -619,24 +619,49 @@ function Stat({ label, value, tone }: { label: string; value: string | number; t
 
 // Vehicle photo gallery — big selected photo + thumbnail strip. Each photo opens
 // the full-screen viewer on click (PhotoCell portals it to the body). Falls back
-// to a single photo when only one was uploaded.
-function VehicleGallery({ v }: { v: any }) {
+// to a single photo when only one was uploaded. When showCover is set (whole/both
+// sell mode), a "Set as cover photo" action lets the seller pick which photo
+// buyers see first — persisted via photo_url/photo_urls ordering.
+function VehicleGallery({ v, showCover }: { v: any; showCover?: boolean }) {
   const gallery: string[] = (Array.isArray(v.images) ? v.images : (v.image ? [v.image] : [])).filter(Boolean);
-  const [hero, setHero] = React.useState(0);
+  // Selection tracked by URL, not index — the gallery re-sorts after a cover
+  // photo change, so an index would end up pointing at a different photo.
+  const [heroUrl, setHeroUrl] = React.useState<string | null>(null);
+  const [savingCover, setSavingCover] = React.useState(false);
   if (gallery.length <= 1) {
     return <PhotoCell icon="Car" url={gallery[0] || v.image} style={{ height: "100%", minHeight: 220, borderRadius: 0 }} iconSize={56} />;
   }
+  const heroIndex = heroUrl ? Math.max(0, gallery.indexOf(heroUrl)) : 0;
+
+  async function setCover() {
+    if (heroIndex === 0 || savingCover) return;
+    const url = gallery[heroIndex];
+    setSavingCover(true);
+    try {
+      const r = await fetch("/api/listings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vehicleId: v.id, primaryPhotoUrl: url }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); csToast(d.error || "Couldn't set cover photo"); }
+      else { csToast("Cover photo updated"); (window as any).csReloadData?.(); }
+    } catch { csToast("Couldn't update — check your connection"); }
+    setSavingCover(false);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 10 }}>
-      <PhotoCell key={hero} icon="Car" url={gallery[hero]} label="Tap to enlarge" style={{ aspectRatio: "4 / 3", borderRadius: 10 }} iconSize={48} />
+      <PhotoCell key={heroIndex} icon="Car" url={gallery[heroIndex]} label="Tap to enlarge" style={{ aspectRatio: "4 / 3", borderRadius: 10 }} iconSize={48} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
         {gallery.slice(0, 8).map((u, i) => (
-          <button key={i} onClick={() => setHero(i)} aria-label={`Photo ${i + 1}`} style={{ padding: 0, border: i === hero ? "2px solid var(--accent)" : "1px solid var(--line)", borderRadius: 8, overflow: "hidden", aspectRatio: "1", cursor: "pointer", background: "var(--surface2)" }}>
+          <button key={i} onClick={() => setHeroUrl(u)} aria-label={`Photo ${i + 1}`} style={{ padding: 0, border: i === heroIndex ? "2px solid var(--accent)" : "1px solid var(--line)", borderRadius: 8, overflow: "hidden", aspectRatio: "1", cursor: "pointer", background: "var(--surface2)" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={u} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           </button>
         ))}
       </div>
+      {showCover && (
+        <button onClick={setCover} disabled={heroIndex === 0 || savingCover} title={heroIndex === 0 ? "This is the cover photo buyers see first" : "Make this the cover photo buyers see first"} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line)", background: heroIndex === 0 ? "var(--surface2)" : "var(--accent)", color: heroIndex === 0 ? "var(--muted)" : "#fff", fontSize: 12.5, fontWeight: 600, cursor: heroIndex === 0 || savingCover ? "default" : "pointer", opacity: savingCover ? 0.7 : 1 }}>
+          {savingCover ? <LoaderCircle size={13} className="spin" /> : <Star size={13} fill={heroIndex === 0 ? "none" : "currentColor"} />}
+          {heroIndex === 0 ? "Cover photo" : "Set as cover photo"}
+        </button>
+      )}
     </div>
   );
 }
