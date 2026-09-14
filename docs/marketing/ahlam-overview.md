@@ -1,5 +1,7 @@
 # Ahlam: Product Overview
 
+> **Review status:** Draft for Andy's review. Confirm the product claims and wording below before this overview is used publicly. The related LinkedIn copy is in [linkedin-launch-kit.md](linkedin-launch-kit.md).
+
 Ahlam is an AI-powered platform for auto salvage yards and parts shops. It packages three services into one:
 
 1. **A modernized version of Car-Part.com and Goldticket**: a B2B marketplace with an AI scanner built in.
@@ -49,3 +51,10 @@ The Ahlam browser extension takes a part or vehicle description, along with its 
 - **Inventory that stays accurate.** Mark as sold keeps every channel current.
 - **Deals that close themselves.** The AI agent negotiates within your limits while you focus on the yard.
 
+## Founder review checklist
+
+- Confirm which marketplaces currently provide live pricing data and which are planned.
+- Confirm the typical scanner completion time before publishing the one-minute claim.
+- Confirm the AI deal agent, Gmail notification, receipt, and discount-limit flow work end to end.
+- Confirm exactly which destinations the browser extension supports today.
+- Replace or qualify any claim that is not yet available to every customer.
