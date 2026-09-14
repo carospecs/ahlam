@@ -199,6 +199,7 @@ const STATUS_TO_ENUM: Record<string, string> = { Posted: "active", Draft: "draft
 //   { listingId, priceUsd?, status?, description? }  → edit one part listing
 //   { vehicleId, sellMode }                           → flip a vehicle parts/whole/both
 //   { vehicleId, status }                             → post/unpost a vehicle as a whole car
+//   { vehicleId, primaryPhotoUrl }                    → reorder gallery so this photo is the cover
 //   { listingIds, status }                            → bulk-update listing statuses
 export async function PATCH(req: Request) {
   const supabase = await supabaseServer();
@@ -340,6 +341,20 @@ export async function PATCH(req: Request) {
   if (body.acquisitionCostCents !== undefined) {
     const n = body.acquisitionCostCents === "" || body.acquisitionCostCents == null ? null : Math.round(Number(body.acquisitionCostCents));
     vehUpdate.acquisition_cost_cents = n != null && Number.isFinite(n) && n >= 0 ? n : null;
+  }
+
+  // Cover photo pick: reorder the gallery so the chosen photo becomes the hero
+  // (photo_url), matching the same "first photo is the cover" convention used
+  // at creation time and for part listings above.
+  if (typeof body.primaryPhotoUrl === "string" && body.primaryPhotoUrl) {
+    const { data: cur } = await db.from("vehicles").select("photo_urls, photo_url").eq("id", vehicleId).eq("shop_id", shopId).single();
+    const existing: string[] = Array.isArray(cur?.photo_urls) ? cur!.photo_urls.filter(Boolean)
+      : (cur?.photo_url ? [cur.photo_url] : []);
+    if (existing.includes(body.primaryPhotoUrl)) {
+      const reordered = [body.primaryPhotoUrl, ...existing.filter((u) => u !== body.primaryPhotoUrl)];
+      vehUpdate.photo_urls = reordered;
+      vehUpdate.photo_url = reordered[0];
+    }
   }
 
   // New photo(s) for the vehicle — uploaded to the bucket and appended to the gallery.
