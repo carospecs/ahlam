@@ -580,6 +580,21 @@ button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, va
   .cs-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 26px !important; }
 }
 
+/* ---- Sales demo --------------------------------------------------------- */
+@media (max-width: 940px) {
+  .cs-demo-hero-grid,
+  .cs-demo-proof,
+  .cs-demo-calculator,
+  .cs-demo-pilot { grid-template-columns: 1fr !important; }
+  .cs-demo-four { grid-template-columns: 1fr 1fr !important; }
+}
+@media (max-width: 620px) {
+  .cs-demo-hero-grid { padding-top: 72px !important; }
+  .cs-demo-four,
+  .cs-demo-two { grid-template-columns: 1fr !important; }
+  .cs-demo-audio { display: none !important; }
+}
+
 /* Founder marketing queue: keep the photo and editor readable on phones. */
 @media (max-width: 760px) {
   .cs-marketing-draft { grid-template-columns: 1fr !important; }

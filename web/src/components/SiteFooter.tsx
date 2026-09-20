@@ -29,6 +29,7 @@ type Col = { h: string; links: { label: string; href: string; external?: boolean
 const COLS: Col[] = [
   { h: "Product", links: [
     { label: "How it works", href: "/#how" },
+    { label: "Demo", href: "/demo" },
     { label: "Marketplace", href: "/#marketplace" },
     { label: "Pricing", href: "/#pricing" },
     { label: "Compare", href: "/guides/ahlam-vs-car-part-ebay-hollander-spreadsheets" },

@@ -49,6 +49,7 @@ export function PublicHeader() {
             <span style={navDivider} className="cs-pill-links" />
             <nav className="cs-pill-links" style={{ display: "flex", alignItems: "center", gap: 2 }}>
               <Link href="/guidance" style={navLink}>How it works</Link>
+              <Link href="/demo" style={navLink}>Demo</Link>
               <Link href="/guides" style={navLink}>Guides</Link>
             </nav>
             <span style={navDivider} />

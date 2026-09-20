@@ -20,6 +20,7 @@ type Lang = "en" | "es";
 
 const PRIMARY: { label: string; href: string }[] = [
   { label: "How it works", href: "/#how" },
+  { label: "Demo", href: "/demo" },
   { label: "Marketplace", href: "/#marketplace" },
   { label: "Pricing", href: "/#pricing" },
   { label: "Guides", href: "/guides" },
@@ -93,6 +94,7 @@ export function SiteHeader({
 
         <nav className="cs-pill-links" style={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Link href="/#how" style={navLink}>How it works</Link>
+          <Link href="/demo" style={navLink}>Demo</Link>
           <Link href="/#marketplace" style={navLink}>Marketplace</Link>
 
           {/* Audiences dropdown (desktop) */}
