@@ -192,7 +192,9 @@ export async function updateListing(params: {
     const merged: CorrectedFields = {
       partName: base?.partName ?? aiFallback?.partName ?? "",
       partCategory: params.category ?? base?.partCategory ?? aiFallback?.partCategory ?? "",
-      condition: (params.condition ?? base?.condition ?? aiFallback?.condition ?? "Good") as "Good" | "Poor",
+      condition: normalizeCondition(
+        params.condition ?? base?.condition ?? aiFallback?.condition
+      ),
       conditionNotes: params.conditionNotes ?? base?.conditionNotes ?? aiFallback?.conditionNotes ?? "",
       description: params.description ?? base?.description ?? aiFallback?.description ?? "",
       fitment: params.fitment ? parseFitment(params.fitment) : (base?.fitment ?? aiFallback?.fitment ?? []),
@@ -204,4 +206,11 @@ export async function updateListing(params: {
 
   const { error } = await supabase.from("listings").update(update).eq("id", params.id);
   if (error) throw error;
+}
+
+/** Keep older records displayable while only writing the current ARA grades. */
+function normalizeCondition(condition: unknown): ConditionGrade {
+  return condition === "A" || condition === "B" || condition === "C"
+    ? condition
+    : "B";
 }

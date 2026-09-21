@@ -19,7 +19,6 @@ import {
   Store,
   LogOut,
   ChevronRight,
-  List,
 } from "lucide-react-native";
 import { colors, space, font, radius } from "@/theme";
 import { Button } from "@/components/Button";
@@ -107,18 +106,18 @@ export default function Home() {
         contentContainerStyle={styles.body}
         showsVerticalScrollIndicator={false}
       >
-        {/* Primary action: photograph a part */}
+        {/* Primary action: one simple phone-first scan for a vehicle or part. */}
         <View style={styles.hero}>
-          <Text style={styles.title}>Photograph the vehicle</Text>
+          <Text style={styles.title}>Scan a vehicle or part</Text>
           <Text style={styles.subtitle}>
-            Snap one photo and we&apos;ll find every sellable part, grade each
-            one, and draft the listings. You review and post.
+            Take one clear photo. We find the sellable parts, draft the
+            listings, and you choose what to publish.
           </Text>
         </View>
 
         <View style={styles.actions}>
           <Button
-            label="Take a photo"
+            label="Scan with camera"
             icon={<Camera size={18} color={colors.white} />}
             onPress={() => capture("camera")}
             loading={busy}
@@ -132,22 +131,13 @@ export default function Home() {
           />
         </View>
 
-        <View style={styles.actions}>
-          <Button
-            label="List a whole vehicle"
-            variant="secondary"
-            icon={<List size={18} color={colors.foreground} />}
-            onPress={() => router.push("/bulk")}
-          />
-        </View>
-
         {/* Marketplace */}
-        <Text style={styles.sectionLabel}>Marketplace</Text>
+        <Text style={styles.sectionLabel}>B2B marketplace</Text>
         <View style={styles.tiles}>
           <Tile
             icon={<Store size={22} color={colors.foreground} />}
-            label="Browse market"
-            sub="Buy parts & cars from other shops"
+            label="Browse B2B market"
+            sub="Buy parts and vehicles from other yards"
             onPress={() => router.push("/market")}
           />
         </View>

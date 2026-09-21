@@ -44,8 +44,9 @@ export const font = {
 
 /** Semantic color per condition grade (always paired with the text label). */
 export const conditionColor: Record<ConditionGrade, string> = {
-  Good: colors.success,
-  Poor: colors.danger,
+  A: colors.success,
+  B: colors.signal,
+  C: colors.danger,
 };
 
 /** Safe lookup that tolerates legacy data. */

@@ -84,7 +84,7 @@ export async function fetchMarketplace(
       return {
         id: l.id,
         part: c.partName || c.part_name || "Used Part",
-        grade: c.condition || "Good",
+        grade: c.condition === "A" || c.condition === "B" || c.condition === "C" ? c.condition : "B",
         price: l.price_usd ?? c.priceUsd ?? c.suggestedPriceUsd ?? 0,
         fitment: formatFit(c.fitment),
         category: c.partCategory || c.part_category || "",

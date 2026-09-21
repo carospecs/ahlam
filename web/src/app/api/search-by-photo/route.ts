@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
     const { data: listings } = await db
       .from("listings")
-      .select("*")
+      .select("*, shops(name, location, business_phone)")
       .eq("status", "active");
 
     const results = (listings || [])
@@ -76,6 +76,9 @@ export async function POST(req: Request) {
           photoUrl: l.photo_url || null,
           sellerId: l.seller_id || l.created_by,
           shopId: l.shop_id,
+          shopName: l.shops?.name ?? "Independent seller",
+          location: l.shops?.location ?? "",
+          phone: l.shops?.business_phone ?? null,
         };
       })
       .sort((a: any, b: any) => {

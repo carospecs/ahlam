@@ -256,13 +256,16 @@ export default function Review() {
           </ScrollView>
 
           <View style={styles.footer}>
+            <Text style={styles.crossListText}>
+              Published parts appear on your yard website and the B2B marketplace.
+            </Text>
             <Button
               label={
                 includedCount === 0
                   ? "Select parts to save"
-                  : `Save ${includedCount} listing${
+                  : `Publish ${includedCount} part${
                       includedCount === 1 ? "" : "s"
-                    }`
+                    } everywhere`
               }
               loading={saving}
               disabled={includedCount === 0}
@@ -434,5 +437,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.line,
     backgroundColor: colors.background,
+  },
+  crossListText: {
+    color: colors.muted,
+    fontSize: font.tiny,
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: space.sm,
   },
 });

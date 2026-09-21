@@ -25,6 +25,7 @@ import {
   TrendingUp,
 } from "lucide-react-native";
 import { colors, space, font, radius, conditionColorOf } from "@/theme";
+import type { ConditionGrade } from "@ahlam/shared";
 import { Button } from "@/components/Button";
 import {
   fetchListing,
@@ -46,7 +47,7 @@ export default function ListingDetail() {
   const [price, setPrice] = useState("");
   const [desc, setDesc] = useState("");
   const [status, setStatus] = useState<SavedListing["status"]>("active");
-  const [condition, setCondition] = useState<"Good" | "Poor">("Good");
+  const [condition, setCondition] = useState<ConditionGrade>("B");
   const [category, setCategory] = useState("");
   const [fitment, setFitment] = useState("");
   const [conditionNotes, setConditionNotes] = useState("");
@@ -126,7 +127,7 @@ export default function ListingDetail() {
     setPrice(listing.price_usd != null ? String(listing.price_usd) : "");
     setDesc(c.description ?? "");
     setStatus(listing.status);
-    setCondition(c.condition ?? "Good");
+    setCondition(toConditionGrade(c.condition));
     setCategory(c.partCategory ?? "");
     setFitment(Array.isArray(c.fitment) ? c.fitment.map((f: any) => `${f.yearStart}–${f.yearEnd} ${f.make} ${f.model}`).join(", ") : typeof c.fitment === "string" ? c.fitment : "");
     setConditionNotes(c.conditionNotes ?? "");
@@ -254,7 +255,7 @@ export default function ListingDetail() {
 
             <Text style={styles.fieldLabel}>Condition</Text>
             <View style={styles.statusRow}>
-              {(["Good", "Poor"] as const).map((c) => {
+              {(["A", "B", "C"] as const).map((c) => {
                 const on = condition === c;
                 return (
                   <Pressable
@@ -262,7 +263,7 @@ export default function ListingDetail() {
                     onPress={() => setCondition(c)}
                     style={[styles.statusChip, on && styles.statusChipOn]}
                   >
-                    <Text style={[styles.statusChipText, on && styles.statusChipTextOn]}>{c}</Text>
+                    <Text style={[styles.statusChipText, on && styles.statusChipTextOn]}>{gradeLabel(c)}</Text>
                   </Pressable>
                 );
               })}
@@ -350,6 +351,14 @@ export default function ListingDetail() {
       </Pressable>
     </ScrollView>
   );
+}
+
+function toConditionGrade(value: unknown): ConditionGrade {
+  return value === "A" || value === "B" || value === "C" ? value : "B";
+}
+
+function gradeLabel(grade: ConditionGrade): string {
+  return grade === "A" ? "A — like new" : grade === "B" ? "B — good" : "C — core / repair";
 }
 
 const styles = StyleSheet.create({

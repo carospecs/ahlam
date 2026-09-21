@@ -29,6 +29,8 @@ import {
 import { colors, space, font, radius, conditionColorOf } from "@/theme";
 import { Button } from "@/components/Button";
 import { useSession } from "@/lib/auth";
+import { config } from "@/lib/config";
+import { supabase } from "@/lib/supabase";
 import * as ImagePicker from "expo-image-picker";
 import * as Linking from "expo-linking";
 import {
@@ -76,14 +78,40 @@ export default function Market() {
     if (result.canceled || !result.assets?.[0]?.base64) return;
     setPhotoSearching(true);
     try {
-      const res = await fetch("/api/search-by-photo", {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${config.apiBaseUrl}/api/search-by-photo`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: result.assets[0].base64 }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ image: result.assets[0].base64 }),
       });
       const data = await res.json();
-      if (data.parts) setParts(data.parts);
-      if (data.vehicles) setVehicles(data.vehicles);
+      if (!res.ok) throw new Error(data.error ?? "Photo search failed");
+      const matches: MarketPart[] = (data.results ?? [])
+        .filter((item: any) => item.shopId !== shop?.id)
+        .map((item: any) => ({
+          id: item.id,
+          part: item.partName,
+          grade: item.grade,
+          price: item.price,
+          fitment: item.fitment,
+          category: item.category,
+          photoUrl: item.photoUrl,
+          views: item.views ?? 0,
+          note: "",
+          desc: "",
+          shopId: item.shopId,
+          shopName: item.shopName ?? "Independent seller",
+          location: item.location ?? "",
+          phone: item.phone ?? null,
+        }));
+      setParts(matches);
+      setTab("parts");
+      if (matches.length === 0) {
+        Alert.alert("No matches yet", `We identified ${data.partName ?? "that part"}, but no matching B2B listings are active.`);
+      }
     } catch {
       Alert.alert("Search failed", "Could not search by photo. Try again.");
     } finally {

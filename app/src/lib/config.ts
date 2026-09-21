@@ -16,5 +16,7 @@ export const config = {
   supabaseUrl: env("EXPO_PUBLIC_SUPABASE_URL") ?? "",
   supabaseAnonKey: env("EXPO_PUBLIC_SUPABASE_ANON_KEY") ?? "",
   // Where /api/identify and /api/* live (your deployed web app).
-  apiBaseUrl: env("EXPO_PUBLIC_API_BASE_URL") ?? "http://localhost:3000",
+  // A physical phone cannot reach its own localhost. Local development can
+  // still override this with EXPO_PUBLIC_API_BASE_URL.
+  apiBaseUrl: env("EXPO_PUBLIC_API_BASE_URL") ?? "https://ahlam.io",
 };
