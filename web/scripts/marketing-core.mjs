@@ -14,6 +14,9 @@ export const CLIENT_STOREFRONTS = {
   "82e638d7-7c4c-467a-97b1-baa5c7a71332": "https://speedyautowrecking.ahlam.io",
   "555bb92c-64a2-4092-a1fd-0024cedaed6b": "https://aandbautosalvage.ahlam.io",
   "749da208-9fa9-466a-a6d0-eca31cde97aa": "https://elapacheautowrecking.ahlam.io",
+  "de8bfe4f-fe28-4bed-9370-0fbd3f7664c8": "https://discount-auto-wrecking.ahlam.io",
+  "eb61e98c-cd57-4722-a196-bec8cdb79833": "https://bj-auto-parts.ahlam.io",
+  "eae91457-fc2f-4cc8-a48b-4ef15d49468c": "https://ez-auto-parts.ahlam.io",
 };
 
 function zonedParts(now, timeZone = DEFAULT_TIME_ZONE) {

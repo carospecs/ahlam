@@ -21,6 +21,11 @@ export const SHOP_SUBDOMAINS: Record<string, string> = {
   speedyautowrecking: "82e638d7-7c4c-467a-97b1-baa5c7a71332",
   aandbautosalvage: "555bb92c-64a2-4092-a1fd-0024cedaed6b",
   elapacheautowrecking: "749da208-9fa9-466a-a6d0-eca31cde97aa",
+  // California client storefronts provisioned with internal Ahlam owner
+  // accounts. Their inventory is isolated by these real shop IDs.
+  "discount-auto-wrecking": "de8bfe4f-fe28-4bed-9370-0fbd3f7664c8",
+  "bj-auto-parts": "eb61e98c-cd57-4722-a196-bec8cdb79833",
+  "ez-auto-parts": "eae91457-fc2f-4cc8-a48b-4ef15d49468c",
 };
 
 // Reverse map (shop id -> slug), built once at module scope for O(1) lookups.
