@@ -28,6 +28,7 @@
       "package": "io.ahlam.app",
       "versionCode": 1,
       "permissions": ["CAMERA"],
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F172A"
@@ -41,14 +42,20 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Ahlam uses the camera to photograph auto parts."
+          "cameraPermission": "Ahlam uses the camera to photograph auto parts.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
         }
       ],
       "expo-image-picker",
       "expo-apple-authentication"
     ],
     "extra": {
-      "router": { "origin": false }
-    }
+      "router": { "origin": false },
+      "eas": {
+        "projectId": "a6d3a63f-0c10-4b6e-a18e-dda473025d7f"
+      }
+    },
+    "owner": "ahlamio"
   }
 }
