@@ -33,12 +33,12 @@ export async function POST(req: Request) {
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const path = `${kind === "cover" ? "covers" : "logos"}/${shopId}.${ext}`;
-  let { error: upErr } = await db.storage.from(BUCKET).upload(path, bytes, { contentType: file.type, upsert: true });
+  let { error: upErr } = await db.storage.from(BUCKET).upload(path, bytes, { contentType: file.type, cacheControl: "31536000", upsert: true });
   // Environments that predate the storage migration have no bucket yet, which
   // used to fail every upload with "Bucket not found". Create it and retry.
   if (upErr && /bucket not found/i.test(upErr.message)) {
     await db.storage.createBucket(BUCKET, { public: true });
-    ({ error: upErr } = await db.storage.from(BUCKET).upload(path, bytes, { contentType: file.type, upsert: true }));
+    ({ error: upErr } = await db.storage.from(BUCKET).upload(path, bytes, { contentType: file.type, cacheControl: "31536000", upsert: true }));
   }
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 

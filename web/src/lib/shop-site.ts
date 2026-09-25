@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
 import { SHOP_SUBDOMAINS } from "@/lib/shop-subdomains";
 import { SHOP_STATIC_PROFILES, staticShopRow } from "@/lib/shop-static-profiles";
@@ -197,19 +198,18 @@ export function mapVehicle(v: any) {
 
 /** Everything a shop has live: active parts, sellable vehicles, recent reviews
  *  (with author display names). */
-export async function getShopInventory(shop: { id: string; default_warranty_days?: number | null }) {
-  if (shop.id === DEMO_SHOP.id) return { parts: DEMO_PARTS, vehicles: DEMO_VEHICLES, reviews: DEMO_REVIEWS };
+const loadShopInventory = async (shopId: string, defaultWarrantyDays: number | null) => {
   let parts: any[] = [];
   let vehicles: any[] = [];
   let reviews: any[] = [];
   try {
     const db = supabaseAdmin();
     const [l, v, rv] = await Promise.all([
-      db.from("listings").select(LISTING_CARD_COLUMNS).eq("shop_id", shop.id).eq("status", "active").order("created_at", { ascending: false }),
-      db.from("vehicles").select(VEHICLE_CARD_COLUMNS).eq("shop_id", shop.id).in("sell_mode", ["whole", "both"]).eq("status", "active").order("created_at", { ascending: false }),
-      db.from("reviews").select("id, rating, body, verified_purchase, created_at, author_id").eq("shop_id", shop.id).order("created_at", { ascending: false }).limit(20),
+      db.from("listings").select(LISTING_CARD_COLUMNS).eq("shop_id", shopId).eq("status", "active").order("created_at", { ascending: false }),
+      db.from("vehicles").select(VEHICLE_CARD_COLUMNS).eq("shop_id", shopId).in("sell_mode", ["whole", "both"]).eq("status", "active").order("created_at", { ascending: false }),
+      db.from("reviews").select("id, rating, body, verified_purchase, created_at, author_id").eq("shop_id", shopId).order("created_at", { ascending: false }).limit(20),
     ]);
-    parts = (l.data || []).map((row: any) => mapPart(row, shop.default_warranty_days));
+    parts = (l.data || []).map((row: any) => mapPart(row, defaultWarrantyDays));
     vehicles = (v.data || []).filter((x: any) => x.status === "active").map(mapVehicle);
     reviews = rv.data || [];
     const authorIds = Array.from(new Set(reviews.map((r: any) => r.author_id)));
@@ -222,6 +222,16 @@ export async function getShopInventory(shop: { id: string; default_warranty_days
     // render an empty storefront rather than erroring the whole page
   }
   return { parts, vehicles, reviews };
+};
+
+// Public storefront visits frequently request the same inventory together.
+// A one-minute shared cache prevents crawlers and repeat views from repeatedly
+// transferring the same database payload, while keeping new scans visible fast.
+const getCachedShopInventory = unstable_cache(loadShopInventory, ["shop-inventory"], { revalidate: 60 });
+
+export async function getShopInventory(shop: { id: string; default_warranty_days?: number | null }) {
+  if (shop.id === DEMO_SHOP.id) return { parts: DEMO_PARTS, vehicles: DEMO_VEHICLES, reviews: DEMO_REVIEWS };
+  return getCachedShopInventory(shop.id, shop.default_warranty_days ?? null);
 }
 
 /** Parts this shop sold recently — the personal site's public social-proof

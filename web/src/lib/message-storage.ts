@@ -32,6 +32,7 @@ export async function uploadMessageImages(
       const path = `messages/${conversationId}/${Date.now()}-${i}.${ext}`;
       const up = await db.storage.from("part-photos").upload(path, bytes, {
         contentType: `image/${ext === "jpg" ? "jpeg" : ext}`,
+        cacheControl: "31536000",
         upsert: true,
       });
       if (up.error) continue;

@@ -72,6 +72,7 @@ export async function saveListing(params: {
     .from("part-photos")
     .upload(path, decode(params.imageBase64), {
       contentType: "image/jpeg",
+      cacheControl: "31536000",
       upsert: false,
     });
   if (upErr) throw upErr;
@@ -117,6 +118,7 @@ export async function saveListings(params: {
     .from("part-photos")
     .upload(path, decode(params.imageBase64), {
       contentType: "image/jpeg",
+      cacheControl: "31536000",
       upsert: false,
     });
   if (upErr) throw upErr;

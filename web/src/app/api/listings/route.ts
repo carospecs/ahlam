@@ -111,7 +111,7 @@ export async function POST(req: Request) {
         const b64 = String(images[i]).replace(/^data:[^;]+;base64,/, "");
         const bytes = Buffer.from(b64, "base64");
         const path = `${shopId}/${stamp}-${i}.jpg`;
-        const up = await db.storage.from("part-photos").upload(path, bytes, { contentType: "image/jpeg", upsert: true });
+        const up = await db.storage.from("part-photos").upload(path, bytes, { contentType: "image/jpeg", cacheControl: "31536000", upsert: true });
         photoUrls.push(up.error ? null : db.storage.from("part-photos").getPublicUrl(path).data.publicUrl);
       } catch { photoUrls.push(null); }
     }
@@ -267,7 +267,7 @@ export async function PATCH(req: Request) {
         try {
           const b64 = String(body.photosBase64[i]).replace(/^data:[^;]+;base64,/, "");
           const path = `${shopId}/${stamp}-${i}-${String(body.listingId).slice(0, 8)}.jpg`;
-          const up = await db.storage.from("part-photos").upload(path, Buffer.from(b64, "base64"), { contentType: "image/jpeg", upsert: true });
+          const up = await db.storage.from("part-photos").upload(path, Buffer.from(b64, "base64"), { contentType: "image/jpeg", cacheControl: "31536000", upsert: true });
           if (!up.error) added.push(db.storage.from("part-photos").getPublicUrl(path).data.publicUrl);
         } catch { /* skip a photo that won't decode/upload */ }
       }
@@ -367,7 +367,7 @@ export async function PATCH(req: Request) {
       try {
         const b64 = String(body.photosBase64[i]).replace(/^data:[^;]+;base64,/, "");
         const path = `${shopId}/${stamp}-${i}-veh-${String(vehicleId).slice(0, 8)}.jpg`;
-        const up = await db.storage.from("part-photos").upload(path, Buffer.from(b64, "base64"), { contentType: "image/jpeg", upsert: true });
+        const up = await db.storage.from("part-photos").upload(path, Buffer.from(b64, "base64"), { contentType: "image/jpeg", cacheControl: "31536000", upsert: true });
         if (!up.error) added.push(db.storage.from("part-photos").getPublicUrl(path).data.publicUrl);
       } catch { /* skip */ }
     }
