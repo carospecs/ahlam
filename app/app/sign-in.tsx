@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
 } from "react-native";
@@ -16,6 +17,7 @@ import {
   signInWithEmail,
   signUpWithEmail,
   signInWithGoogle,
+  signInWithApple,
 } from "@/lib/auth";
 
 export default function SignIn() {
@@ -66,6 +68,21 @@ export default function SignIn() {
     setBusy(true);
     try {
       await signInWithGoogle();
+    } catch (e) {
+      setNotice({
+        type: "error",
+        text: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function apple() {
+    setNotice(null);
+    setBusy(true);
+    try {
+      await signInWithApple();
     } catch (e) {
       setNotice({
         type: "error",
@@ -149,6 +166,14 @@ export default function SignIn() {
               onPress={google}
               disabled={busy}
             />
+            {Platform.OS === "ios" && (
+              <Button
+                label="Continue with Apple"
+                variant="secondary"
+                onPress={apple}
+                disabled={busy}
+              />
+            )}
           </View>
 
           <Pressable
@@ -161,6 +186,16 @@ export default function SignIn() {
                 : "Already have an account? Sign in"}
             </Text>
           </Pressable>
+          <Text style={styles.legal}>
+            By continuing, you agree to Ahlam&apos;s{" "}
+            <Text style={styles.legalLink} onPress={() => Linking.openURL("https://ahlam.io/terms")}>
+              Terms of Service
+            </Text>{" "}
+            and{" "}
+            <Text style={styles.legalLink} onPress={() => Linking.openURL("https://ahlam.io/privacy")}>
+              Privacy Policy
+            </Text>.
+          </Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -206,4 +241,6 @@ const styles = StyleSheet.create({
     fontSize: font.small,
     fontWeight: "600",
   },
+  legal: { color: colors.muted, fontSize: font.tiny, lineHeight: 18, textAlign: "center" },
+  legalLink: { color: colors.accent, fontWeight: "600" },
 });

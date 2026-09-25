@@ -8,6 +8,7 @@ import {
 import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
+import * as AppleAuthentication from "expo-apple-authentication";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
@@ -149,4 +150,32 @@ export async function signInWithGoogle() {
   if (!code) throw new Error("Google sign-in did not return a code.");
   const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
   if (exErr) throw exErr;
+}
+
+/**
+ * Native iOS Sign in with Apple. Supabase verifies Apple's identity token and
+ * creates/links the Ahlam session. The Apple provider must be enabled in the
+ * Supabase Auth dashboard before a production iOS build can use this action.
+ */
+export async function signInWithApple() {
+  if (Platform.OS !== "ios") {
+    throw new Error("Sign in with Apple is available on iPhone and iPad.");
+  }
+  const available = await AppleAuthentication.isAvailableAsync();
+  if (!available) throw new Error("Sign in with Apple is not available on this device.");
+
+  const credential = await AppleAuthentication.signInAsync({
+    requestedScopes: [
+      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+      AppleAuthentication.AppleAuthenticationScope.EMAIL,
+    ],
+  });
+  if (!credential.identityToken) {
+    throw new Error("Apple did not return a sign-in token.");
+  }
+  const { error } = await supabase.auth.signInWithIdToken({
+    provider: "apple",
+    token: credential.identityToken,
+  });
+  if (error) throw error;
 }

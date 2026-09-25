@@ -66,6 +66,7 @@ function RootNav() {
       <Stack.Screen name="listings" options={{ title: "Inventory" }} />
       <Stack.Screen name="posts" options={{ title: "Posts" }} />
       <Stack.Screen name="chat" options={{ title: "Chat" }} />
+      <Stack.Screen name="account" options={{ title: "Account" }} />
       <Stack.Screen name="listing/[id]" options={{ title: "Listing" }} />
     </Stack>
   );

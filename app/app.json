@@ -44,7 +44,8 @@
           "cameraPermission": "Ahlam uses the camera to photograph auto parts."
         }
       ],
-      "expo-image-picker"
+      "expo-image-picker",
+      "expo-apple-authentication"
     ],
     "extra": {
       "router": { "origin": false }

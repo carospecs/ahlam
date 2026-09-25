@@ -72,7 +72,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "Data retention and deletion",
     paragraphs: [
-      "We keep your account and listing data while your account is active. You can ask us to delete your account and its data at any time by emailing us.",
+      "We keep your account and listing data while your account is active. You can permanently delete your account in the Ahlam mobile app under Account, or ask us to delete your account and its data at any time by emailing us.",
     ],
   },
   {

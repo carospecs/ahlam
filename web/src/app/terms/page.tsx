@@ -74,7 +74,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "Suspension and termination",
     paragraphs: [
-      "You can close your account at any time by emailing us. We may suspend or terminate accounts that violate these terms, our Acceptable Use Policy, or our Marketplace Guidelines, or that create legal risk for Ahlam or other users. Where reasonable, we will warn you first.",
+      "You can close your account at any time in the Ahlam mobile app under Account, or by emailing us. We may suspend or terminate accounts that violate these terms, our Acceptable Use Policy, or our Marketplace Guidelines, or that create legal risk for Ahlam or other users. Where reasonable, we will warn you first.",
       "Sections that by their nature should survive termination, such as your responsibility for your listings, our disclaimers, and the limitation of liability, survive it.",
     ],
   },

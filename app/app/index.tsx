@@ -17,6 +17,7 @@ import {
   Megaphone,
   MessageSquare,
   Store,
+  Settings,
   LogOut,
   ChevronRight,
 } from "lucide-react-native";
@@ -92,14 +93,24 @@ export default function Home() {
             </Text>
           </View>
         )}
-        <Pressable
-          onPress={signOut}
-          hitSlop={12}
-          accessibilityLabel="Sign out"
-          accessibilityRole="button"
-        >
-          <LogOut size={20} color={colors.muted} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => router.push("/account")}
+            hitSlop={12}
+            accessibilityLabel="Account settings"
+            accessibilityRole="button"
+          >
+            <Settings size={20} color={colors.muted} />
+          </Pressable>
+          <Pressable
+            onPress={signOut}
+            hitSlop={12}
+            accessibilityLabel="Sign out"
+            accessibilityRole="button"
+          >
+            <LogOut size={20} color={colors.muted} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -221,6 +232,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   shopName: { color: colors.foreground, fontSize: font.h3, fontWeight: "700" },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: space.md },
   body: { padding: space.lg, gap: space.lg },
   hero: { alignItems: "center", marginTop: space.sm, gap: space.sm },
   title: { color: colors.foreground, fontSize: font.h1, fontWeight: "800" },
