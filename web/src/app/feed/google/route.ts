@@ -50,7 +50,12 @@ export async function GET() {
   let shopMap = new Map<string, any>();
   try {
     const db = supabaseAdmin();
-    const { data } = await db.from("listings").select("*").eq("status", "active").order("created_at", { ascending: false }).limit(10000);
+    const { data } = await db
+      .from("listings")
+      .select("id, shop_id, photo_url, corrected, ai_output, price_usd")
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(10000);
     rows = (data || []).filter((l: any) => l.photo_url); // image_link is mandatory
     const shopIds = Array.from(new Set(rows.map((l: any) => l.shop_id).filter(Boolean)));
     if (shopIds.length) {

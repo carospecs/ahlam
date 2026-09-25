@@ -44,11 +44,16 @@ export async function GET(req: Request) {
   }
 
   // Shops keyed by id for seller info.
-  const { data: shops } = await db.from("shops").select("*");
+  const { data: shops } = await db
+    .from("shops")
+    .select("id, name, location, zip_code, lat, lng, business_phone, verified, rating_avg, rating_count, default_warranty_days");
   const shopMap = new Map((shops || []).map((s: any) => [s.id, s]));
 
   // Active part listings from other shops (filtered in SQL).
-  let listQuery = db.from("listings").select("*").eq("status", "active");
+  let listQuery = db
+    .from("listings")
+    .select("id, shop_id, seller_id, created_by, corrected, ai_output, price_usd, photo_url, photo_urls, views, marketplace_url")
+    .eq("status", "active");
   if (ownShopId) listQuery = listQuery.neq("shop_id", ownShopId);
   if (priceMax) listQuery = listQuery.lte("price_usd", Number(priceMax));
   if (sort === "price-asc") listQuery = listQuery.order("price_usd", { ascending: true });
@@ -115,7 +120,11 @@ export async function GET(req: Request) {
   }
 
   // Whole-car vehicles from other shops (filtered in SQL).
-  let vehQuery = db.from("vehicles").select("*").in("sell_mode", ["whole", "both"]).eq("status", "active");
+  let vehQuery = db
+    .from("vehicles")
+    .select("id, shop_id, year, make, model, trim, body, color, sell_mode, asking_price, views, photo_url, photo_urls")
+    .in("sell_mode", ["whole", "both"])
+    .eq("status", "active");
   if (ownShopId) vehQuery = vehQuery.neq("shop_id", ownShopId);
   const { data: vehicleRows } = await vehQuery.order("created_at", { ascending: false });
 

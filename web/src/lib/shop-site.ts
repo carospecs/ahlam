@@ -19,6 +19,15 @@ const BASE_COLUMNS =
   "id, name, location, address_line, zip_code, lat, lng, business_phone, email, website, description, hours, logo_url, cover_url, default_warranty_days, returns_policy, verified, rating_avg, rating_count, plan, trial_ends_at, subscription_status";
 export const SHOP_PUBLIC_COLUMNS = `${BASE_COLUMNS}, slug`;
 
+// Storefront cards deliberately carry just the display fields.  `ai_output`
+// and `corrected` are needed to derive the customer-facing part details, but
+// the scan's other raw fields can be large and should never be sent on every
+// public storefront view.
+const LISTING_CARD_COLUMNS =
+  "id, corrected, ai_output, price_usd, photo_url, photo_urls, sold_at, sold_price";
+const VEHICLE_CARD_COLUMNS =
+  "id, year, make, model, trim, body, color, sell_mode, asking_price, photo_url, photo_urls, mileage";
+
 // ---------------------------------------------------------------------------
 // Demo site — served at demo.ahlam.io (and demo.localhost in dev). The slug is
 // reserved so no shop can ever claim it; it renders the real site pages with
@@ -196,8 +205,8 @@ export async function getShopInventory(shop: { id: string; default_warranty_days
   try {
     const db = supabaseAdmin();
     const [l, v, rv] = await Promise.all([
-      db.from("listings").select("*").eq("shop_id", shop.id).eq("status", "active").order("created_at", { ascending: false }),
-      db.from("vehicles").select("*").eq("shop_id", shop.id).in("sell_mode", ["whole", "both"]).eq("status", "active").order("created_at", { ascending: false }),
+      db.from("listings").select(LISTING_CARD_COLUMNS).eq("shop_id", shop.id).eq("status", "active").order("created_at", { ascending: false }),
+      db.from("vehicles").select(VEHICLE_CARD_COLUMNS).eq("shop_id", shop.id).in("sell_mode", ["whole", "both"]).eq("status", "active").order("created_at", { ascending: false }),
       db.from("reviews").select("id, rating, body, verified_purchase, created_at, author_id").eq("shop_id", shop.id).order("created_at", { ascending: false }).limit(20),
     ]);
     parts = (l.data || []).map((row: any) => mapPart(row, shop.default_warranty_days));
@@ -259,7 +268,10 @@ export const getListingDetail = cache(async (id: string): Promise<any | null> =>
   }
   try {
     const db = supabaseAdmin();
-    const { data: l } = await db.from("listings").select("*").eq("id", id).single();
+    const { data: l } = await db.from("listings")
+      .select("id, shop_id, status, corrected, ai_output, price_usd, photo_url")
+      .eq("id", id)
+      .single();
     if (!l) return null;
     const shop = l.shop_id ? await getShopById(l.shop_id) : null;
     const c = l.corrected || l.ai_output || {};
